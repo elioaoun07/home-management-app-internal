@@ -13,7 +13,7 @@ import { v2Post } from "./api";
 import { Back, Empty, ErrorNotice } from "./components";
 import { PairV2, useV2Session } from "./BrowserSession";
 import { client, message, pmKeys, useWorld } from "./state";
-import { LocalPreview, localRunOf } from "./LocalPreview";
+import { LocalPreview } from "./LocalPreview";
 import { useClock } from "./StewardRequests";
 import { PendingCommand as PendingError, PmError, transport } from "./transport";
 import type { UatHandover, UatScenario, UatSummary } from "./types";
@@ -28,6 +28,7 @@ import {
   feedbackState,
   initialPosition,
   listPending,
+  localRunOf,
   move,
   newCommandId,
   noteRequired,
@@ -193,7 +194,7 @@ function StatusLine({ sender }: { sender: Sender }) {
 
 // --- the wizard ------------------------------------------------------------
 
-export function UatPage({ id }: { id: string }) {
+export function UatPage({ id, onReturn }: { id: string; onReturn?: () => void }) {
   const { connected } = useWorld();
   const session = useV2Session();
   const one = useUatOne(id);
@@ -217,10 +218,10 @@ export function UatPage({ id }: { id: string }) {
         <Empty title="Not found" />
       </div>
     );
-  return <Wizard key={`${one.data.handover_id}:${one.data.revision}`} handover={one.data} refreshError={one.error} offline={!connected} />;
+  return <Wizard key={`${one.data.handover_id}:${one.data.revision}`} handover={one.data} refreshError={one.error} offline={!connected} onReturn={onReturn} />;
 }
 
-export function Wizard({ handover, refreshError, offline }: { handover: UatHandover; refreshError: unknown; offline: boolean }) {
+export function Wizard({ handover, refreshError, offline, onReturn }: { handover: UatHandover; refreshError: unknown; offline: boolean; onReturn?: () => void }) {
   const now = useClock(15000);
   const sender = useUatSender(handover.handover_id);
   const local = useMemo(() => readLocalDraft(localStorage, handover), [handover]);
@@ -243,6 +244,7 @@ export function Wizard({ handover, refreshError, offline }: { handover: UatHando
   const outdated = handover.staleDraft || staleLocalDraft(localStorage, handover);
   const done = progress(handover);
   const localRun = localRunOf(handover.subject.delivery_ref);
+  const statusLabel = localRun && handover.signoff ? "Signed off" : uatLabel(handover);
 
   // The position and the typed note survive a reload, per revision.
   useEffect(() => {
@@ -302,14 +304,14 @@ export function Wizard({ handover, refreshError, offline }: { handover: UatHando
 
   return (
     <div className="uat-page">
-      <Back fallback="/delivery" />
+      {onReturn ? <button className="text-button" onClick={onReturn}>Back to run</button> : <Back fallback={localRun ? `/delivery/run/${encodeURIComponent(localRun)}` : "/delivery"} />}
       <header className="uat-head">
         <div>
           <span className="eyebrow">{[handover.subject.campaign, handover.subject.work_id].filter(Boolean).join(" · ") || "Delivery"}</span>
           <h1>{handover.subject.title || handover.summary || handover.subject.work_id || "Test steps"}</h1>
         </div>
         <div className="uat-chips">
-          <Chip tone={handover.acceptance.shipped ? "ok" : handover.status === "ready" ? undefined : "wait"}>{uatLabel(handover)}</Chip>
+          <Chip tone={handover.acceptance.shipped ? "ok" : handover.status === "ready" ? undefined : "wait"}>{statusLabel}</Chip>
           <Chip>r{handover.revision}</Chip>
           {handover.stale && <Chip tone="warn">Stale</Chip>}
           {outdated && <Chip tone="wait">Outdated draft</Chip>}
@@ -534,7 +536,13 @@ export function Wizard({ handover, refreshError, offline }: { handover: UatHando
               <button
                 className="primary"
                 disabled={!handover.signable || busy || offline || hasPending("signoff")}
-                onClick={() => void sender.send("signoff", { action: "signoff", ...base, build: build.trim() || undefined })}
+                onClick={async () => {
+                  const reply = await sender.send("signoff", { action: "signoff", ...base, build: build.trim() || undefined });
+                  if (reply?.ok && localRun) {
+                    await client.invalidateQueries({ queryKey: pmKeys.localRun(localRun) });
+                    onReturn?.();
+                  }
+                }}
               >
                 <Check size={16} aria-hidden />
                 Sign off
@@ -544,7 +552,7 @@ export function Wizard({ handover, refreshError, offline }: { handover: UatHando
 
           {handover.signoff ? (
             <p className="uat-signed" role="status">
-              <Chip tone={handover.acceptance.shipped ? "ok" : "warn"}>{handover.acceptance.shipped ? "Shipped" : uatLabel(handover)}</Chip> {stamp(handover.signoff.received_at)}
+              <Chip tone={handover.acceptance.shipped ? "ok" : "warn"}>{statusLabel}</Chip> {stamp(handover.signoff.received_at)}
               {handover.signoff.build ? ` · ${handover.signoff.build}` : ""}
             </p>
           ) : (

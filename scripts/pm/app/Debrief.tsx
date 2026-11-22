@@ -47,7 +47,7 @@ export function Debrief({
   timeline?: LocalTimeline;
   scene?: LocalScene;
 }) {
-  if (scene.phase !== "shipped") return null;
+  if (!scene.run.pushed && scene.phase !== "shipped") return null;
   const usage = run.usage;
   const tokens = localRunTokens(usage);
   const chips = debriefChips(run, timeline, scene);
@@ -58,7 +58,7 @@ export function Debrief({
     scene.nodes.some((node) => node.edited && node.path === null) ||
     timeline.truncated;
   return (
-    <section className="stage-debrief" aria-label="Shipped">
+    <section className="stage-debrief" aria-label="Pushed">
       <dl>
         {scene.elapsed !== null && (
           <div>

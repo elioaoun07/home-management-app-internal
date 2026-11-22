@@ -182,11 +182,11 @@ function buildArchive(archiveRaw, campaign, entries, stateText, fix) {
 /**
  * Move shipped criteria, long receipts and old state-log entries out of one book.
  * Pure. All text is LF; `bookRel` / `archiveRel` are PM-root-relative.
- * @param {{bookRaw:string, checklistRaw:string, campaign:string, bookRel:string, archiveRel:string, archiveRaw?:string|null}} input
+ * @param {{bookRaw:string, checklistRaw:string, campaign:string, bookRel:string, archiveRel:string, archiveRaw?:string|null, onlyId?:string|null}} input
  * @returns {{book:string, archive:string|null, anchorMap:Map<string,{file:string,anchor:string}>,
  *            stats:{sections:number, receipts:number, stateEntries:number, before:number, after:number}}}
  */
-export function compactBook({ bookRaw, checklistRaw, campaign, bookRel, archiveRel, archiveRaw = null }) {
+export function compactBook({ bookRaw, checklistRaw, campaign, bookRel, archiveRel, archiveRaw = null, onlyId = null }) {
   const lines = bookRaw.split("\n");
   const heads = headings(bookRaw);
   const open = new Set(fileTasks(checklistRaw).map((task) => task.idChip).filter(Boolean));
@@ -200,6 +200,7 @@ export function compactBook({ bookRaw, checklistRaw, campaign, bookRel, archiveR
   const moved = new Map(); // workId -> {start, end, label}
   if (criteriaRange) {
     for (const id of exactIds) {
+      if (onlyId && id !== onlyId) continue;
       if (open.has(id)) continue;
       const hits = heads.map((entry, index) => ({ entry, index })).filter(({ entry }) =>
         entry.level === 3 && normalizeWorkId(entry.text) === id && entry.line > criteriaRange[0] && entry.line < criteriaRange[1]);
@@ -219,6 +220,7 @@ export function compactBook({ bookRaw, checklistRaw, campaign, bookRel, archiveR
   const byId = new Map();
   const lineEdits = new Map(); // book line -> {entry, lead, title}
   for (const record of history.records) {
+    if (onlyId && record.workId !== onlyId) continue;
     const source = lines[record.line];
     if (RECORD_LINK.test(source) || record.datePrecision === "unrecorded") continue;
     const exact = record.identity === "exact";
@@ -251,7 +253,7 @@ export function compactBook({ bookRaw, checklistRaw, campaign, bookRel, archiveR
   // 3. State log: keep the newest STATE_KEEP dated entries and the closing base paragraphs.
   let stateCut = null; // [startLine, endLine, entryCount]
   const stateAt = h2(STATE_HEADING);
-  if (stateAt >= 0) {
+  if (!onlyId && stateAt >= 0) {
     const from = heads[stateAt].line + 1, to = sectionEnd(heads, stateAt, lines.length);
     const paragraphs = [];
     for (let i = from; i < to; i++) {
@@ -432,16 +434,17 @@ function walkMd(dir, skip, out = []) {
   return out;
 }
 
-export function buildIndexBlock(pmDir, today = todayIso()) {
+export function buildIndexBlock(pmDir, today = todayIso(), read = path => readFileSync(path, "utf8"),
+  books = new Map(campaignDirs(pmDir).map(name => [name, masterBookRel(pmDir, name)]))) {
   const rank = (name) => (CAMPAIGN_ORDER.indexOf(name) < 0 ? 99 : CAMPAIGN_ORDER.indexOf(name));
-  const campaigns = campaignDirs(pmDir).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).map((name) => {
-    const bookRel = masterBookRel(pmDir, name);
-    const bookRaw = bookRel ? toLf(readFileSync(join(pmDir, bookRel), "utf8")) : "";
-    const tasks = groupedTasks(toLf(readFileSync(join(pmDir, name, CHECKLIST_NAME), "utf8"))).filter((task) => ["Now", "Next", "Later"].includes(task.section));
+  const campaigns = [...books.keys()].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b)).map((name) => {
+    const bookRel = books.get(name);
+    const bookRaw = bookRel ? toLf(read(join(pmDir, bookRel))) : "";
+    const tasks = groupedTasks(toLf(read(join(pmDir, name, CHECKLIST_NAME)))).filter((task) => ["Now", "Next", "Later"].includes(task.section));
     return { name, bookRaw, tasks, pendingUat: pendingUat(bookRaw), shipped: parseHistory(bookRaw, { campaign: name, file: bookRel || name }).records.length };
   });
   let planning = null;
-  try { planning = JSON.parse(readFileSync(join(pmDir, "_Planning.json"), "utf8")); } catch { /* no plan yet */ }
+  try { planning = JSON.parse(read(join(pmDir, "_Planning.json"))); } catch { /* no plan yet */ }
   return renderIndexBlock({ campaigns, planning, today });
 }
 

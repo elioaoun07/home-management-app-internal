@@ -1,7 +1,8 @@
 // Synthetic Local session data and request boundary for the retained browser suite.
-// No provider/session/backend write is permitted; only the named review response is simulated.
+// No provider/session/backend write is permitted.
+import { appAsset } from "../../scripts/pm/app-shell.mjs";
 export const stateScenes = ["live", "thinking", "quiet", "stale", "signal-lost", "link-down", "failed-hook", "cancelled", "your-turn", "push-pending", "shipped", "reverted"];
-export async function installLocalSessionFixture(page, { origin, frozenBundle, writes, simulatedReviews }) {
+export async function installLocalSessionFixture(page, { origin, frozenBundle, writes }) {
   let scene = "failed", toolEvent = null;
   let at = new Date().toISOString(), localResponses = 0, extraRows = [];
 const phaseFor = value => ["live", "thinking", "quiet", "stale", "signal-lost", "link-down", "interrupted"].includes(value) ? "building" : value === "failed-hook" ? "failed" : value === "your-turn" ? "uat-ready" : ["replay-gap", "replay-stale-gap"].includes(value) ? "cancelled" : value;
@@ -52,6 +53,7 @@ const local = (requestedId = id) => ({
   run_id: requestedId,
   phase: phaseFor(scene),
   branch: "delivery/BUD-1",
+  base: "a".repeat(40),
   workspace: "C:/fixture/very-long-worktree-path/retained-failed-attempt/BUD-1",
   head: ["checking", "uat-ready", "your-turn", "push-pending", "shipped", "reverted"].includes(scene) ? "c".repeat(40) : null,
   current_head: "b".repeat(40),
@@ -138,18 +140,19 @@ await page.route("**/*", async (route) => {
   const request = route.request(),
     url = new URL(request.url());
   if (url.origin !== origin) return route.abort();
-  if (frozenBundle && ["/app/assets/pm.js", "/app/assets/pm.css"].includes(url.pathname)) {
-    const kind = url.pathname.endsWith(".js") ? "js" : "css";
-    return route.fulfill({ contentType: kind === "js" ? "text/javascript" : "text/css", body: frozenBundle[kind] });
-  }
+  const asset = frozenBundle && appAsset(url.pathname, frozenBundle);
+  if (asset) return route.fulfill({ contentType: asset.type, body: asset.body });
   if (!["GET", "HEAD"].includes(request.method())) {
-    const body = request.postDataJSON();
-    if (url.pathname === "/api/delivery/v2/local" && body?.action === "review" && body.run_id === id) {
-      simulatedReviews.push(body.run_id);
-      return json(route, { patch: "diff --git a/fixture-only-first-run.ts b/fixture-only-first-run.ts\n--- a/fixture-only-first-run.ts\n+++ b/fixture-only-first-run.ts\n+fixture-only-first-run" });
-    }
     writes.push(url.pathname);
     return route.abort();
+  }
+  if (url.pathname === "/api/delivery/v2/local/comparison") {
+    const run = local(url.searchParams.get("id"));
+    const name = run.run_id === id ? "fixture-only-first-run" : "fixture-only-second-run";
+    const path = "src/" + name + ".ts";
+    if (run.head !== url.searchParams.get("head")) return route.fulfill({ status: 409, json: { error: "stale fixture" } });
+    return url.searchParams.has("path") ? json(route, { patch: "@@ -1 +1 @@\n-before\n+" + name }) :
+      json(route, { base: run.base, files: [{ status: "M", path }] });
   }
   if (url.pathname === "/api/delivery/v2/session")
     return json(route, { paired: true, actor: "fixture", csrf: "fixture" });

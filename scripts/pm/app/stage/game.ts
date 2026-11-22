@@ -330,10 +330,11 @@ export function localStageGame(
     add("handover", "Handover", "Your turn", scene.at);
   if (scene.run.handover?.acceptance.state === "accepted")
     add("accepted", "Accepted", scene.run.handover.acceptance.state, scene.at);
-  if (scene.phase === "shipped")
+  const published = !!scene.run.pushed || (scene.phase === "shipped" && !scene.run.applied && (!!scene.run.merge || scene.events.some(event => event.kind === "event" && event.summary === "Owner shipped merge")));
+  if (published)
     add(
       "shipped",
-      "Shipped",
+      "Pushed",
       scene.run.merge ?? scene.run.head ?? scene.run.branch,
       scene.at,
     );
@@ -345,7 +346,7 @@ export function localStageGame(
     scene.seals.every((seal) => seal.state === "passed");
   const rank: StageRank = scene.run.interrupted
     ? null
-    : scene.phase === "shipped"
+    : published
       ? firstAttempt && fullSeal && everStale === false
         ? "S"
         : "A"
@@ -354,9 +355,9 @@ export function localStageGame(
         : null;
   const rubric =
     rank === "S"
-      ? "Shipped · First try · 4/4 · No signal ×0"
+      ? "Pushed · First try · 4/4 · No signal ×0"
       : rank === "A"
-        ? "Shipped"
+        ? "Pushed"
         : rank === "B"
           ? "Your turn"
           : "";

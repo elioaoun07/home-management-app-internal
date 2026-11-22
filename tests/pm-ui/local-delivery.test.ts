@@ -35,17 +35,10 @@ describe("Local delivery controls", () => {
     );
     expect(actions({ ...base, canShip: true })).not.toContain(">Ship<");
   });
-  it("offers Undo after a shipped merge and Retry push for a retained merge", () => {
-    expect(actions()).not.toContain(">Undo<");
-    expect(actions({ ...base, phase: "shipped", canUndo: true })).toContain(
-      ">Undo<",
-    );
-    expect(actions({ ...base, phase: "push-pending" })).toContain(
-      ">Retry push<",
-    );
-    expect(actions({ ...base, phase: "push-pending" })).not.toMatch(
-      /disabled="">Retry push/,
-    );
+  it("leaves legacy pushes visible for inspection without invoking retired commands", () => {
+    expect(actions({ ...base, phase: "shipped", canUndo: true })).not.toContain(">Undo<");
+    expect(actions({ ...base, phase: "push-pending" })).toContain("Legacy push needs manual review");
+    expect(actions({ ...base, phase: "push-pending" })).not.toContain(">Retry push<");
   });
   it("keeps recovery actions available for interrupted attempts and merges", () => {
     for (const phase of ["preparing", "building", "checking"]) {
@@ -105,7 +98,7 @@ describe("Local session review", () => {
     handover: null,
     error: "native session exited 1: TypeError: Cannot freeze\nstack trace",
   };
-  it("retains all review sections and a concise failure with the stack disclosed", () => {
+  it("shows the owner stations and the failure before opening session evidence", () => {
     const html = renderToStaticMarkup(
       createElement(LocalRunReview, {
         run,
@@ -114,29 +107,22 @@ describe("Local session review", () => {
         patch: null,
       }),
     );
-    for (const label of [
-      "Delivery stages",
-      "Plan",
-      "Verification",
-      "Activity",
-      "Changes",
-    ])
-      expect(html).toContain(`aria-label="${label}"`);
+    expect(html).toContain('aria-label="Owner stations"');
+    for (const label of ["Test", "Review", "Merge", "Commit", "Push", "Clean up"])
+      expect(html).toContain(label + "</button>");
+    expect(html).toContain("Session evidence");
+    expect(html).not.toContain('role="tabpanel"');
     expect(html).toContain("Agent could not start");
     expect(html).toContain("<summary>Error details</summary>");
     expect(html).toContain("Cannot freeze");
     expect(html).toContain("New attempt");
-    expect(html.match(/Not run/gu)).toHaveLength(4);
-    expect(html).toContain("Host sign-in");
+    expect(html).toContain("<h1>Require host sign-in</h1>");
     expect(html).not.toContain(">Passed<");
   });
   it("never marks unobserved steps or null-exit checks as completed", () => {
     expect(localRunStages(run).map((stage) => stage.state)).toEqual([
-      "done",
       "stopped",
-      "pending",
-      "pending",
-      "pending",
+      ...Array(6).fill("pending"),
     ]);
     expect(
       localRunStages({
@@ -145,7 +131,7 @@ describe("Local session review", () => {
         error: undefined,
         activity: [],
       }).map((stage) => stage.state),
-    ).toEqual(["current", "pending", "pending", "pending", "pending"]);
+    ).toEqual(["current", ...Array(6).fill("pending")]);
     expect(
       localRunStages({
         ...run,
@@ -153,7 +139,7 @@ describe("Local session review", () => {
         head: "candidate",
         error: undefined,
       }).map((stage) => stage.state),
-    ).toEqual(["done", "done", "current", "pending", "pending"]);
+    ).toEqual(["done", "current", ...Array(5).fill("pending")]);
     expect(localCheckLabel(undefined)).toBe("Not run");
     expect(
       localCheckLabel({

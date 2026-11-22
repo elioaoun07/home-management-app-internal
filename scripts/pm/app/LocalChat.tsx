@@ -134,7 +134,7 @@ export function LocalChat({ run, limit = 40, compact = false, composer = true }:
       {thread.length > 0 && <ol ref={list} className="chat-thread">
         {thread.map((entry) => {
           if (entry.kind === "agent")
-            return <li key={entry.key} className="chat-agent"><p>{entry.text}</p><time dateTime={entry.at}>{hhmm(entry.at)}</time></li>;
+            return <li key={entry.key} className="chat-agent"><p>{entry.text}</p>{entry.excerpt && <small className="quiet">Recorded excerpt</small>}<time dateTime={entry.at}>{hhmm(entry.at)}</time></li>;
           if (entry.kind === "owner")
             return (
               <li key={entry.key} className="chat-owner">

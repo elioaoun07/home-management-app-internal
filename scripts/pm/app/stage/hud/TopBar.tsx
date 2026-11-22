@@ -13,6 +13,7 @@ export interface TopBarProps extends SettingsMenuProps {
   caption: string;
   clock: ReactNode;
   theater?: ReactNode;
+  roomSwitch?: ReactNode;
   replay?: boolean;
 }
 
@@ -25,6 +26,7 @@ export function TopBar({
   caption,
   clock,
   theater,
+  roomSwitch,
   replay,
   ...settings
 }: TopBarProps) {
@@ -76,6 +78,7 @@ export function TopBar({
         <span className="run-game-tag">{id}</span>
         <h1 title={title}>{title}</h1>
       </div>
+      {roomSwitch}
       <span className="board-line">LINE {line}/11</span>
       <div className="board-status">
         {turn && (

@@ -1,0 +1,143 @@
+.owner-room {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container-type: inline-size;
+  background:
+    radial-gradient(ellipse at 49% 42%, rgb(86 129 139 / 22%), transparent 66%),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--theme-bg) 90%, #7696ae),
+      var(--theme-bg) 70%
+    );
+}
+.owner-room::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.24;
+  background-image: radial-gradient(var(--ink-muted) 0.65px, transparent 0.8px);
+  background-size: 17px 17px;
+  mask-image: linear-gradient(transparent 4%, black 54%, transparent);
+}
+.owner-room-render {
+  position: absolute;
+  inset: 0;
+}
+.owner-room-render:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+.owner-room-render canvas,
+.owner-room-render svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: manipulation;
+}
+.owner-room-stations {
+  pointer-events: none;
+}
+.owner-room .stage-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.owner-room .owner-room-station[data-state="stopped"] .owner-room-signal {
+  color: var(--warning, #e9bf79);
+}
+.owner-room .owner-room-station {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45em;
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--ink-muted) 49%, var(--surface));
+  border-radius: 6px;
+  background: var(--surface);
+  font:
+    600 clamp(12px, 1.28cqw, 15px) / 1.15 Geist,
+    system-ui,
+    sans-serif;
+  min-height: 32px;
+  padding: 5px 10px;
+  white-space: nowrap;
+  box-shadow: 0 2px 7px rgb(3 12 21 / 30%);
+}
+.owner-room .owner-room-station:hover,
+.owner-room .owner-room-station:focus-visible {
+  border-color: var(--accent);
+}
+.owner-room .owner-room-station[aria-pressed="true"] {
+  border-color: var(--warning, #e9bf79);
+  background: color-mix(in srgb, var(--surface) 89%, #dcb67b);
+  box-shadow:
+    inset 0 -2px var(--warning, #e9bf79),
+    0 2px 12px rgb(4 14 21 / 40%);
+}
+.owner-room .owner-room-station[aria-pressed="true"] .owner-room-glyph {
+  color: var(--warning, #e9bf79);
+}
+.owner-room .owner-room-signal {
+  color: var(--accent);
+}
+.owner-room-stations[data-layout="berths"] {
+  position: absolute;
+  inset: 0;
+}
+.owner-room-stations[data-layout="berths"] button {
+  position: absolute;
+  transform: translate(-50%, -8%);
+}
+.owner-room-stations[data-layout="schematic"] {
+  position: absolute;
+  inset: 12% 7%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.owner-room-stations[data-layout="schematic"] .owner-room-station {
+  flex-direction: column;
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--surface-soft) 90%, var(--accent)),
+    var(--surface)
+  );
+}
+.owner-room-stations[data-layout="schematic"] .owner-room-glyph {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 5px;
+  color: var(--accent);
+}
+.owner-room-stations[data-layout="schematic"] .owner-room-signal {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+@container (max-width: 580px) {
+  .owner-room-stations[data-layout="berths"] .owner-room-station {
+    padding: 4px 7px;
+    min-height: 32px;
+  }
+  .owner-room-stations[data-layout="berths"] .owner-room-glyph {
+    display: none;
+  }
+
+}
+@media (pointer: coarse) {
+  .owner-room .owner-room-station {
+    min-height: 40px;
+  }
+}

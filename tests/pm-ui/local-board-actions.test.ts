@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { LocalActions } from "../../scripts/pm/app/LocalDelivery";
+import { LocalActions, type LocalRunView } from "../../scripts/pm/app/LocalDelivery";
 import {
   localBoardActionAllowed,
   attentionActionAllowed,
@@ -34,13 +34,9 @@ describe("R123 attention command admission", () => {
         const html = renderToStaticMarkup(
           createElement(LocalActions, { run, busy, act: () => {} }),
         );
-        // DLV-167: Ship is never offered; Merge replaces it, Retry push remains.
-        expect(html).not.toMatch(/>Ship<\/button>/);
+        expect(html).not.toMatch(/>(Ship|Undo|Retry push)<\/button>/);
         for (const [action, label] of [
-          ["review", "Review diff"],
           ["merge", "Merge"],
-          ["ship", "Retry push"],
-          ["undo", "Undo"],
           ["cancel", "Cancel"],
         ] as const) {
           const button = html.match(
@@ -61,11 +57,12 @@ describe("R123 attention command admission", () => {
     }) }));
     expect(conflicted).toContain('role="alert"');
     expect(conflicted).toContain("<code>src/a.ts</code>");
-    expect(conflicted).toMatch(/<button[^>]*disabled[^>]*>Merge<\/button>/);
+    expect(conflicted).toContain(">Recheck</button>");
+    expect(conflicted).not.toContain(">Merge</button>");
     const merged = renderToStaticMarkup(createElement(LocalActions, { busy: false, act: () => {}, run: boardRun({
       phase: "shipped", head: "candidate", applied: { at: "2026-11-22T10:00:00Z", files: ["a", "b"], main_head: "abc", pm_error: null },
     }) }));
-    expect(merged).toContain("Merged 2 files · commit and push in your repo");
+    expect(merged).toContain("Merged in your folder");
     expect(merged).not.toContain(">Merge</button>");
     expect(merged).not.toContain(">Undo</button>");
   });
@@ -75,13 +72,7 @@ describe("R123 attention command admission", () => {
       work: { id: "R123", title: "Fixture", brief: "Recorded brief" },
     });
     const items = localRunAttention(run, new Set(), epoch);
-    expect(
-      attentionActionAllowed(
-        run,
-        true,
-        items.find((item) => item.kind === "retry")!,
-      ),
-    ).toBe(false);
+    expect(items.some(item => item.kind === "retry")).toBe(false);
     expect(
       attentionActionAllowed(
         run,
@@ -97,5 +88,28 @@ describe("R123 attention command admission", () => {
     )!;
     expect(item.action.href).toBeUndefined();
     expect(attentionActionAllowed(run, false, item)).toBe(false);
+  });
+
+  it("shows the conditional abort, retries checks without a rebase, and resumes a partially copied merge", () => {
+    const plan = { files: [{ status: "M", path: "app.ts" }], conflicts: [{ path: "app.ts", committed: true, uncommitted: false }],
+      branch: "main", expected: "main", canRefresh: true, refreshBase: "new-base",
+      refreshCommands: [["git", "rebase", "--onto", "new-base"], ["git", "rebase", "--abort"]] };
+    const render = (changes: Partial<LocalRunView>) => renderToStaticMarkup(
+      createElement(LocalActions, { run: boardRun({ phase: "uat-ready", head: "candidate", mergePlan: plan, ...changes }), busy: false, act: () => {} }));
+    const conflict = render({});
+    expect(conflict).toContain("On rebase conflict");
+    expect(conflict).toContain("git rebase --abort");
+    expect(conflict).toContain(">Refresh</button>");
+    expect(render({ phase: "refresh-failed", mergePlan: { ...plan, refreshCommands: [] } })).toContain(">Retry checks</button>");
+    const partial = render({ canMerge: true, merge_pending: { main_head: "new-base" } });
+    expect(partial).toContain(">Resume merge</button>");
+    expect(partial).not.toContain("git rebase");
+    expect(partial).not.toContain("<summary>Discard</summary>");
+    const legacy = render({ phase: "merged", mergePlan: null, applied: { at: "now", main_head: "base", files: ["a"], pm_error: null } });
+    expect(legacy).toContain("<summary>Discard worktree</summary>");
+    const committed = render({ phase: "committed", publication: { action: "push", recover: true, commands: [["git", "ls-remote", "internal"]],
+      files: [], reason: null, token: "bound" } });
+    expect(committed).toContain("<summary>Discard worktree</summary>");
+    expect(committed).toContain(">Verify push</button>");
   });
 });

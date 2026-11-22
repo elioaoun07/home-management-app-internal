@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowLeft, ArrowLeftRight, BookOpen, ChevronLeft, ChevronRight, Disc3, Radio, X } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, BookOpen, ChevronLeft, ChevronRight, Disc3, Maximize2, Minimize2, Radio, X } from "lucide-react";
 import { Markdown } from "./components";
 import { BlackBox } from "./BlackBox";
 import { LocalChat } from "./LocalChat";
@@ -13,6 +13,10 @@ import type { LocalLiveness } from "./localRunLiveness";
 import { ZONE_BY_ID, type ZoneId } from "./stage/config";
 import type { ZoneBoardState } from "./stage/zoneModel";
 import { BrainRoom } from "./BrainRoom";
+import { OwnerStationDetail } from "./OwnerStationDetail";
+import { currentOwnerStation, ownerStationSignals, type OwnerStation } from "./ownerStations";
+import type { LocalAct, LocalRunView } from "./LocalDelivery";
+import type { DeliveryRoom } from "./OwnerWorkspace";
 import type { View } from "./brain/layout";
 import { roomLighting } from "./brain/lighting";
 import { resolveMark, roomCassette, roomCheck, roomMoment, roomRows, roomStepRow, roomSteps, roomZone, type RoomMark } from "./transferRoomModel";
@@ -75,7 +79,7 @@ function ComparePane({ moment, label }: { moment: OpenMoment | null; label: stri
 }
 
 export function TransferRoom({
-  active, timeline, scene, health, liveHealth, replay, cursorMissing, playing, zones, question, onLive, onSeek, onTransportKey, onQuestion, onChanges, testSteps, brain,
+  active, timeline, scene, health, liveHealth, replay, cursorMissing, playing, zones, question, onLive, onSeek, onTransportKey, onQuestion, onChanges, testSteps, brain, owner,
 }: {
   active: boolean;
   timeline: LocalTimeline;
@@ -93,12 +97,51 @@ export function TransferRoom({
   onQuestion: () => void;
   onChanges: () => void;
   testSteps?: ReactNode;
-  brain?: { view: View; onView: (view: View) => void; onBoard: () => void; blocked: boolean };
+  brain?: { view: View; onView: (view: View) => void; onBoard: () => void; blocked: boolean;
+    floor: DeliveryRoom; onFloor: (floor: DeliveryRoom) => void };
+  owner: { run: LocalRunView; act: LocalAct; busy: boolean; patch: string | null; station?: OwnerStation;
+    onStation: (station: OwnerStation) => void };
 }) {
   const [reader, setReader] = useState<Reader | null>(null);
+  const [stationPanel, setStationPanel] = useState<"open" | "closed" | null>(null);
+  const [wideStation, setWideStation] = useState(false);
+  const [projection, setProjection] = useState<string | null>(null);
+  const stationClose = useRef<HTMLButtonElement>(null);
+  const stationSource = useRef<HTMLElement | null>(null);
+  const floor = brain?.floor;
+  const currentStation = currentOwnerStation(owner.run);
+  const selectedStation = owner.station ?? currentStation;
+  const inspecting = floor === "owner" && stationPanel === "open";
+  const ownerFloor = useMemo(() => ({
+    selected: selectedStation,
+    signals: ownerStationSignals(owner.run),
+    patch: !replay && selectedStation === "merge" ? projection : null,
+  }), [owner.run, selectedStation, replay, projection]);
   const [pins, setPins] = useState<readonly [RoomMark | null, RoomMark | null]>([null, null]);
   const [compare, setCompare] = useState(false);
   const [smallPane, setSmallPane] = useState<"A" | "B">("A");
+  useEffect(() => {
+    setReader(null);
+    setCompare(false);
+    setStationPanel(null);
+    setWideStation(false);
+    setProjection(null);
+  }, [floor]);
+  useEffect(() => {
+    if (inspecting) stationClose.current?.focus({ preventScroll: true });
+  }, [inspecting, selectedStation]);
+  function inspectStation(id: OwnerStation, source?: HTMLElement) {
+    if (source) stationSource.current = source;
+    setReader(null);
+    setCompare(false);
+    owner.onStation(id);
+    setStationPanel("open");
+  }
+  function closeStation() {
+    setStationPanel("closed");
+    setWideStation(false);
+    stationSource.current?.focus({ preventScroll: true });
+  }
   const latest = timeline.events.at(-1);
   const selected = scene.latest;
   const selectedKind = selected?.kind ?? "event";
@@ -123,6 +166,7 @@ export function TransferRoom({
   };
 
   function openZone(zone: Filter, control: HTMLElement) {
+    setStationPanel(current => current && "closed");
     returnTo.current = control;
     listTop.current = 0;
     if (readerBody.current) readerBody.current.scrollTop = 0;
@@ -197,9 +241,17 @@ export function TransferRoom({
       style={roomArt}
       hidden={!active}
       data-brain={!!brain}
-      data-reader={!!reader || compare}
+      data-reader={!!reader || compare || inspecting}
       data-comparing={compare}
+      data-inspecting={inspecting}
+      data-expanded-station={inspecting && wideStation}
       onKeyDown={(event) => {
+        if (event.key === "Escape" && inspecting) {
+          event.stopPropagation();
+          if (wideStation) setWideStation(false);
+          else closeStation();
+          return;
+        }
         if (event.key === "Escape" && (reader || compare)) {
           event.stopPropagation();
           close();
@@ -219,10 +271,12 @@ export function TransferRoom({
           </>}
           {question && <button type="button" className="room-question" onClick={onQuestion}>Question</button>}
         </div>
-        {brain ? <BrainRoom key={scene.run.run_id} {...brain} scene={scene} timeline={timeline} health={currentHealth} lighting={lighting}
-          replay={replay} playing={playing} question={question} reading={!!reader || compare || brain.blocked}
+        {brain ? <BrainRoom key={scene.run.run_id} {...brain} owner={ownerFloor} currentStation={currentStation}
+          inspectedStation={inspecting ? selectedStation : null} onStation={inspectStation} scene={scene} timeline={timeline} health={currentHealth} lighting={lighting}
+          replay={replay} playing={playing} question={question} reading={!!reader || compare || inspecting || brain.blocked}
           inspected={opened} onZone={openZone} onQuestion={onQuestion}
           onEvidence={(event, source) => {
+            setStationPanel(current => current && "closed");
             returnTo.current = source;
             setCompare(false);
             onSeek(event);
@@ -270,7 +324,7 @@ export function TransferRoom({
           </button>
           {preview && <span className="room-preview" title={preview}>{preview}</span>}
         </div>}
-        <nav className="room-steps" aria-label="Room steps">
+        {floor !== "owner" && <nav className="room-steps" aria-label="Room steps">
           <button type="button" onClick={(event) => openZone("brief", event.currentTarget)} aria-pressed={reader?.zone === "brief"}><BookOpen size={15} /> Plan</button>
           {roomSteps.map(({ label, zones: group }) => {
             const lit = group.some((zone) => zones.zones.some((fact) => fact.id === zone && fact.status !== "off" && fact.status !== "skipped"));
@@ -279,7 +333,7 @@ export function TransferRoom({
             return <button key={label} type="button" aria-pressed={checked} aria-current={powered ? "step" : undefined} data-reached={lit} onClick={(event) => openZone(group.find((zone) => zone === label.toLowerCase()) ?? group[0], event.currentTarget)}>{label}</button>;
           })}
           <button type="button" onClick={(event) => openZone("all", event.currentTarget)} aria-pressed={reader?.zone === "all"}>All actions</button>
-        </nav>
+        </nav>}
         {!brain && <div className="room-jog" aria-label="Jog wheel">
           <button type="button" aria-label="Previous action" onClick={() => jog(previous)} disabled={!previous}><ChevronLeft size={20} /></button>
           <label className="room-wheel">
@@ -302,6 +356,19 @@ export function TransferRoom({
           {replay && <button type="button" onClick={onLive}>Live</button>}
         </div>}
       </div>
+      {floor === "owner" && stationPanel && <section className="room-reader room-workstation" hidden={!inspecting}
+        aria-label="Station inspector">
+        <header><span>{roomReplay ? "Replay" : "Workstation"}</span>
+          <button type="button" aria-label={wideStation ? "Restore room" : "Expand inspector"} aria-pressed={wideStation}
+            onClick={() => setWideStation(!wideStation)}>{wideStation ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
+          <button ref={stationClose} type="button" aria-label="Close inspector" onClick={closeStation}><X size={18} /></button>
+        </header>
+        <div className="room-reader-body">
+          <OwnerStationDetail key={selectedStation} station={selectedStation} run={owner.run} act={owner.act}
+            busy={owner.busy} patch={owner.patch} readOnly={replay} onPatchViewed={setProjection}
+            onSelectStation={id => inspectStation(id)} />
+        </div>
+      </section>}
       {(reader || compare) && <section className="room-reader" aria-label="Room output">
         <header>
           {reader?.mark && !compare && <button type="button" aria-label="Back to actions" onClick={close}><ArrowLeft size={18} /></button>}

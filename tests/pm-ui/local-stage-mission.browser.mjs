@@ -10,6 +10,7 @@ import {
   routeFixture,
   shiftCase,
   sourceSnapshot,
+  stageThemes,
 } from "./fixtures/local-stage-board.mjs";
 
 const evidence = process.env.ERA_MISSION_EVIDENCE || ".pm/r126-evidence/slice1";
@@ -22,11 +23,12 @@ const headed = process.env.ERA_STAGE_HEADED === "1";
 const browser = await chromium.launch({ headless: !headed, executablePath: executable, args: ["--mute-audio"] });
 const checks = [], captures = [], layouts = [], errors = [], writes = [];
 const tools = ["Activity", "Brief", "Verification", "Changes", "Worktree", "Host limits"];
+const selectedWidths = process.env.ERA_STAGE_WIDTHS?.split(",").map(Number);
 const missionProfiles = [
   ...profiles.filter((profile) => profile.width === 390),
   { width: 1024, height: 768, dpr: 1 },
   ...profiles.filter((profile) => profile.width !== 390),
-];
+].filter(profile => !selectedWidths || selectedWidths.includes(profile.width));
 
 async function layout(page) {
   return page.locator(".board-workshop").evaluate((root) => {
@@ -103,7 +105,7 @@ const closeDrawer = async (page) => {
 };
 
 try {
-  for (const profile of missionProfiles) for (const theme of ["blue", "pink"]) {
+  for (const profile of missionProfiles) for (const theme of stageThemes()) {
     const context = await browser.newContext({ viewport: { width: profile.width, height: profile.height }, deviceScaleFactor: profile.dpr, serviceWorkers: "block" });
     const run = shiftCase("failed-hook");
     run.work.id = "HUB-118";
@@ -123,13 +125,13 @@ try {
       assert.ok(Math.abs(facts.root.height - profile.height) <= 1, "stage fills viewport height");
       assert.equal(facts.scrollWidth, profile.width);
       if (profile.width >= 900) assert.equal(facts.scrollHeight, profile.height, "no desktop page scroll");
-      assert.ok(Math.abs(facts.bar.height - 44) <= 1, "44 px bar");
-      assert.ok(Math.abs(facts.dock.height - (profile.width === 390 ? 112 : 56)) <= 1, "56 px dock; two rows on phone");
+      assert.ok(Math.abs(facts.bar.height - (profile.width === 390 ? 94 : 56)) <= 1, "header fits room navigation");
+      assert.ok(Math.abs(facts.dock.height - 56) <= 1, "closed Recorder takes one dock row");
       assert.ok(Math.abs(facts.dock.bottom - profile.height) <= 1, "dock anchors the window");
       assert.ok(facts.board.y >= facts.bar.bottom - 1 && facts.board.bottom <= facts.dock.y + 1, "board reserves bar and dock");
       if (profile.width === 390) assert.ok(facts.board.height >= 300, "phone board is at least 300 px");
-      else assert.ok(Math.abs(facts.rail.width - (profile.width < 1100 ? 44 : 340)) <= 1, "rail starts at the declared width");
-      if (profile.width < 1100) assert.equal(facts.railOpen, "false", "narrow rail starts collapsed");
+      else assert.ok(Math.abs(facts.rail.width - 42) <= 1, "collapsed rail has a compact entry button");
+      assert.equal(facts.railOpen, "false", "the board starts with its rail collapsed");
       assert.deepEqual(facts.tabs.map((tab) => tab.text), tools);
       assert.ok(facts.tabs.every((tab) => tab.icon), "every dock tab has icon and label");
       for (const tab of facts.tabs) {
@@ -143,7 +145,12 @@ try {
       assert.equal(await topbar.locator(".board-line,.board-clock").count(), 2);
       assert.equal(await topbar.getByRole("button", { name: "Theater", exact: true }).count(), 1);
       await capture(page, `${key}-frame`);
+      const recorder = page.getByRole("button", { name: "Recorder", exact: true });
       const replay = page.getByRole("slider", { name: "Replay", exact: true });
+      assert.equal(await recorder.getAttribute("aria-expanded"), "false");
+      assert.equal(await replay.isVisible(), false);
+      await recorder.click();
+      await replay.waitFor();
       await replay.focus();
       await replay.press("Home");
       await page.waitForFunction(() => document.querySelector(".board-workshop")?.dataset.replay === "true");
@@ -153,12 +160,13 @@ try {
       await replay.press("End");
       await replay.press("l");
       await page.waitForFunction(() => document.querySelector(".board-workshop")?.dataset.replay === "false");
+      await recorder.click();
     });
     await check(page, `${key}-rail`, async () => {
       const rail = page.locator(".board-rail");
       const toggle = rail.locator(".board-rail-heading button");
       if (await rail.getAttribute("data-open") === "true") await toggle.click();
-      if (profile.width !== 390) assert.ok(Math.abs((await rail.boundingBox()).width - 44) <= 1, "collapsed strip is 44 px");
+      if (profile.width !== 390) assert.ok(Math.abs((await rail.boundingBox()).width - 42) <= 1, "collapsed rail button remains reachable");
       await toggle.click();
       await page.waitForFunction(() => document.querySelector(".board-rail")?.dataset.open === "true");
       const box = await rail.boundingBox();
@@ -179,7 +187,10 @@ try {
         await page.getByRole("tabpanel").waitFor();
         assert.equal(await tab.getAttribute("aria-selected"), "true");
         const facts = await layout(page);
-        assert.ok(Math.abs(facts.drawer.height / facts.board.height - 0.45) <= 0.015, "drawer occupies the board's lower 45%");
+        assert.ok(facts.drawer.height >= facts.board.height * .44 && facts.drawer.height <= facts.board.height + 1,
+          "drawer reserves readable height and stays within the board");
+        assert.equal(await page.getByRole("tabpanel").evaluate(node => getComputedStyle(node).overflowY),
+          "auto", "the drawer's panel can scroll independently");
         assert.ok(Math.abs(facts.drawer.bottom - facts.board.bottom) <= 1, "drawer stays above dock");
         assert.ok(facts.drawer.x >= facts.board.x - 1 && facts.drawer.right <= facts.board.right + 1);
       }
@@ -215,7 +226,10 @@ try {
       assert.equal(await game.getAttribute("aria-checked"), "true", "Game switch remains reachable");
       await capture(page, `${key}-settings`);
       await game.click();
-      await page.getByRole("region", { name: "Plan", exact: true }).waitFor();
+      await page.getByRole("navigation", { name: "Owner stations" }).waitFor();
+      await page.locator(".calm-evidence > summary").click();
+      await page.getByRole("tab", { name: "Brief", exact: true }).click();
+      await page.getByRole("tabpanel").waitFor();
       assert.equal(await page.locator(".app-header").isVisible(), true, "Calm retains the app shell");
     });
     if (profile.width === 1280) await check(page, `${key}-empty-rail`, async () => {
@@ -233,7 +247,7 @@ try {
       const rail = page.locator(".board-rail");
       assert.equal(await page.locator(".board-workshop").getAttribute("data-attention"), "0");
       assert.equal(await rail.getAttribute("data-open"), "false", "empty wide rail starts collapsed");
-      assert.ok(Math.abs((await rail.boundingBox()).width - 44) <= 1);
+      assert.ok(Math.abs((await rail.boundingBox()).width - 42) <= 1);
       await page.keyboard.press("n");
       await page.waitForFunction(() => document.querySelector(".board-rail")?.dataset.open === "true");
       await page.waitForTimeout(150);

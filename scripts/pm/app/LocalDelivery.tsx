@@ -20,6 +20,9 @@ import { displayTitle } from "./localRunModel";
 import {FoundryStandby} from './stage/FoundryStandby';
 import type { UatHandover, Work } from "./types";
 import type { LocalOwnerMessage, LocalQuestion } from "./localChatModel";
+import { UatPage } from "./UatWizard";
+import { GitCommands } from "./LocalWorkflow";
+export { LocalActions } from "./LocalWorkflow";
 
 export const offersLocalLane = () =>
   transport().capabilities.kind === "local" &&
@@ -29,6 +32,7 @@ export interface LocalReadiness {
   facts: Record<string, { state: string; code: string; detail?: string }>;
 }
 export interface LocalRunView {
+  cancelCleanupCommands?: string[][];
   base?: string | null;
   run_id: string;
   phase: string;
@@ -61,9 +65,12 @@ export interface LocalRunView {
     started_at?: string;
     finished_at?: string;
   }[];
+  earlier_activity?: boolean;
   activity: {
     at: string;
     summary: string | null;
+    message_text?: string;
+    message_excerpt?: boolean;
     kind?: string;
     seq?: number;
     job_id?: string | null;
@@ -85,7 +92,18 @@ export interface LocalRunView {
   /** DLV-167: the session's files against the main checkout since the run's base. */
   mergePlan?: LocalMergePlan | null;
   canMerge?: boolean;
-  applied?: { at: string; files: string[]; main_head: string; pm_error: string | null } | null;
+  applied?: { at: string; files: string[]; main_head: string; pm_error: string | null; manifest?: { path: string }[] } | null;
+  committed?: { sha: string; at: string } | null;
+  pushed?: { sha: string; at: string; remote: string; branch: string } | null;
+  cleaned_at?: string | null;
+  cleanup_error?: string | null;
+  cleanup_archive?: string | null;
+  cleanup_outcome?: string | null;
+  activeCommand?: string | null;
+  merge_pending?: { main_head: string } | null;
+  publication_log?: { at: string; argv: string[]; exit: number | null; tail: string }[];
+  publication?: { action: "commit" | "push"; commands: string[][]; files: string[]; token: string | null; reason: string | null; recover?: boolean; outgoing?: string[]; cleanupCommands?: string[][]; cleanupInput?: string | null } | null;
+  refresh?: { conflicts?: string[] } | null;
 }
 export interface LocalMergePlan {
   files: { status: string; path: string }[];
@@ -93,8 +111,14 @@ export interface LocalMergePlan {
   branch: string | null;
   expected: string;
   error?: string;
+  dirtyConflicts?: string[];
+  committedConflicts?: string[];
+  refreshCommands?: string[][];
+  refreshBase?: string;
+  canRefresh?: boolean;
 }
-export type LocalAction = "review" | "merge" | "ship" | "undo" | "cancel";
+export type LocalAction = "review" | "merge" | "commit" | "push" | "refresh" | "recheck" | "test" | "cancel" | "discard";
+export type LocalAct = (action: LocalAction, evidence?: Record<string, string>) => void;
 export interface LocalPreviewView {
   state: "starting" | "ready" | "stopped" | "failed";
   url: string | null;
@@ -172,6 +196,13 @@ export function LocalLaunch({ work }: { work: Work }) {
     enabled: library && connected && !!session.data?.paired,
   });
   const pendingBody = library ? previous.data?.body : null;
+  const workId = work.idChip || work.id;
+  const preview = useQuery({
+    queryKey: pmKeys.localStartPlan(work.file, workId),
+    queryFn: ({ signal }) => read<{ commands: string[][]; cleanupCommands?: string[][]; branch: string; start_nonce: string; token: string }>(
+      "/api/delivery/v2/local/start-plan?" + new URLSearchParams({ file: work.file, id: workId }), signal),
+    enabled: connected && !!session.data?.paired && !pendingBody,
+  });
   const catalogue = useQuery({
     queryKey: pmKeys.v2executors,
     queryFn: ({ signal }) => transport().v2Executors(signal),
@@ -204,6 +235,8 @@ export function LocalLaunch({ work }: { work: Work }) {
     mutationFn: async () => {
       const body = pendingBody || {
         action: "start",
+        start_nonce: preview.data?.start_nonce,
+        preview_id: preview.data?.token,
         id: work.idChip || work.id,
         file: work.file,
         executor,
@@ -284,10 +317,20 @@ export function LocalLaunch({ work }: { work: Work }) {
           <LocalReadinessPanel data={refusal} />
         </section>
       )}
+      {preview.data && <details className="launch-check-details">
+        <summary>Start commands</summary>
+        <GitCommands commands={preview.data.commands} />
+        {!!preview.data.cleanupCommands?.length && <>
+          <strong>On failure or cancellation</strong>
+          <GitCommands commands={preview.data.cleanupCommands} />
+          <small>Delete {preview.data.branch} at its archived commit.</small>
+        </>}
+      </details>}
+      <ErrorNotice error={preview.error} retry={() => void preview.refetch()} />
       <div className="gate-actions">
         <button
           className="primary"
-          disabled={!connected || !session.data?.paired || busy || (library && (!previous.isSuccess || (!pendingBody && !chosen)))}
+          disabled={!connected || !session.data?.paired || busy || (!pendingBody && !preview.data) || (library && (!previous.isSuccess || (!pendingBody && !chosen)))}
           onClick={() => {
             if (starting.current) return;
             selectionTouched.current = true;
@@ -345,34 +388,12 @@ function HostLimits() {
   return <details><summary>Host limits</summary><p>Credential scrub prevents accidents, not deliberate host access.</p></details>;
 }
 
-export function LocalActions({ run, busy, act }: { run: Pick<LocalRunView, "phase" | "head" | "canShip" | "canUndo" | "canMerge" | "mergePlan" | "applied" | "interrupted" | "handover">; busy: boolean; act: (action: LocalAction) => void }) {
-  // DLV-167: Merge copies the tested files into the main checkout; the owner
-  // commits and pushes. Ship stays hidden: it pushes to `origin`, not the owner's remote.
-  const plan = run.phase === "uat-ready" ? run.mergePlan : null;
-  const offBranch = !!plan && !plan.error && plan.branch !== plan.expected;
-  return <div className="gate-actions">
-    {!!plan?.conflicts.length && <div className="merge-note merge-alert" role="alert">
-      <strong>Changed in your repo since this session started</strong>
-      <ul>{plan.conflicts.map((c) => <li key={c.path}><code>{c.path}</code>{c.uncommitted ? " · uncommitted" : ""}</li>)}</ul>
-    </div>}
-    {offBranch && <div className="merge-note merge-alert" role="alert"><strong>Switch your repo to {plan.expected}</strong></div>}
-    {plan?.error && <div className="merge-note merge-alert" role="alert">{plan.error}</div>}
-    {run.applied && <p className="merge-note merge-done">Merged {run.applied.files.length} file{run.applied.files.length === 1 ? "" : "s"} · commit and push in your repo{run.applied.pm_error ? ` · PM: ${run.applied.pm_error}` : ""}</p>}
-    <button className="secondary" disabled={busy || !run.head} onClick={() => act("review")}>Review diff</button>
-    {run.handover && <a className="secondary" href={`#/delivery/test/${run.handover.handover_id}`}>Test steps</a>}
-    {run.phase === "push-pending"
-      ? <button className="primary" disabled={busy} onClick={() => act("ship")}>Retry push</button>
-      : run.phase === "uat-ready" && <button className="primary" disabled={busy || !run.canMerge} onClick={() => act("merge")}>Merge</button>}
-    {(run.canUndo || run.phase === "revert-push-pending") && <button className="secondary" disabled={busy} onClick={() => act("undo")}>Undo</button>}
-    {["preparing", "building", "checking"].includes(run.phase) && <button className="secondary" disabled={busy} onClick={() => act("cancel")}>Cancel</button>}
-  </div>;
-}
-
 export function LocalRun({ id }: { id: string }) {
   const session = useV2Session();
   const game = useGameLayer();
   const route = useRoute();
-  const [patch, setPatch] = useState<{ runId: string; value: string } | null>(
+  const [testId, setTestId] = useState<string | null>(null);
+  const [patch, setPatch] = useState<{ runId: string; head: string | null; value: string } | null>(
     null,
   );
   const detail = useQuery({
@@ -385,7 +406,8 @@ export function LocalRun({ id }: { id: string }) {
     enabled: !!session.data?.paired && offersLocalLane(),
     refetchInterval: (query) => {
       const phase = query.state.data?.phase;
-      return phase && ["failed", "cancelled", "reverted"].includes(phase)
+      if (query.state.data?.activeCommand) return 2000;
+      return query.state.data?.cleaned_at || (phase && ["failed", "cancelled", "reverted", "discarded", "cleaned"].includes(phase))
         ? false
         : phase === "shipped"
           ? 15_000
@@ -393,26 +415,37 @@ export function LocalRun({ id }: { id: string }) {
     },
   });
   const command = useMutation({
-    mutationFn: async (action: LocalAction) => {
+    mutationFn: async ({ action, evidence }: { action: LocalAction; evidence?: Record<string, string> }) => {
       const runId = id;
+      const head = detail.data?.head ?? null;
       return {
         ...(await v2Post<{ patch?: string }>(
           "local",
-          { action, run_id: runId },
-          120_000,
+          { ...evidence, action, run_id: runId },
+          action === "refresh" ? 100 * 60_000 : action === "commit" ? 30 * 60_000 : action === "push" || action === "discard" ? 15 * 60_000 : 120_000,
         )),
-        runId,
+        runId, head,
       };
     },
     onSuccess: (result) => {
       if (result.patch !== undefined)
-        setPatch({ runId: result.runId, value: result.patch });
+        setPatch({ runId: result.runId, head: result.head, value: result.patch });
     },
     onSettled: () => client.invalidateQueries({ queryKey: pmKeys.all }),
   });
   const run = detail.data;
+  const closeTests = () => {
+    setTestId(null);
+    void detail.refetch();
+  };
+  const act: LocalAct = (action, evidence) => {
+    if (action === "test") setTestId(run?.handover?.handover_id ?? null);
+    else if (action === "recheck") void detail.refetch();
+    else command.mutate({ action, evidence });
+  };
   if (session.data && !session.data.paired) return <PairV2 />;
   if (!offersLocalLane()) return <p>Open on the laptop</p>;
+  if (testId && run?.handover?.handover_id === testId) return <UatPage id={testId} onReturn={closeTests} />;
   return (
     <LibraryArrival key={id} active={game.enabled && route.query.get("arrival") === "library"}
       error={!!(session.error || detail.error)}>
@@ -429,16 +462,15 @@ export function LocalRun({ id }: { id: string }) {
         <>
           <LocalRunReview
             run={run}
-            busy={command.isPending}
-            act={(action) => command.mutate(action)}
-            patch={patch?.runId === id ? patch.value : null}
+            busy={command.isPending || !!run.activeCommand}
+            act={act}
+            patch={patch?.runId === id && patch.head === run.head ? patch.value : null}
             poll={{
               dataUpdatedAt: detail.dataUpdatedAt,
               isError: detail.isError,
             }}
             retry={() => void detail.refetch()}
           />
-          {!game.enabled && <HostLimits />}
         </>
       )}
     </div>

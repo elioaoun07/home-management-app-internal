@@ -1316,13 +1316,26 @@ export function openStore({ path, now = () => new Date().toISOString(), readOnly
           entry.at ?? null,
           String(entry.kind || "event"),
           JSON.stringify(entry.agent ?? { role: "main" }),
-          entry.summary == null ? null : String(entry.summary).slice(0, 400),
+          entry.kind === "message" && run_id.startsWith("local-") &&
+            typeof entry.message_text === "string" && entry.message_text.startsWith(entry.summary)
+            ? entry.message_text.slice(0, 16_384)
+            : entry.summary == null ? null : String(entry.summary).slice(0, 400),
         );
       });
     },
 
-    listActivity(run_id, limit = 200) {
-      return sql("SELECT * FROM activity WHERE run_id = ? ORDER BY rowid DESC LIMIT ?").all(run_id, limit).reverse();
+    listActivity(run_id, limit = 200, includeLocalText = false) {
+      const rows = sql("SELECT * FROM activity WHERE run_id = ? ORDER BY rowid DESC LIMIT ?").all(run_id, limit).reverse();
+      if (includeLocalText || !run_id.startsWith("local-")) return rows;
+      return rows.map(row => row.kind === "message" && row.summary?.length > 240
+        ? { ...row, summary: row.summary.slice(0, 240) } : row);
+    },
+
+    /** Page older Local rows in insertion order, bound to a row of this run. */
+    earlierLocalActivity(run_id, before) {
+      return sql(`SELECT * FROM activity WHERE run_id = ? AND rowid < (
+        SELECT rowid FROM activity WHERE job_id = ? AND run_id = ? AND seq = ?
+      ) ORDER BY rowid DESC LIMIT 31`).all(run_id, run_id, run_id, before).reverse();
     },
 
     /** Native subagent activity the executors reported, for fleet accounting. */

@@ -37,13 +37,14 @@ interface Input extends PlaybackInput {
 export function useStageClock(
   section: RefObject<HTMLElement | null>,
   input: Input,
-  view: "overview" | "seat" = "overview",
+  view: "overview" | "seat" | "owner" = "overview",
 ) {
   const current = useRef(input);
   current.current = input;
   const notify = useRef<() => void>(() => {});
   useEffect(() => notify.current(), [input]);
   useLayoutEffect(() => {
+    if (view === "owner") return;
     const root = section.current;
     const staticCanvas = root?.querySelector<HTMLCanvasElement>(
       '[data-layer="static"]',

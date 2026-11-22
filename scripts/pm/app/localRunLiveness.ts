@@ -1,3 +1,5 @@
+import { localRunLabel } from "./localRunModel";
+
 export const LIVENESS = {
   thinkingAfter: 20_000,
   quietAfter: 90_000,
@@ -83,7 +85,7 @@ export function liveness(
       : run.phase === "uat-ready" && readyTimes.length
         ? Math.max(0, now - Math.max(...readyTimes))
         : null;
-  const terminal = ["failed", "cancelled", "shipped", "reverted"].includes(
+  const terminal = ["failed", "cancelled", "shipped", "reverted", "pushed", "cleaned", "discarded"].includes(
     run.phase,
   );
   let state: LocalLivenessState;
@@ -97,9 +99,11 @@ export function liveness(
   )
     state = "link-down";
   else if (run.interrupted) state = "signal-lost";
+  else if (run.phase === "discarded") state = "cancelled";
+  else if (run.phase === "pushed" || run.phase === "cleaned") state = "shipped";
   else if (terminal)
     state = run.phase as "failed" | "cancelled" | "shipped" | "reverted";
-  else if (run.phase === "uat-ready" || asked !== null) state = "your-turn";
+  else if (["uat-ready", "merged", "committed", "refresh-conflict", "refresh-failed", "merging"].includes(run.phase) || asked !== null) state = "your-turn";
   else if (["push-pending", "revert-push-pending"].includes(run.phase))
     state = "push-pending";
   else {
@@ -127,7 +131,7 @@ export function liveness(
     "signal-lost": "Signal lost",
     failed: "Failed",
     cancelled: "Stopped",
-    shipped: "Shipped",
+    shipped: localRunLabel(run),
     reverted: "Reverted",
     "push-pending": "Push pending",
     "your-turn":
@@ -142,7 +146,7 @@ export function liveness(
   };
   return {
     state,
-    caption: captions[state] || phaseCaption,
+    caption: state !== "link-down" && state !== "signal-lost" && ["merged", "committed", "pushed", "cleaned", "discarded", "refresh-conflict", "refresh-failed", "refreshing", "merging"].includes(run.phase) ? localRunLabel(run) : captions[state] || phaseCaption,
     lastSignalAt,
     sinceSignalMs,
     waitingMs,

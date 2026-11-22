@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Armchair, Footprints, Map, Maximize, RotateCw, X } from "lucide-react";
-import { LocalActions, type LocalAction, type LocalRunView } from "./LocalDelivery";
+import { Armchair, Footprints, Map, Maximize, Minimize2, RotateCw, X } from "lucide-react";
+import { LocalActions, type LocalAct, type LocalAction, type LocalRunView } from "./LocalDelivery";
 import { DeliveryWorkshop } from "./DeliveryWorkshop";
 import { LocalRunConsole, type Tool } from "./LocalRunConsole";
 import { buildTimeline, sceneAt } from "./localRunScene";
@@ -35,6 +35,10 @@ import type { BoardPlacement } from "./stage/types";
 import type { StageTempo, ReplayMode } from "./stage/director";
 import type { View } from "./brain/layout";
 import "./local-run-game.css";
+import { Back } from "./components";
+import { displayTitle } from "./localRunModel";
+import { OwnerWorkspace, RoomSwitch, opensAtOwner, type DeliveryRoom } from "./OwnerWorkspace";
+import { currentOwnerStation, type OwnerStation } from "./ownerStations";
 
 export function LocalRunGame({
   run,
@@ -46,7 +50,7 @@ export function LocalRunGame({
 }: {
   run: LocalRunView;
   busy: boolean;
-  act: (action: LocalAction) => void;
+  act: LocalAct;
   patch: string | null;
   poll?: LocalPollHealth;
   retry?: () => void;
@@ -66,6 +70,8 @@ export function LocalRunGame({
   );
   const timeline = useMemo(() => buildTimeline(run), [run]);
   const arrivingFromLibrary = useRoute().query.get("arrival") === "library";
+  const [room, setRoom] = useState<DeliveryRoom>(() => !arrivingFromLibrary && opensAtOwner(run) ? "owner" : "ai");
+  const [ownerStation, setOwnerStation] = useState<OwnerStation>();
   const [view, setView] = useState<"overview" | "seat">(() => {
     try {
       return localStorage.getItem("pm-local-game-view") === "seat" ? "seat" : "overview";
@@ -77,6 +83,7 @@ export function LocalRunGame({
   const [brainView, setBrainView] = useState<View | null>(arrivingFromLibrary ? "walk" : null);
   const inRoom = !!brainView || view === "seat";
   const consoleId = useId();
+  const [wideReader, setWideReader] = useState(false);
   const [tool, setTool] = useState<Tool>("activity"),
     [consoleOpen, setConsoleOpen] = useState(false),
     [fileFilter, setFileFilter] = useState<string | null>(null);
@@ -88,8 +95,7 @@ export function LocalRunGame({
     [speed, setSpeed] = useState<1 | 4>(1),
     [tempo, setTempo] = useState<StageTempo>(1);
   const [positions, setPositions] = useState<BoardPlacement[]>([]),
-    [railOpen, setRailOpen] = useState(() =>
-      !arrivingFromLibrary && (typeof matchMedia === "undefined" || !matchMedia(`(max-width: ${HUD.railCollapseBelow - 1}px)`).matches)),
+    [railOpen, setRailOpen] = useState(() => !arrivingFromLibrary && !!openQuestion(run)),
     [selectedAttentionId, setSelectedAttentionId] = useState<string>();
   const [staging, setStaging] = useState<StagingUi>({
     zone: null,
@@ -101,6 +107,7 @@ export function LocalRunGame({
   });
   const stageRef = useRef<HTMLElement>(null),
     panel = useRef<HTMLElement>(null);
+  const drawerTrigger = useRef<HTMLElement | null>(null);
   const realHealth = useRunHealth(run, poll);
   const replay = replayTime !== null;
   const cursorMissing = replay && !!replayCursor && (replayMark
@@ -124,6 +131,7 @@ export function LocalRunGame({
     replayTime ?? Date.now(),
     replayTime === null ? poll : {},
   );
+  const ownerRun = replay ? snapshot.run : run;
   const {
     attention: realAttention,
     acknowledge,
@@ -159,12 +167,14 @@ export function LocalRunGame({
       setConsoleOpen(false);
   }, []);
   const selectTool = useCallback((next: Tool) => {
+    drawerTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setTool(next);
     setConsoleOpen(true);
     if (matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)
       setRailOpen(false);
   }, []);
   const openTool = useCallback((next: Tool) => {
+    drawerTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setTool(next);
     setConsoleOpen(true);
     if (matchMedia(`(max-width: ${HUD.railBelow}px)`).matches)
@@ -175,20 +185,30 @@ export function LocalRunGame({
   }, []);
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (!consoleOpen || event.key !== "Escape" || event.defaultPrevented) return;
       setConsoleOpen(false);
+      drawerTrigger.current?.focus({ preventScroll: true });
     };
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
-  }, []);
+  }, [consoleOpen]);
   const action = useCallback(
-    (value: LocalAction) => {
+    (value: LocalAction, evidence?: Record<string, string>) => {
       if (replay || !localBoardActionAllowed(run, busy, value)) return;
-      if (value === "review") openTool("changes");
-      act(value);
+      act(value, evidence);
     },
-    [act, openTool, run, busy, replay],
+    [act, run, busy, replay],
   );
+  const enterRoom = useCallback((next: DeliveryRoom, station?: OwnerStation) => {
+    if (next === room && !station) return;
+    setConsoleOpen(false);
+    setRailOpen(false);
+    if (station) {
+      setOwnerStation(station);
+      setBrainView(null);
+    }
+    setRoom(next);
+  }, [room]);
   const canAct = useCallback(
     (item: AttentionItem) => attentionActionAllowed(run, busy, item),
     [run, busy],
@@ -213,16 +233,15 @@ export function LocalRunGame({
         if (!replay) acknowledge(item.id);
         setFileFilter(null);
         openTool("activity");
-      } else if (item.action.run === "review") action("review");
+      } else if (item.action.run === "review") enterRoom("owner", "review");
       else if (item.action.run === "cancel") action("cancel");
-      else if (item.action.run === "retry")
-        action(run.phase === "revert-push-pending" ? "undo" : "ship");
+      else if (item.action.run === "test") enterRoom("owner", "test");
       else if (item.action.href)
         location.hash = item.action.href.replace(/^#/u, "");
       else if (item.action.run === "new-attempt" && run.work.campaign)
         location.hash = `/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`;
     },
-    [acknowledge, openTool, action, run, replay],
+    [acknowledge, openTool, action, run, replay, enterRoom],
   );
   const onZone = useCallback(
     (zone: ZoneId) => {
@@ -314,23 +333,47 @@ export function LocalRunGame({
     onEnd,
     onStage: setStaging,
     onPlacements: setPositions,
-  }, inRoom ? "seat" : "overview");
+  }, room === "owner" && !brainView ? "owner" : inRoom ? "seat" : "overview");
   const theater = () => {
     if (document.fullscreenElement)
       void document.exitFullscreen().catch(() => {});
-    else void stageRef.current?.requestFullscreen().catch(() => {});
+    else void stageRef.current?.closest(".board-game")?.requestFullscreen?.().catch(() => {});
   };
+  const roomSwitch = <RoomSwitch room={room} onChange={enterRoom} />;
+  if (room === "owner" && !brainView) {
+    return <div className="run-game board-game owner-game" data-phase={run.phase}>
+      <section ref={stageRef} className="owner-game-frame" aria-label="Owner room">
+        <header className="owner-game-header">
+          <Back fallback="/delivery" />
+          <div className="board-title"><span className="run-game-tag">{run.work.id}</span><h1 title={displayTitle(run)}>{displayTitle(run)}</h1></div>
+          {roomSwitch}
+          <button type="button" className="owner-view-switch" onClick={explore}>
+            <Footprints size={16} />Explore 3D
+          </button>
+          {replay && <button type="button" onClick={live}>Return live</button>}
+          <button type="button" className="owner-theater" onClick={theater} aria-label="Theater" title="Theater"><Maximize size={16} /></button>
+        </header>
+        {realHealth.state === "link-down" && <button className="owner-reconnect" onClick={retry}><RotateCw size={14} />Reconnect</button>}
+        <OwnerWorkspace run={ownerRun} busy={busy || realHealth.state === "link-down"} act={action}
+          patch={replay ? null : patch} readOnly={replay} initialStation={ownerStation} onStationChange={setOwnerStation} />
+      </section>
+    </div>;
+  }
   return (
     <div className="run-game board-game" data-phase={run.phase}>
       <DeliveryWorkshop
         stageRef={stageRef}
+        roomSwitch={roomSwitch}
         positions={positions}
         staging={staging}
         railOpen={railOpen}
         seated={inRoom}
         seat={visitedSeat && <TransferRoom
           active={inRoom}
-          brain={brainView ? { view: brainView, onView: setBrainView, onBoard: showBoard, blocked: consoleOpen } : undefined}
+          brain={brainView ? { view: brainView, onView: setBrainView, onBoard: showBoard, blocked: consoleOpen,
+            floor: room, onFloor: enterRoom } : undefined}
+          owner={{ run: ownerRun, busy: busy || realHealth.state === "link-down", act: action, patch: replay ? null : patch,
+            station: ownerStation, onStation: id => setOwnerStation(id === currentOwnerStation(ownerRun) ? undefined : id) }}
           timeline={timeline}
           scene={snapshot}
           health={health}
@@ -350,7 +393,7 @@ export function LocalRunGame({
             setRailOpen(true);
             setSelectedAttentionId(ask?.id);
           }}
-          testSteps={test && <a className="primary room-test-link" href={test.action.href}>Test steps</a>}
+          testSteps={test && <button className="primary room-test-link" onClick={() => enterRoom("owner", "test")}>Test steps</button>}
         />}
         onZone={onZone}
         snapshot={snapshot}
@@ -441,7 +484,7 @@ export function LocalRunGame({
             data-closed-failed={["failed", "cancelled"].includes(run.phase)}
           >
             {["failed", "cancelled"].includes(run.phase) && run.work.campaign && <a className="primary" href={`#/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`}>New attempt</a>}
-            {run.head ? <LocalActions run={run} busy={busy} act={action} /> : localBoardActionAllowed(run, busy, "cancel") || (["preparing", "building", "checking"].includes(run.phase) && !run.interrupted) ? <div className="gate-actions"><button className="secondary" disabled={busy} onClick={() => action("cancel")}>Cancel</button></div> : null}
+            <LocalActions run={run} busy={busy} act={action} station="session" />
           </div>
         )}
         question={
@@ -455,18 +498,24 @@ export function LocalRunGame({
           ) : null
         }
         debrief={
-          snapshot.phase === "shipped" ? (
+          snapshot.run.pushed || (snapshot.phase === "shipped" && !!snapshot.run.merge && !snapshot.run.applied) ? (
             <Debrief run={snapshot.run} timeline={timeline} scene={snapshot} />
           ) : null
         }
       >
       <details
         className="board-console-drawer"
+        data-expanded={wideReader}
         open={consoleOpen}
         onToggle={(event) => setConsoleOpen(event.currentTarget.open)}
       >
-        <summary aria-label="Close details">{LOCAL_RUN_TOOLS.find(item => item.id === tool)?.label}<X size={16} /></summary>
-        <LocalRunConsole
+        <summary aria-label="Close details" title="Close details" onClick={() => drawerTrigger.current?.focus({ preventScroll: true })}>
+          <span>{LOCAL_RUN_TOOLS.find(item => item.id === tool)?.label}</span><X size={16} />
+        </summary>
+        {consoleOpen && <button type="button" className="board-expand-reader" aria-pressed={wideReader}
+          aria-label={wideReader ? "Reduce details" : "Expand details"} title={wideReader ? "Reduce details" : "Expand details"}
+          onClick={() => setWideReader(!wideReader)}>{wideReader ? <Minimize2 size={16} /> : <Maximize size={16} />}</button>}
+        {consoleOpen && <LocalRunConsole
           id={consoleId}
           showTools={false}
           run={run}
@@ -482,7 +531,7 @@ export function LocalRunGame({
           fileFilter={fileFilter}
           selectedAttentionId={selectedAttentionId}
           setFileFilter={setFileFilter}
-        />
+        />}
       </details>
       </DeliveryWorkshop>
     </div>

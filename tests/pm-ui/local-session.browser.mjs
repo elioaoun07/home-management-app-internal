@@ -1,6 +1,5 @@
 // Credential-free A5 fixture only. All session responses are synthetic; every
-// non-fixture write/request is blocked. One review response is fulfilled in the
-// browser without reaching the server. Never starts a native provider.
+// write is blocked. Recorded diffs are served by the fixture.
 import assert from "node:assert/strict";
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -47,7 +46,6 @@ writeFileSync(`${evidence}/served-pm.js`, frozenBundle.js);
 writeFileSync(`${evidence}/served-pm.css`, frozenBundle.css);
 const errors = [],
   writes = [],
-  simulatedReviews = [],
   observations = [],
   stageFacts = [],
   firstFrameFacts = [],
@@ -63,7 +61,7 @@ const assertionChanges = [
   "R122 runtime gallery/pixel/bloom/quality instrumentation and headless scripting claims are retired; local-stage-art.browser.mjs owns R123 DPR1.5 canvas/performance budgets.",
   "The retained suite preserves action admission, exact-row replay/future masking, tab restoration, sound opt-in, hidden/offscreen/reduced freeze, Calm and diff run isolation.",
 ];
-const controls = await installLocalSessionFixture(page, { origin, frozenBundle, writes, simulatedReviews });
+const controls = await installLocalSessionFixture(page, { origin, frozenBundle, writes });
 const { id, otherId, iso } = controls;
 async function open(path, next, theme) {
   controls.scene = next;
@@ -81,10 +79,15 @@ async function open(path, next, theme) {
   if (path.startsWith("/delivery/run/")) {
     if (await page.evaluate(() => localStorage.getItem("pm-game-layer") === "off")) {
       await page.locator(".local-run-page").waitFor();
-      await page.getByRole("region", { name: "Plan", exact: true }).waitFor();
+      await page.locator(".calm-evidence > summary").click();
       return;
     }
+    const ai = page.getByRole("button", { name: "AI room", exact: true });
+    await ai.waitFor();
+    if (await ai.getAttribute("aria-pressed") === "false") await ai.click();
     await page.locator(".board-workshop").waitFor();
+    if (["shipped", "replay-gap", "replay-stale-gap"].includes(next))
+      await page.getByRole("button", { name: "Recorder", exact: true }).click();
     // The dedicated mission suite checks initial collapse. Retained checks
     // deliberately open the rail to inspect the same visible evidence/cards.
     if (await page.locator(".board-dock").count()) {
@@ -96,7 +99,8 @@ async function open(path, next, theme) {
 }
 async function selectTool(name) {
   if (await page.locator(".board-dock").count()) {
-    await page.locator(".board-dock").getByRole("tab", { name, exact: name !== "Verification" }).click();
+    const tab = page.locator(".board-dock").getByRole("tab", { name, exact: name !== "Verification" });
+    if (await tab.getAttribute("aria-expanded") !== "true") await tab.click();
     await page.getByRole("tabpanel").waitFor();
     return;
   }
@@ -104,6 +108,10 @@ async function selectTool(name) {
   if ((await drawer.getAttribute("open")) === null) await drawer.locator(":scope > summary").click();
   await page.getByRole("tab", { name, exact: name !== "Verification" }).click();
   await page.getByRole("tabpanel").waitFor();
+}
+async function openOwnerDiff() {
+  await page.getByRole("button", { name: "Owner room", exact: true }).click();
+  await page.locator(".owner-room-stations").getByRole("button", { name: "Review", exact: true }).click();
 }
 async function capture(name) {
   assert.ok(
@@ -220,14 +228,16 @@ try {
     delete document.visibilityState;
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await checkSessionRegressions({ page, open, selectTool, capture, controls, id });
+  await checkSessionRegressions({ page, open, selectTool, openOwnerDiff, capture, controls, id });
   await open(`/delivery/run/${id}`, "checking", "blue");
-  await page.locator(".board-rail > .run-game-commandbar").getByRole("button", { name: "Review diff", exact: true }).click();
-  await page.locator(".run-game-patch").filter({ hasText: "fixture-only-first-run" }).waitFor();
+  await openOwnerDiff();
+  await page.getByRole("region", { name: "Code diff" }).getByText("+fixture-only-first-run", { exact: true }).waitFor();
   await page.evaluate(nextId => { location.hash = `/delivery/run/${nextId}`; }, otherId);
   await page.locator(".run-game-tag").filter({ hasText: "BUD-2" }).first().waitFor();
-  await selectTool("Changes");
-  assert.equal(await page.locator(".run-game-patch").count(), 0, "another run cannot inherit the first run's diff");
+  await openOwnerDiff();
+  const otherDiff = page.getByRole("region", { name: "Code diff" });
+  await otherDiff.getByText("+fixture-only-second-run", { exact: true }).waitFor();
+  assert.ok(!(await otherDiff.innerText()).includes("fixture-only-first-run"), "another run cannot inherit the first run's diff");
   await capture("diff-run-isolation");
   await page.emulateMedia({ reducedMotion: "reduce" });
   await open(`/delivery/run/${id}`, "building", "blue");
@@ -246,8 +256,10 @@ try {
   // The calm surface keeps the original structured review over the same evidence.
   await page.evaluate(() => localStorage.setItem("pm-game-layer", "off"));
   await open(`/delivery/run/${id}`, "building", "blue");
-  for (const name of ["Plan", "Verification", "Activity", "Changes"])
-    assert.equal(await page.getByRole("region", { name, exact: true }).count(), 1);
+  for (const [tab, name] of [["Brief", "Plan"], ["Verification", "Verification"], ["Activity", "Activity"], ["Changes", "Changes"]]) {
+    await page.getByRole("tab", { name: tab, exact: tab !== "Verification" }).click();
+    await page.getByRole("region", { name, exact: true }).waitFor();
+  }
   await capture("calm-review");
   await page.evaluate(() => localStorage.setItem("pm-game-layer", "on"));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -260,12 +272,11 @@ try {
     "reduced motion stays static",
   );
   assert.deepEqual(writes, []);
-  assert.deepEqual(simulatedReviews, [id, id]);
   assert.deepEqual(errors, []);
   writeFileSync(
     `${evidence}/${resultName}.json`,
     JSON.stringify(
-      { observations, stageFacts, firstFrameFacts, parkedFacts, beats, secondBurstFacts, frameBudget, canvasDpr, fullscreen, errors, writes, simulatedReviews, reducedMotion: true, bundleFacts, sourceFacts, assertionChanges },
+      { observations, stageFacts, firstFrameFacts, parkedFacts, beats, secondBurstFacts, frameBudget, canvasDpr, fullscreen, errors, writes, reducedMotion: true, bundleFacts, sourceFacts, assertionChanges },
       null,
       2,
     ),

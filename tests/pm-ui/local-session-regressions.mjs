@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 
 // R123 regressions found by the independent source audit. All API replies remain synthetic.
-export async function checkSessionRegressions({ page, open, selectTool, capture, controls, id }) {
+export async function checkSessionRegressions({ page, open, selectTool, openOwnerDiff, capture, controls, id }) {
   await open(`/delivery/run/${id}`, "shipped", "blue");
-  await page.locator(".board-rail > .run-game-commandbar").getByRole("button", { name: "Review diff", exact: true }).click();
-  await page.locator(".run-game-patch").filter({ hasText: "fixture-only-first-run" }).waitFor();
-  assert.equal(await page.locator(".run-game-files li").count(), 1);
+  await openOwnerDiff();
+  await page.getByRole("region", { name: "Code diff" }).getByText("+fixture-only-first-run", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("combobox", { name: "Changed file" }).locator("option").count(), 1);
+  await page.getByRole("button", { name: "AI room", exact: true }).click();
+  await page.getByRole("button", { name: "Recorder", exact: true }).click();
   const recorder = page.getByRole("slider", { name: "Replay", exact: true });
   await recorder.focus();
   await recorder.press("Home");
@@ -13,8 +15,14 @@ export async function checkSessionRegressions({ page, open, selectTool, capture,
   assert.equal(await page.locator(".run-game-patch").count(), 0, "an early replay cannot disclose a future patch");
   assert.equal(await page.locator(".run-game-files li").count(), 0, "an early replay cannot disclose future diff filenames");
   assert.equal((await page.getByRole("tab", { name: "Changes", exact: false }).innerText()).trim(), "Changes", "the Changes count cannot disclose a future file");
+  await openOwnerDiff();
+  await page.getByText("Comparison available in Live", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("region", { name: "Code diff" }).count(), 0);
+  assert.equal(await page.getByRole("combobox", { name: "Changed file" }).count(), 0);
+  await page.getByRole("button", { name: "AI room", exact: true }).click();
   await selectTool("Activity");
-  assert.deepEqual(await page.locator(".run-game-counters strong").allTextContents(), ["0", "0", "0", "0"], "early Activity counters use only projected rows/checks");
+  assert.equal(await page.locator('.run-game-events li[data-kind="edit"],.run-game-events li[data-kind="check"]').count(), 0,
+    "early Activity contains only the replay frame's recorded events");
   await capture("replay-future-patch-files-and-counters-masked");
 
   await open(`/delivery/run/${id}`, "shipped", "blue");

@@ -427,6 +427,18 @@ describe("unified session board", () => {
     });
   });
 
+  it("keeps a direct Local handover on its original run as it moves from testing to publication", () => {
+    const id = "local-00000000-0000-4000-8000-000000000168";
+    const direct = handover({ subject: { ...handover().subject, type: "direct", run_id: null, delivery_ref: "local:" + id } });
+    for (const stage of ["uat-ready", "merged", "committed"]) {
+      const board = sessionBoard({ world: world(), statusKnown: true, uat: [direct],
+        v2: [run({ lane: "local", run_id: id, stage, active: false })] });
+      expect(board.counts).toEqual({ sessions: 1, requests: 0, acceptance: 0 });
+      expect(cards(board)[0]).toMatchObject({ href: `#/delivery/run/${id}?from=%2Fsessions`, handoverId: direct.handover_id,
+        lane: stage === "uat-ready" ? "uat" : "needs" });
+    }
+  });
+
   it("keeps pending owner checks visible beside another active session for that work", () => {
     const board = sessionBoard({
       world: world("### BUD-1\n**UAT:** pending\n"),

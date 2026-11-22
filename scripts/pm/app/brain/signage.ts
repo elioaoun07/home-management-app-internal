@@ -19,48 +19,54 @@ export function makeSignage() {
   const cells = new Map<string, number>();
   const cellWidth = 512, cellHeight = 144, gutter = 6;
 
-  return (parent: T.Object3D, name: string, y: number, width: number, style: Treatment = "nameplate") => {
-    const key = style + "/" + name;
-    const slot = cells.get(key) ?? cells.size;
+  function bounds(slot: number) {
     const left = (slot % 4) * cellWidth + gutter;
     const top = Math.floor(slot / 4) * cellHeight + gutter;
-    const w = cellWidth - gutter * 2, h = cellHeight - gutter * 2;
+    return { left, top, w: cellWidth - gutter * 2, h: cellHeight - gutter * 2 };
+  }
+  function paint(slot: number, name: string, style: Treatment) {
+    const { left, top, w, h } = bounds(slot);
+    ctx.clearRect(left, top, w, h);
+    ctx.save();
+    ctx.translate(left, top);
+    const plate = style === "lintel" || style === "nameplate";
+    if (plate) {
+      const paint = ctx.createLinearGradient(0, 0, 0, h);
+      paint.addColorStop(0, "#233039");
+      paint.addColorStop(.11, "#15242c");
+      paint.addColorStop(.78, "#111d24");
+      paint.addColorStop(1, "#19272d");
+      ctx.fillStyle = paint;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#54616a";
+      ctx.fillRect(0, 0, w, 3);
+      ctx.fillStyle = "#0a131a";
+      ctx.fillRect(0, h - 5, w, 5);
+      for (const x of [16, w - 16]) {
+        ctx.fillStyle = "#52616a";
+        ctx.beginPath();
+        ctx.arc(x, h / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = style === "floor" ? "#a0a69e" : "#d9e1de";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = `500 ${style === "nameplate" ? 98 : 91}px Bahnschrift, "Segoe UI", sans-serif`;
+    const metrics = ctx.measureText(name);
+    const baseline = (h + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+    ctx.fillText(name, w / 2, baseline, w - (plate ? 45 : 10));
+    ctx.restore();
+    texture.needsUpdate = true;
+  }
+  function label(parent: T.Object3D, name: string, y: number, width: number, style: Treatment = "nameplate") {
+    const key = style + "/" + name;
+    const slot = cells.get(key) ?? cells.size;
     if (!cells.has(key)) {
       cells.set(key, slot);
-      ctx.save();
-      ctx.translate(left, top);
-      const plate = style === "lintel" || style === "nameplate";
-      if (plate) {
-        const paint = ctx.createLinearGradient(0, 0, 0, h);
-        paint.addColorStop(0, "#233039");
-        paint.addColorStop(.11, "#15242c");
-        paint.addColorStop(.78, "#111d24");
-        paint.addColorStop(1, "#19272d");
-        ctx.fillStyle = paint;
-        ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = "#54616a";
-        ctx.fillRect(0, 0, w, 3);
-        ctx.fillStyle = "#0a131a";
-        ctx.fillRect(0, h - 5, w, 5);
-      }
-      if (plate) {
-        for (const x of [16, w - 16]) {
-          ctx.fillStyle = "#52616a";
-          ctx.beginPath();
-          ctx.arc(x, h / 2, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.fillStyle = style === "floor" ? "#a0a69e" : "#d9e1de";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      ctx.font = `500 ${style === "nameplate" ? 98 : 91}px Bahnschrift, "Segoe UI", sans-serif`;
-      const metrics = ctx.measureText(name);
-      const baseline = (h + metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
-      ctx.fillText(name, w / 2, baseline, w - (plate ? 45 : 10));
-      ctx.restore();
-      texture.needsUpdate = true;
+      paint(slot, name, style);
     }
+    const { left, top, w, h } = bounds(slot);
     const geometry = new T.PlaneGeometry(width, width * h / w);
     const uv = geometry.getAttribute("uv");
     for (let i = 0; i < uv.count; i++) {
@@ -70,5 +76,11 @@ export function makeSignage() {
     sign.position.set(0, y, .38);
     parent.add(sign);
     return sign;
-  };
+  }
+  return Object.assign(label, {
+    rename(original: string, caption: string, style: Treatment) {
+      const slot = cells.get(style + "/" + original);
+      if (slot !== undefined) paint(slot, caption, style);
+    },
+  });
 }

@@ -424,7 +424,7 @@ export function observeCodexEvent(state, event, now = () => new Date().toISOStri
     if (state.activity.length > 200) state.activity.shift();
     if (typeof state.relay === "function") {
       try {
-        state.relay(record);
+        state.relay(record, record.kind === "message" ? summary : undefined);
       } catch {
         /* the supervisor's persistence problem is not this stream's to resolve */
       }

@@ -1,12 +1,15 @@
 import type { ZoneId } from "../stage/config";
-import type { Area, Finish, View } from "./layout";
+import type { Area, Finish, Floor, View } from "./layout";
+import type { OwnerStation, OwnerStationState } from "../ownerStations";
 import type { Topic } from "./topics";
 
-export type Target = ZoneId | "seat" | "core" | "previous" | "present" | "next" | "exit";
+export type TravelTarget = ZoneId | "lift" | `owner:${OwnerStation}`;
+export type Target = TravelTarget | "seat" | "core" | "previous" | "present" | "next" | "exit";
 export type Pose = { x: number; z: number; yaw: number; pitch: number };
 export type Presence = {
   target: Target | null;
   area: Area;
+  floor?: Floor;
   zone: ZoneId | null;
 };
 export interface Signal {
@@ -28,6 +31,12 @@ export interface RoomLighting {
   ship: "pending" | "shipped" | "reverted" | null;
 }
 export interface WorldState {
+  floor?: Floor;
+  owner?: {
+    selected: OwnerStation;
+    signals: Record<OwnerStation, OwnerStationState>;
+    patch?: string | null;
+  };
   view: View;
   nativeMotion: boolean;
   finish: Finish;
@@ -44,7 +53,7 @@ export interface WorldState {
 export interface WorldApi {
   captureMouse(): void;
   update(state: WorldState): void;
-  go(zone: ZoneId): void;
+  go(zone: TravelTarget): void;
   inspectBreak(): void;
   reset(): void;
   enter(): void;

@@ -363,7 +363,7 @@ function pushActivity(state, entry, now) {
   if (state.activity.length > ACTIVITY_LIMIT) state.activity.shift();
   if (typeof state.relay === "function") {
     try {
-      state.relay(record);
+      state.relay(record, entry.kind === "message" ? entry.summary : undefined);
     } catch {
       /* the supervisor's persistence problem is not this stream's to resolve */
     }

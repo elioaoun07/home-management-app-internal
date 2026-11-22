@@ -534,6 +534,46 @@ owner: Elio
 
 - ✅ 2026-11-22 — **DLV-167** Merge a tested Local candidate's files into the main checkout — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-167>) (DLV-167 lane block, route case, board/delivery UI tests pass; tests/delivery-v2 + tests/pm-ui 2384 passed / 8 skipped; typecheck, scoped eslint, pm:build-app clean. Owner UAT pending (restart pnpm pm, Merge BUD-95).)
 
+### DLV-161
+
+- ✅ 2026-11-22 — **DLV-161** Recover Ship, Undo and locks, and clean up closed attempts — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-161>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+### DLV-168
+
+- ✅ 2026-11-22 — **DLV-168** Take one item from Start to Pushed on one page, within a disk budget — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-168>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+### DLV-169
+
+- ✅ 2026-11-22 — **DLV-169** Set the Local workflow defaults and stage order — [criteria](#dlv-169) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+**Outcome:** S0. Resolve the six workflow defaults and publish an executable sequence under DLV-168.
+**Kind:** investigation
+**Touches:** `ERA Notes/10 - Project Management/Delivery/`, `ERA Notes/10 - Project Management/Plans/Delivery Local Workflow — Rethink.md`
+
+- **Acceptance:** Record the owner's D1–D6 answers and explicit go under DLV-168. Each stage has one linked checklist row, acceptance and owner witness. Until then, this stage is open.
+- **Implementation:** done. The owner approved all six decisions and requested implementation of every stage.
+- **Evidence (2026-11-22):** Local `main` at `a20d6183` includes BUD-95 and DLV-166/167. The cached `internal/main` matches and the cached `origin/main` trails by 202 commits. Use a fresh item for the end-to-end witness. The old Ship and Undo both push through the lane's default remote (`scripts/delivery-v2/local-lane.mjs`). A copied Merge stores `applied` and phase `shipped`, even if its PM operation reports an error.
+
+### DLV-171
+
+- ✅ 2026-11-22 — **DLV-171** Restrict Local pushes to the configured destination — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-171>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+### DLV-170
+
+- ✅ 2026-11-22 — **DLV-170** Release closed Local worktrees and bound dependency storage — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-170>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+### DLV-172
+
+- ✅ 2026-11-22 — **DLV-172** Keep the next action on the same Local run page — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-172>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+### DLV-173
+
+- ✅ 2026-11-22 — **DLV-173** Commit and push the tested changes from the run page — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-173>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+### DLV-174
+
+- ✅ 2026-11-22 — **DLV-174** Recover a blocked Merge and retest the refreshed candidate — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-174>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

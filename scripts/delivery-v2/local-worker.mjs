@@ -10,7 +10,9 @@ assertNoLocalSecrets(request.workspace.root);
 const selected = await createExecutor(request.settings.executor, { local: true, env: process.env, codexOptions: { env: process.env } });
 if (!selected.ok) throw new Error(selected.refusal.detail);
 const runOptions = {
-  observeActivity: value => channel.send({ type: "activity", value }),
+  observeActivity: (entry, message) => channel.send({ type: "activity", value: {
+    ...entry, ...(typeof message === "string" && { message_text: message.slice(0, 16_384) }),
+  } }),
   askOwner: channel.askOwner,
   takeOwnerMessages: channel.takeMessages,
 };

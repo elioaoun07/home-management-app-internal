@@ -211,15 +211,6 @@ export function localRunAttention(
       action: { label: "Copy path", run: "copy-path" },
     });
   }
-  if (["push-pending", "revert-push-pending"].includes(run.phase))
-    add("retry", run.phase, {
-      level: "act",
-      zone: "ship",
-      title: "Retry push",
-      state: "open",
-      since: null,
-      action: { label: "Retry", run: "retry" },
-    });
   if (run.phase === "failed") {
     const failure = localRunFailure(run);
     add("failed", "failure", {

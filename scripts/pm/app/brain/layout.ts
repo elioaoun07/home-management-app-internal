@@ -1,9 +1,11 @@
 import type { ZoneId } from "../stage/config";
+import { OWNER_STATIONS, type OwnerStation } from "../ownerStations";
 
 export type Point = { x: number; z: number };
 export type View = "map" | "walk" | "seat";
 export type Finish = "realistic" | "illustrated";
 export type Area = "room" | "core";
+export type Floor = "ai" | "owner";
 // The doorway sightline clears the chair so the ERA sphere and the lit bay
 // are both visible as soon as the player enters.
 export const spawn = { x: .46, z: 6.62, yaw: .069, pitch: .055, area: "room" } as const;
@@ -27,6 +29,30 @@ export const stations = bays.flatMap(({ angle, zones }) => zones.map((id, index)
   const radius = id === "build" ? 7.35 : 10.65;
   return { id, angle: heading, bay: angle, radius, ...roomPoint(heading, radius), arrival: roomPoint(heading, radius - 1.65) };
 }));
+export const ownerStations3D = OWNER_STATIONS.map(({ id }, i) => {
+  const angle = bays[i].angle, radius = 10.65;
+  return { id, angle, bay: angle, radius, ...roomPoint(angle, radius), arrival: roomPoint(angle, radius - 2) };
+});
+const ownerDestinations: Record<ZoneId, OwnerStation> = {
+  brief: "review", setup: "test", explore: "review", think: "review", build: "merge", bench: "test",
+  seal: "commit", verify: "review", handover: "test", test: "test", ship: "push",
+};
+export function ownerStationForZone(zone: ZoneId): OwnerStation {
+  return ownerDestinations[zone];
+}
+// Local +Z points out of the cabin and into the room. Both landings occupy
+// the same open sector of the observatory, between Ship and the entrance.
+export const liftAngle = -159 * Math.PI / 180;
+const liftCenter = roomPoint(159, 8.02);
+export function liftPoint(x: number, z: number) {
+  return { x: liftCenter.x + Math.cos(liftAngle) * x + Math.sin(liftAngle) * z,
+    z: liftCenter.z - Math.sin(liftAngle) * x + Math.cos(liftAngle) * z };
+}
+export const liftPanel = liftPoint(.86, .40);
+export const liftCall = liftPoint(-1.14, 1.18);
+export const liftThreshold = liftPoint(0, 2.82);
+export const liftEntrance = liftPoint(-.25, 1.13);
+export const liftPassenger = { ...liftPoint(-.05, -.44), yaw: liftAngle + Math.PI, pitch: .015 };
 export const zoneNames: Record<ZoneId, string> = {
   brief: "Plan", setup: "Setup", explore: "Explore", think: "Comms", build: "Build", bench: "Bench",
   seal: "Seal", verify: "Verify", handover: "Handover", test: "Test", ship: "Ship",
@@ -46,11 +72,18 @@ const hallWall = roomRadius - .20, bayWall = 12.13;
 function footprint(center: Point, yaw: number, halfWidth: number, halfDepth: number) {
   return { ...center, cos: Math.cos(yaw), sin: Math.sin(yaw), halfWidth, halfDepth };
 }
-const roomFixtures = [
-  ...stations.map(s => footprint(s, -s.angle * Math.PI / 180, .61, .45)),
+const sharedFixtures = [
   footprint(chair, .38, .56, .34),
   footprint({ x: chair.x * .73, z: chair.z * .73 }, .38, .425, .20),
+  footprint(liftPoint(-1.10,0),liftAngle,.09,1.02),
+  footprint(liftPoint(1.10,0),liftAngle,.09,1.02),
+  footprint(liftPoint(0,-1.06),liftAngle,1.14,.08),
+  footprint(liftPoint(-.96,1.06),liftAngle,.23,.12),
+  footprint(liftPoint(.96,1.06),liftAngle,.23,.12),
 ];
+const workFixtures = (items: readonly { x:number;z:number;angle:number }[]) =>
+  [...sharedFixtures, ...items.map(s=>footprint(s,-s.angle*Math.PI/180,.61,.45))];
+const roomFixtures = workFixtures(stations), ownerFixtures = workFixtures(ownerStations3D);
 export const coreStations = [
   ["previous", -3, -1.75, "Previous"], ["present", 0, -3.5, "Selected"],
   ["next", 3, -1.75, "Next"], ["exit", 0, 4, "Room"],
@@ -87,7 +120,7 @@ const walls = perimeter();
 
 // Positive distance is free space. During movement we only need contacts
 // within the player's radius; the optional normal points into the free space.
-function clearance(point: Point, area: Area, normal?: Point) {
+function clearance(point: Point, area: Area, normal?: Point, floor: Floor = "ai") {
   const radius = Math.hypot(point.x, point.z);
   let nearest = radius - (area === "core" ? .77 : 2.23);
   if (normal) { normal.x = point.x / (radius || 1); normal.z = radius ? point.z / radius : 1; }
@@ -95,10 +128,10 @@ function clearance(point: Point, area: Area, normal?: Point) {
     nearest = 5.08 - radius;
     if (normal) { normal.x = -point.x / radius; normal.z = -point.z / radius; }
   }
-  const fixtures = area === "core" ? coreFixtures : roomFixtures;
+  const fixtures = area === "core" ? coreFixtures : floor === "owner" ? ownerFixtures : roomFixtures;
   for (const item of fixtures) {
     const dx = point.x - item.x, dz = point.z - item.z;
-    if (Math.abs(dx) > 1.25 || Math.abs(dz) > 1.25) continue;
+    if (Math.abs(dx) > 1.7 || Math.abs(dz) > 1.7) continue;
     const x = item.cos * dx - item.sin * dz, z = item.sin * dx + item.cos * dz;
     const ax = Math.abs(x) - item.halfWidth, az = Math.abs(z) - item.halfDepth;
     const px = Math.max(ax, 0), pz = Math.max(az, 0);
@@ -127,14 +160,14 @@ function clearance(point: Point, area: Area, normal?: Point) {
   return nearest;
 }
 
-export function canStand(point: Point, area: Area) {
+export function canStand(point: Point, area: Area, floor: Floor = "ai") {
   if (area === "room" && Math.hypot(point.x, point.z) > (bayAt(point) ? bayWall : hallWall)) return false;
-  return clearance(point, area) >= playerRadius - .00001;
+  return clearance(point, area, undefined, floor) >= playerRadius - .00001;
 }
 
-export function slideAgainstRoom(point: Point, velocity: Point, area: Area, normal: Point) {
+export function slideAgainstRoom(point: Point, velocity: Point, area: Area, normal: Point, floor: Floor = "ai") {
   for (let pass = 0; pass < 3; pass++) {
-    const penetration = playerRadius - clearance(point, area, normal);
+    const penetration = playerRadius - clearance(point, area, normal, floor);
     if (penetration <= 0) return true;
     point.x += normal.x * (penetration + .000001);
     point.z += normal.z * (penetration + .000001);
@@ -142,5 +175,5 @@ export function slideAgainstRoom(point: Point, velocity: Point, area: Area, norm
     velocity.x -= inward * normal.x;
     velocity.z -= inward * normal.z;
   }
-  return canStand(point, area);
+  return canStand(point, area, floor);
 }

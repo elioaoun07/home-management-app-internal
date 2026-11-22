@@ -14,14 +14,12 @@ import type { LocalScene, LocalTimeline } from "./localRunScene";
 import { LocalRunActivityPanel } from "./LocalRunActivityPanel";
 import { LocalRunVerificationPanel } from "./LocalRunVerificationPanel";
 import { LocalRunTools, type Tool } from "./LocalRunTools";
-import { LocalChat } from "./LocalChat";
 export type { Tool } from "./LocalRunTools";
 
 export const LocalRunConsole = memo(
   function LocalRunConsole({
     run,
     snapshot,
-    timeline,
     replay,
     patch,
     tool,
@@ -86,14 +84,12 @@ export const LocalRunConsole = memo(
           tabIndex={0}
           className="run-game-panel"
         >
-          {tool === "activity" && !replay && <LocalChat run={run} compact limit={12} />}
           {tool === "activity" && (
             <LocalRunActivityPanel
-              activity={activity}
+              replay={replay}
               visibleEvents={visibleEvents}
               fileFilter={fileFilter}
               setFileFilter={setFileFilter}
-              timeline={timeline}
               viewRun={viewRun}
               focusId={focusId}
             />
@@ -205,6 +201,7 @@ export const LocalRunConsole = memo(
                 </div>
               </div>
               <dl className="run-game-worktree-facts">
+                {viewRun.cleanup_archive && <div><dt>Archive</dt><dd><code>{viewRun.cleanup_archive}</code></dd></div>}
                 <div>
                   <dt>Path</dt>
                   <dd>

@@ -9,11 +9,6 @@ import { client, pmKeys } from "./state";
 import { transport } from "./transport";
 import type { LocalRunView } from "./LocalDelivery";
 
-/** The Local run behind a handover's `local:<run>` delivery ref, else null. */
-export function localRunOf(deliveryRef: string | null | undefined): string | null {
-  return /^local:(local-[0-9a-f-]{36})$/u.exec(deliveryRef ?? "")?.[1] ?? null;
-}
-
 // Same rule as LocalDelivery's offersLocalLane, without importing that module
 // (it reaches UatWizard through the review surfaces).
 const desktop = () => transport().capabilities.kind === "local" && isLoopbackOrigin(location.origin);

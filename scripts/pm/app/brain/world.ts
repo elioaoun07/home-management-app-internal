@@ -1,6 +1,8 @@
 import * as T from "three";
 export { createLibraryWorld } from "../libraryWorld";
-import { canStand, chair, spawn, stations, type Area } from "./layout";
+export { createOwnerWorld } from "../ownerWorld";
+import { canStand, chair, liftCall, liftEntrance, liftPanel, liftPassenger, liftThreshold, ownerStationForZone, ownerStations3D, spawn, stations, type Area, type Floor } from "./layout";
+import { liftDuration, liftFrame, makeElevator } from "./elevator";
 import { makeRoom, makeSphere, release } from "./art";
 import { chamberReflections } from "./chamber";
 import { roomRenderBudget } from "./renderBudget";
@@ -52,6 +54,9 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   const budget = roomRenderBudget(software);
 
   const scene = new T.Scene(), room = makeRoom(invalidate, software);
+  const elevator = makeElevator();
+  room.outer.add(elevator.group);
+  room.cutaway.push(elevator.cutaway);
   const reflections = software ? null : chamberReflections();
   scene.environment = reflections;
   scene.environmentIntensity = .43;
@@ -75,7 +80,11 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     scene.traverse(node => { if (node instanceof T.Light) node.layers.enable(opticalLayer); });
   }
 
-  let state = initial, area: Area = "room", pose: Pose = { ...spawn };
+  let state = initial, floor: Floor = initial.floor ?? "ai", area: Area = "room", pose: Pose = { ...spawn };
+  let ride: { to: Floor; started: number } | null = null;
+  const callMarker = new T.Vector3(liftCall.x, 1.42, liftCall.z);
+  const entranceMarker = new T.Vector3(liftEntrance.x, 1.83, liftEntrance.z);
+  const cabinMarker = new T.Vector3(liftPanel.x, 1.46, liftPanel.z);
   let interiorPose: Pose = { ...pose }, savedRoom: Pose = { ...pose };
   let resumeCore = false, enteredCore = false;
   let sphere = makeSphere(state.topic, state.finish === "illustrated", software);
@@ -130,7 +139,10 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   };
 
   function wantCamera() {
-    if (state.view === "map" && area === "room") {
+    if (ride) {
+      position.set(pose.x, standEye + .09, pose.z);
+      targetRotation.setFromEuler(euler.set(pose.pitch, pose.yaw, 0));
+    } else if (state.view === "map" && area === "room") {
       goal.position.set(0, 19.6, 14.8);
       goal.lookAt(0, .24, -.45);
       position.copy(goal.position); targetRotation.copy(goal.quaternion);
@@ -188,7 +200,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     if (document.pointerLockElement === host) document.exitPointerLock();
   }
 
-  const active = () => state.view === "walk" && !state.paused && document.visibilityState !== "hidden";
+  const active = () => !ride && state.view === "walk" && !state.paused && document.visibilityState !== "hidden";
   const navigationActive = () => active() && (
     (held.size > Number(held.has("ShiftLeft")) + Number(held.has("ShiftRight"))) ||
     pad.x !== 0 || pad.y !== 0 || velocity.x !== 0 || velocity.z !== 0 ||
@@ -205,7 +217,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     const side = Number(held.has("d")) - Number(held.has("a")) + pad.x;
     const sprint = held.has("ShiftLeft") || held.has("ShiftRight") || pad.sprint;
     const distance = forward || side || velocity.x || velocity.z
-      ? advanceWalk(pose, velocity, area, forward, side, dt, sprint) : 0;
+      ? advanceWalk(pose, velocity, area, forward, side, dt, sprint, floor) : 0;
     sound.travel(distance, dt);
     if (!state.quiet && !motion.matches) advanceGait(gait, distance, dt);
   }
@@ -237,6 +249,16 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   const locatedPosition = new T.Vector3(), locatedRotation = new T.Quaternion();
   const publishedPose = { x: NaN, z: NaN, yaw: NaN, pitch: NaN };
   let poseText = "";
+  function stationMarkers(): [Target, T.Vector3][] {
+    const shared = Array.from(room.markers).filter(([id]) =>
+      floor === "ai" || ["seat", "core", "previous", "present", "next", "exit"].includes(id));
+    if (floor === "owner") {
+      for (const [id, marker] of room.ownerMarkers) shared.push([`owner:${id}`, marker]);
+    }
+    shared.push(["lift", callMarker], ["lift", cabinMarker]);
+    return shared;
+  }
+  let markers = stationMarkers();
   function locate() {
     if (pose.x !== publishedPose.x || pose.z !== publishedPose.z ||
         pose.yaw !== publishedPose.yaw || pose.pitch !== publishedPose.pitch) {
@@ -244,20 +266,20 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       const text = `${pose.x.toFixed(3)},${pose.z.toFixed(3)},${pose.yaw.toFixed(3)},${pose.pitch.toFixed(3)}`;
       if (text !== poseText) { poseText = text; host.dataset.pose = text; }
     }
-    if (locatedView === state.view && presence.area === area &&
+    if (!ride && locatedView === state.view && presence.area === area && presence.floor === floor &&
         locatedPosition.equals(camera.position) && locatedRotation.equals(camera.quaternion)) return;
     locatedView = state.view;
     locatedPosition.copy(camera.position); locatedRotation.copy(camera.quaternion);
     let target: Target | null = null, zone: Presence["zone"] = null;
-    if (state.view === "walk") {
+    if (!ride && state.view === "walk") {
       let nearest = Infinity, forward = .83;
       camera.getWorldDirection(direction);
       for (const station of stations) {
-        if (area !== "room") break;
+        if (area !== "room" || floor !== "ai") break;
         const d = Math.hypot(pose.x - station.x, pose.z - station.z);
         if (d < nearest && d < 3.25) { nearest = d; zone = station.id; }
       }
-      for (const [key, marker] of room.markers) {
+      for (const [key, marker] of markers) {
         if ((["previous", "present", "next", "exit"].includes(key)) !== (area === "core")) continue;
         const offset = position.copy(marker).sub(camera.position);
         const range = key === "core" ? 2.0 : 2.2;
@@ -266,9 +288,10 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
         if (dot > forward) { target = key; forward = dot; }
       }
       if (!target && area === "room" && Math.hypot(pose.x, pose.z - 2.48) < 1.65) target = "core";
+      if (!target && area === "room" && Math.hypot(pose.x - liftPassenger.x, pose.z - liftPassenger.z) < .95) target = "lift";
     }
-    if (presence.target !== target || presence.area !== area || presence.zone !== zone) {
-      presence = { area, target, zone }; input.presence(presence);
+    if (presence.target !== target || presence.area !== area || presence.zone !== zone || presence.floor !== floor) {
+      presence = { area, target, zone, floor }; input.presence(presence);
     }
   }
 
@@ -283,10 +306,13 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   }
 
   const canAnimate = () => !state.paused && !state.quiet && !motion.matches;
-  const roomAlive = () => canAnimate() && (!state.lighting.failed || (area === "room" && !!state.lighting.faultZone));
+  // The topic collector and vault read the same recording on both floors.
+  // The agent floor also carries the SDK machines' fault cable.
+  const roomAlive = () => canAnimate() && (!state.lighting.failed || (floor === "ai" && area === "room" && !!state.lighting.faultZone));
   function paintSignal(signal: Signal) {
-    if (!state.lighting.failed && area === "room" && canAnimate() && visible && !document.hidden) {
-      illumination.play(signal, performance.now());
+    if (!ride && area === "room" && canAnimate() && visible && !document.hidden) {
+      if (floor === "owner") illumination.pulseOwner(ownerStationForZone(signal.zone), performance.now());
+      else if (!state.lighting.failed) illumination.play(signal, performance.now());
     }
     invalidate();
   }
@@ -294,7 +320,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   function paint(now: number) {
     sound.position(pose, state.lighting.energy, state.lighting.working,
       active() && visible && document.hasFocus() && !state.replay && !state.quiet && !motion.matches);
-    for (const wall of room.cutaway) wall.visible = state.view !== "map";
+    for (const wall of room.cutaway) wall.visible = state.view !== "map" || !!ride;
     room.marker.visible = state.view === "map";
     room.marker.position.set(pose.x, .11, pose.z);
     room.marker.rotation.z = pose.yaw;
@@ -307,12 +333,50 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   let lastSteady = false;
   const damage = ambientRegion();
   const noPath: readonly T.Vector3[] = [];
+  function projectFloor() {
+    room.setDeck(floor, state.owner, bufferWidth > 0 && bufferWidth < 550, bufferWidth / Math.max(1, bufferHeight));
+    markers = stationMarkers();
+    elevator.level(floor);
+    host.dataset.floor = floor;
+    still?.invalidate();
+  }
+  function animateLift(now: number) {
+    if (!ride) return;
+    const elapsed = canAnimate() ? now - ride.started : liftDuration;
+    const frame = liftFrame(elapsed);
+    elevator.travel(frame.closed, frame.travel, ride.to === "owner");
+    if (frame.arrived && floor !== ride.to) {
+      floor = ride.to;
+      projectFloor();
+    }
+    if (frame.done) {
+      ride = null;
+      delete host.dataset.lift;
+      locatedView = null;
+      if (state.view === "walk" && !state.paused) host.focus({ preventScroll: true });
+    }
+  }
+  function travelTo(destination: Floor) {
+    clear();
+    illumination.clear();
+    transition = null;
+    area = "room";
+    resumeCore = enteredCore = false;
+    room.inner.visible = false;
+    room.outer.visible = true;
+    pose = { ...liftPassenger };
+    ride = { to: destination, started: performance.now() };
+    host.dataset.lift = "moving";
+    animateLift(ride.started);
+    invalidate();
+  }
   function resize() {
     const { width, height } = host.getBoundingClientRect();
     if (!width || !height) return;
     budget.resize(width, height, devicePixelRatio);
     sizeDirty ||= width !== bufferWidth || height !== bufferHeight;
     bufferWidth = width; bufferHeight = height;
+    room.setDeck(floor, state.owner, width < 550, width / height);
     baseFov = state.view === "map" && width < height ? 78 : 65;
     const aspect = width / height;
     if (camera.aspect !== aspect) {
@@ -337,14 +401,16 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     const frameStart = profiler?.recording ? performance.now() : 0;
     const dt = last ? Math.max(0, (now - last) / 1000) : 0;
     last = now;
+    const inLift = !!ride;
+    if (inLift) animateLift(now);
     const moving = navigationActive();
     if (moving) walk(dt);
-    if (moving || transition) lastMotionAt = now;
+    if (moving || transition || inLift) lastMotionAt = now;
     // Avoid resizing on every brief key release or mouse event. The final
     // frame after travel always reaches the display's resting resolution.
     const motionFrame = now - lastMotionAt < 260;
     const refined = !motionFrame && wasMoving;
-    if (renderNeeded || moving || illumination.flying || transition || roomAlive() || refined) {
+    if (renderNeeded || moving || inLift || illumination.flying || transition || roomAlive() || refined) {
       const invalidated = renderNeeded;
       renderNeeded = false;
       if (motionFrame && wasMoving) budget.sample(dt * 1000, profiler?.gpuMs);
@@ -366,7 +432,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       locate();
       paint(now);
       const renderStart = profiler?.recording ? performance.now() : 0;
-      const activePath = state.lighting.failed ? room.faultCable.damagePath : state.lighting.endpoint === "seat" ? room.seatCircuit.path :
+      const activePath = floor === "owner" ? undefined : state.lighting.failed ? room.faultCable.damagePath : state.lighting.endpoint === "seat" ? room.seatCircuit.path :
         state.lighting.endpoint ? room.circuits.get(state.lighting.endpoint)?.path : undefined;
       const cached = !!still?.supported && !motionFrame && !illumination.flying && illumination.steady && roomAlive();
       if (!cached || invalidated || resized || wasFlying || lastSteady !== illumination.steady) still?.invalidate();
@@ -415,7 +481,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       wasFlying = illumination.flying;
     }
     wasMoving = motionFrame;
-    if (renderNeeded || motionFrame || illumination.flying || transition) schedule();
+    if (renderNeeded || motionFrame || illumination.flying || transition || ride) schedule();
     else if (roomAlive()) {
       const delay = state.lighting.failed ? room.faultCable.nextWake(now / 1000) : 0;
       if (delay === 0) schedule();
@@ -440,7 +506,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   function clickMap(event: PointerEvent) {
     const bounds = host.getBoundingClientRect();
     let nearest: Target | null = null, distance = 31;
-    for (const [id, marker] of room.markers) {
+    for (const [id, marker] of markers) {
       if (id === "core" || ["previous", "next", "present", "exit"].includes(id)) continue;
       const where = marker.clone().project(camera);
       const d = Math.hypot((where.x + 1) * bounds.width / 2 - (event.clientX - bounds.left), (1 - where.y) * bounds.height / 2 - (event.clientY - bounds.top));
@@ -450,7 +516,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   }
 
   host.addEventListener("keydown", event => {
-    if (state.paused || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (ride || state.paused || event.altKey || event.ctrlKey || event.metaKey) return;
     if (!event.repeat && active()) sound.activate();
     if (event.key === "Escape" && document.pointerLockElement === host) {
       clear();
@@ -481,7 +547,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     }
   }, opts);
   host.addEventListener("pointerdown", event => {
-    if (event.button !== 0 || state.paused) return;
+    if (event.button !== 0 || state.paused || ride) return;
     if (active()) sound.activate();
     host.focus({ preventScroll: true });
     if (state.view === "map") { clickMap(event); return; }
@@ -576,6 +642,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   const theme = new MutationObserver(palette);
   theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
+  projectFloor();
   palette();
   resize();
   moveCamera(performance.now());
@@ -588,6 +655,11 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       const becamePaused = !state.paused && next.paused;
       const enteringQuiet = !state.quiet && next.quiet;
       state = next;
+      const wanted = next.floor ?? "ai";
+      const floorChanged = (previous.floor ?? "ai") !== wanted;
+      if (floorChanged) travelTo(wanted);
+      else if (previous.owner !== next.owner && floor === "owner")
+        room.setDeck(floor, next.owner, bufferWidth < 550, bufferWidth / Math.max(1, bufferHeight));
       if (next.paused || next.replay || next.quiet || next.view !== "walk") sound.silence();
       if (becamePaused) clear();
       const frozenReplay = next.replay && !next.playing &&
@@ -617,7 +689,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
           room.inner.visible = true; room.outer.visible = false;
           clear(); transition = null;
         }
-        if (area === "room") moveToView(previous.view);
+        if (area === "room" && !floorChanged && !ride) moveToView(previous.view);
         resize();
       }
       if (next.signal && next.signal.id !== latestSignal) {
@@ -630,18 +702,27 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       invalidate();
     },
     go(zone) {
-      const station = stations.find(item => item.id === zone);
-      if (!station) return;
+      if (ride) return;
       if (area === "core") this.exit();
-      pose = { ...pose, ...station.arrival };
-      const target = room.markers.get(zone);
+      const sdk = stations.find(item => item.id === zone);
+      const mapped = sdk && ownerStationForZone(sdk.id);
+      const owner = floor === "owner" ? ownerStations3D.find(item => `owner:${item.id}` === zone || item.id === mapped) : undefined;
+      const station = floor === "owner" ? owner : sdk;
+      if (zone !== "lift" && !station) return;
+      pose = { ...pose, ...(station?.arrival ?? liftThreshold) };
+      const target = zone === "lift" ? entranceMarker : owner ? room.ownerMarkers.get(owner.id) : room.markers.get(zone);
       if (target) standLook(target);
+      if (owner && canAnimate()) illumination.pulseOwner(owner.id, performance.now());
       clear(); transition = null; invalidate();
       host.focus({ preventScroll: true });
     },
     inspectBreak() {
       const zone = state.lighting.faultZone;
       if (!zone || state.view !== "walk" || area !== "room") return;
+      if (floor === "owner") {
+        this.go(zone);
+        return;
+      }
       room.faultCable.set(zone);
       const tip = room.faultCable.supplyPath.at(-1);
       const station = room.markers.get(zone);
@@ -654,11 +735,12 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       clear(); transition = null; invalidate(); host.focus({ preventScroll: true });
     },
     reset() {
+      if (ride) return;
       if (area === "core") this.exit();
       clear(); pose = { ...spawn }; transition = null; invalidate();
     },
     enter() {
-      if (area === "core") return;
+      if (ride || area === "core") return;
       savedRoom = { ...pose };
       pose = enteredCore ? { ...interiorPose } : { x: 1.16, z: 3.42, yaw: .327, pitch: .14 };
       enteredCore = true;

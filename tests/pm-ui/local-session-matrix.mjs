@@ -76,6 +76,7 @@ export async function checkSessionMatrix({ page, open, selectTool, capture, core
       await capture(`${key}-reading-session`);
       controls.toolEvent = { kind: "edit", summary: "src/features/fixture/panel.tsx" };
       await page.waitForFunction(() => document.querySelector(".delivery-workshop")?.dataset.station === "forge");
+      await page.locator(".run-game-events summary").filter({ hasText: "Edited panel.tsx" }).first().click();
       await page.locator(".run-game-events").getByText("src/features/fixture/panel.tsx", { exact: true }).first().waitFor();
       await capture(`${key}-running-session`);
       await open(`/delivery/run/${id}`, "checking", theme);
@@ -84,16 +85,12 @@ export async function checkSessionMatrix({ page, open, selectTool, capture, core
       assert.equal(await page.getByText("Passed", { exact: true }).count(), 1);
       assert.equal(await page.locator(".delivery-workshop").getAttribute("data-station"), "lab");
       await open(`/delivery/run/${id}`, "uat-ready", theme);
-      await page
-        .getByRole("link", { name: "Test steps", exact: true })
-        .waitFor();
-      assert.equal(
-        await page
-          .getByRole("button", { name: "Ship", exact: true })
-          .isDisabled(),
-        true,
-      );
+      await page.getByRole("button", { name: "Owner room", exact: true }).click();
+      await page.getByRole("button", { name: "Test steps", exact: true }).waitFor();
+      await page.locator(".owner-room-stations").getByRole("button", { name: "Merge", exact: true }).click();
+      assert.equal(await page.getByRole("region", { name: "Merge station" }).getByRole("button", { name: "Merge", exact: true }).count(), 0);
       await capture(`${key}-uat-session`);
+      await page.getByRole("button", { name: "AI room", exact: true }).click();
       assert.equal(await page.locator(".delivery-workshop").getAttribute("data-active"), "false");
       await open(`/delivery/run/${id}`, "interrupted", theme);
       await page.locator('[data-kind="lost"]').getByText("Signal lost", { exact: true }).waitFor();

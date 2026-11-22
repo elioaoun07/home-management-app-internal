@@ -18,7 +18,6 @@ owner: Elio
 
 **Local lane**
 
-- [ ] **DLV-161** Recover Ship, Undo and locks, and clean up closed attempts — [criteria](<Delivery — Master Book.md#dlv-161>) _(friction - M)_
 - [ ] **DLV-162** Run each gate once, visibly, with rule verdicts — [criteria](<Delivery — Master Book.md#dlv-162>) _(friction - M)_
 - [ ] **DLV-163** Route each delivery to its playbook and skills before launch — [criteria](<Delivery — Master Book.md#dlv-163>) _(friction - M)_
 - [ ] **DLV-156** Drive a local delivery through one supervisor command contract — [criteria](<Delivery — Master Book.md#dlv-156>) _(friction - M)_

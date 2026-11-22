@@ -1,5 +1,5 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
-import { Award } from "lucide-react";
+import { Award, History } from "lucide-react";
 import type { LocalRunView } from "../../LocalDelivery";
 import type { LocalActivityEvent } from "../../localRunActivityModel";
 import type { AttentionItem } from "../../localRunAttention";
@@ -48,6 +48,7 @@ export interface FoundryHudProps {
   controls?: ReactNode;
   settingsControls?: ReactNode;
   theaterControl?: ReactNode;
+  roomSwitch?: ReactNode;
   actions?: ReactNode;
   failure?: ReactNode;
   question?: ReactNode;
@@ -85,6 +86,7 @@ export const FoundryHud = memo(function FoundryHud({
   controls,
   settingsControls,
   theaterControl,
+  roomSwitch,
   actions,
   failure,
   question,
@@ -124,6 +126,7 @@ export const FoundryHud = memo(function FoundryHud({
   );
   const [rank, setRank] = useState(readRank);
   const [badgesOpen, setBadgesOpen] = useState(false);
+  const [recorderOpen, setRecorderOpen] = useState(false);
   const toggleRank = () => {
     setRank((value) => {
       try {
@@ -175,6 +178,7 @@ export const FoundryHud = memo(function FoundryHud({
         caption={clock ? "" : caption}
         clock={clock ?? elapsedText}
         theater={theaterControl}
+        roomSwitch={roomSwitch}
         replay={replay}
         tempo={tempo}
         onTempo={onTempo}
@@ -191,7 +195,10 @@ export const FoundryHud = memo(function FoundryHud({
         />
         <BadgePop badges={badges} replay={replay} />
       </div>
-      <div className="board-dock">
+      <div className="board-dock" data-compact={!!roomSwitch} data-recorder={recorderOpen}>
+        {roomSwitch && <button type="button" className="board-recorder-toggle" aria-expanded={recorderOpen}
+          onClick={() => setRecorderOpen(value => !value)}><History size={16} />{replay ? "Replay" : "Recorder"}</button>}
+        {(!roomSwitch || recorderOpen) && <>
         <section className="board-telemetry">
           {telemetry ?? (
             <Telemetry
@@ -219,6 +226,7 @@ export const FoundryHud = memo(function FoundryHud({
           </button>
         </section>
         {dockControls}
+        </>}
         <div className="board-dock-tools">{dockTools}</div>
       </div>
       <AttentionRail

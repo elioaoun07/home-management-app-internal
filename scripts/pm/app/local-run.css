@@ -2,6 +2,25 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.local-workflow { min-width: 0; margin: 1rem 0; }
+.local-workflow h3 { margin: .6rem 0; }
+.local-workflow-steps {
+  display: flex; flex-wrap: wrap; gap: .4rem 1rem;
+  list-style: none; padding: 0; margin: 0; font-size: 12px;
+}
+.local-workflow-steps li { border-bottom: 2px solid var(--line); padding-bottom: .2rem; color: var(--ink-muted); }
+.local-workflow-steps li[data-stage-state="done"] { border-color: var(--accent); }
+.local-workflow-steps li[aria-current] { color: var(--ink); border-color: currentColor; font-weight: 700; }
+.local-workflow .gate-actions { align-items: flex-start; flex-wrap: wrap; }
+.local-workflow .local-command-preview {
+  min-width: 0; max-width: 100%; flex: 1 1 100%; white-space: normal;
+}
+.local-command-preview ul { padding-inline-start: 1.5em; max-height: 12rem; overflow: auto; }
+.local-command-preview code, .local-command-preview .local-git-commands { overflow-wrap: anywhere; white-space: pre-wrap; }
+.local-workflow .gate-actions button, .local-workflow summary { min-height: 44px; }
+.local-workflow summary { cursor: pointer; align-content: center; }
+.board-rail .local-workflow { max-height: 47vh; overflow-y: auto; overflow-x: hidden; margin: 0; }
+.board-rail .local-workflow-steps { gap: 4px 8px; }
 .local-run-page > .gate-actions {
   margin: 20px 0 32px;
   flex-wrap: wrap;

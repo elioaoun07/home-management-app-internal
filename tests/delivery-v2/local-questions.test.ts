@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { normalizeAnswers, normalizeMessage, normalizeQuestion, projectQuestions, readLedger, resumePrompt } from "../../scripts/delivery-v2/local-questions.mjs";
+import { localMessageBodies, normalizeAnswers, normalizeMessage, normalizeQuestion, projectQuestions, readLedger, resumePrompt } from "../../scripts/delivery-v2/local-questions.mjs";
 import { ASK_TOOL, BACKEND_ID as CLAUDE, PARK_MESSAGE, buildSessionOptions, createClaudeAdapter, withOwnerQuestions } from "../../scripts/delivery-v2/adapters/claude.mjs";
 import { BACKEND_ID as CODEX, createCodexAdapter } from "../../scripts/delivery-v2/adapters/codex.mjs";
 import { makeExecutionRef, makeJobRequest } from "../../scripts/delivery-v2/adapters/adapter.mjs";
@@ -29,6 +29,14 @@ const job = (root: string, backend_id: string, job_id = "job-1") => makeJobReque
   workspace: { root, access: "write", backing: "git-worktree" } });
 
 describe("DLV-164 question shape and ledger", () => {
+  it("recovers only a uniquely matched final reply from a legacy recording", () => {
+    const summary = "x".repeat(240);
+    const row = { kind: "message", at: "2026-11-22T12:00:00Z", summary };
+    const observed = { activity: [{ ...row, agent: { role: "main" } }], finalText: summary + " last sentence" };
+    expect(localMessageBodies([row], observed)).toEqual([{ ...row, message_excerpt: false, message_text: observed.finalText }]);
+    expect(localMessageBodies([row, row], observed)).toEqual([row, row].map(r => ({ ...r, message_excerpt: true })));
+    expect(localMessageBodies([row], { ...observed, finalText: "Different reply" })).toEqual([{ ...row, message_excerpt: true }]);
+  });
   it("keeps the tool fields and refuses malformed questions with a reason", () => {
     expect(normalizeQuestion({ id: "toolu_1", questions: [{ ...sample, extra: true }] })).toEqual({
       ok: true, question: { id: "toolu_1", questions: [{ question: sample.question, header: "Storage", multiSelect: false, options: [

@@ -9,6 +9,8 @@ import { chain, column, ruleFact, sessionHref, setupConflictCount } from "./cock
 import type { Cockpit, Entity, Setup as SetupData } from "./cockpitTypes";
 import { SectionNav } from "./CockpitUI";
 import { SetupSkillUse } from "./SetupSkillUse";
+import { SetupDeliveryStorage } from "./SetupDeliveryStorage";
+import { SetupDeliveryPush } from "./SetupDeliveryPush";
 import {
   Search,
   Cpu,
@@ -581,6 +583,10 @@ export function Setup() {
               })}
             </section>
           )}
+          {transport().capabilities.kind === "local" && session.data?.paired && <div className="setup-overview-grid">
+            <SetupDeliveryStorage />
+            <SetupDeliveryPush />
+          </div>}
           <div className="setup-overview-grid">
             <section
               className="cockpit-panel setup-coverage-summary"

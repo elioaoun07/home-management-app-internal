@@ -276,6 +276,9 @@ export async function openBoard(page, state, assets, run, theme, seen = []) {
     (value) => document.documentElement.dataset.theme === value,
     theme,
   );
+  const aiRoom = page.getByRole("navigation", { name: "Delivery rooms" }).getByRole("button", { name: "AI room", exact: true });
+  await aiRoom.waitFor();
+  if (await aiRoom.getAttribute("aria-pressed") !== "true") await aiRoom.click();
   await page.locator(".board-workshop").waitFor();
   await page.waitForFunction(
     () =>

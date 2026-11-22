@@ -2,7 +2,10 @@ import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { LOCAL_CHECKS } from "../localRunModel";
 import type { ZoneId } from "../stage/config";
-import { bays, chair, coreStations, roomPoint, stations, zoneNames, type BayName } from "./layout";
+import { bays, chair, coreStations, ownerStations3D, roomPoint, stations, zoneNames, type BayName, type Floor } from "./layout";
+import { OWNER_STATIONS, type OwnerStation } from "../ownerStations";
+import { makeOwnerFloor } from "./ownerFloor";
+import { batchPanels, beam, block, mesh, point, ring, strip } from "./roomGeometry";
 import { fitChamber, fitSeat } from "./chamber";
 import { receiverMaterial } from "./receiver";
 import { createFaultCable } from "./faultCable";
@@ -11,30 +14,15 @@ import { makeSignage } from "./signage";
 import { instrumentCase, workstationKit } from "./workstation";
 export { makeSphere } from "./topicSphere";
 import { fitPlaybackVault } from "./playbackVault";
-import type { Target } from "./protocol";
+import type { Target, WorldState } from "./protocol";
 
-export const point = (x: number, y: number, z: number) => new T.Vector3(x, y, z);
+export { point } from "./roomGeometry";
 type Material = T.MeshStandardMaterial;
 const radialPoint = (angle: number, radius: number, height = .022) => {
   const { x, z } = roomPoint(angle, radius);
   return point(x, height, z);
 };
 
-function mesh<M extends T.Material>(parent: T.Object3D, geometry: T.BufferGeometry, material: M, x = 0, y = 0, z = 0) {
-  const object = new T.Mesh(geometry, material);
-  object.position.set(x, y, z);
-  parent.add(object);
-  return object;
-}
-function block<M extends T.Material>(parent: T.Object3D, material: M, x: number, y: number, z: number, w: number, h: number, d: number) {
-  return mesh(parent, new T.BoxGeometry(w, h, d), material, x, y, z);
-}
-function ring<M extends T.Material>(parent: T.Object3D, m: M, radius: number, width: number) {
-  return mesh(parent, new T.TorusGeometry(radius, width, 6, 72), m);
-}
-function strip(parent: T.Object3D, m: T.Material, points: T.Vector3[], radius = .027, segments = 24) {
-  return mesh(parent, new T.TubeGeometry(new T.CatmullRomCurve3(points), segments, radius, 5, false), m);
-}
 function inlay(parent: T.Object3D, material: Material, points: T.Vector3[]) {
   strip(parent, material, points.map(position => position.clone().add(point(0, -.048, 0))), .055);
 }
@@ -58,26 +46,6 @@ function radialTexture(dark: boolean) {
   return new T.CanvasTexture(canvas);
 }
 
-function batchPanels(source: T.Group) {
-  const batches = new Map<T.Material, T.BufferGeometry[]>();
-  source.updateWorldMatrix(true, true);
-  const space = source.matrixWorld.clone().invert();
-  const transform = new T.Matrix4();
-  source.traverse(node => {
-    if (!(node instanceof T.Mesh) || Array.isArray(node.material)) return;
-    const group = batches.get(node.material) ?? [];
-    node.geometry.applyMatrix4(transform.multiplyMatrices(space, node.matrixWorld));
-    group.push(node.geometry);
-    batches.set(node.material, group);
-  });
-  source.clear();
-  for (const [material, parts] of batches) {
-    const merged = mergeGeometries(parts);
-    if (merged) mesh(source, merged, material);
-    parts.forEach(geometry => geometry.dispose());
-  }
-}
-
 function archOutline(name: BayName, span: number) {
   const cap = span / 2;
   switch (name) {
@@ -88,12 +56,6 @@ function archOutline(name: BayName, span: number) {
     case "Test": return [[-cap, .24], [-cap * .86, 2.86], [cap * .86, 2.86], [cap, .24]];
     case "Ship": return [[-cap, .24], [-cap, 2.36], [-cap * .62, 2.92], [0, 3.4], [cap * .62, 2.92], [cap, 2.36], [cap, .24]];
   }
-}
-
-function beam(parent: T.Object3D, material: T.Material, from: T.Vector3, to: T.Vector3, width: number, depth: number) {
-  const middle = from.clone().lerp(to, .5);
-  const segment = block(parent, material, middle.x, middle.y, middle.z, from.distanceTo(to) + width * .28, width, depth);
-  segment.quaternion.setFromUnitVectors(point(1, 0, 0), to.clone().sub(from).normalize());
 }
 
 type Circuit = {
@@ -132,10 +94,12 @@ export function makeRoom(refresh: () => void, software = false) {
   const label = makeSignage();
   const fitWorkstation = workstationKit(roomMaterials);
   const fixed = new T.Group(), props = new T.Group();
-  outer.add(fixed, props);
+  const aiFurniture = new T.Group(), aiBenches = new T.Group();
+  outer.add(fixed, props, aiFurniture);
+  aiFurniture.add(aiBenches);
   const shade = new T.MeshBasicMaterial({ map: radialTexture(true), transparent: true, depthWrite: false, opacity: .78, polygonOffset: true, polygonOffsetFactor: -2 });
-  function shadow(x: number, z: number, width: number, depth: number) {
-    mesh(fixed, new T.PlaneGeometry(width, depth), shade, x, .004, z).rotation.x = -Math.PI / 2;
+  function shadow(x: number, z: number, width: number, depth: number, parent = fixed) {
+    mesh(parent, new T.PlaneGeometry(width, depth), shade, x, .004, z).rotation.x = -Math.PI / 2;
   }
   shadow(0, 0, 5.6, 5.6);
   const chamber = fitChamber(outer, floor, refresh, software);
@@ -214,16 +178,16 @@ export function makeRoom(refresh: () => void, software = false) {
   const markers = new Map<Target, T.Vector3>();
   const machines = new Map<Target, { moving: T.Mesh; light: Material; stamp: T.Mesh }>();
   const circuits = new Map<ZoneId, Circuit>();
-  const faultCable = createFaultCable(outer, recess);
+  const faultCable = createFaultCable(aiFurniture, recess);
   const checkStamps: T.Mesh<T.BufferGeometry, Material>[][] = [];
   const laminate = cassetteLaminate(refresh);
   for (const s of stations) {
-    const stand = new T.Group(); outer.add(stand);
+    const stand = new T.Group(); aiFurniture.add(stand);
     stand.position.set(s.x, 0, s.z); stand.rotation.y = -s.angle * Math.PI / 180;
-    const bench = new T.Group(); props.add(bench);
+    const bench = new T.Group(); aiBenches.add(bench);
     bench.position.copy(stand.position);
     bench.rotation.copy(stand.rotation);
-    shadow(s.x, s.z, 2.1, 2.25);
+    shadow(s.x, s.z, 2.1, 2.25, aiBenches);
     const contact = radialPoint(s.angle, s.radius - .14, 1.19);
     markers.set(s.id, contact);
     fitWorkstation(bench, s.id);
@@ -384,6 +348,7 @@ export function makeRoom(refresh: () => void, software = false) {
   }
   faultCable.finish();
   batchPanels(props);
+  batchPanels(aiBenches);
   const seat = new T.Group(); outer.add(seat);
   seat.position.set(chair.x, 0, chair.z); seat.rotation.y = .38;
   shadow(chair.x, chair.z, 2.5, 2.5);
@@ -434,7 +399,48 @@ export function makeRoom(refresh: () => void, software = false) {
   inner.visible = false;
   const marker = mesh(outer, new T.ConeGeometry(.22, .53, 3), new T.MeshBasicMaterial({ color: "#f7d7a0" }), 0, .095, 0);
   marker.rotation.x = -Math.PI / 2;
+  const ownerMarkers = new Map<OwnerStation, T.Vector3>(ownerStations3D.map(s =>
+    [s.id, radialPoint(s.angle, s.radius - .20, s.id === "merge" ? 2.07 : 1.36)]));
+  let deck: Floor = "ai";
+  let ownerFloor: ReturnType<typeof makeOwnerFloor> | undefined;
+  let ownerLight: { source: T.Vector3; color: T.Color } | undefined;
+  function setDeck(next: Floor, owner?: WorldState["owner"], compact = false, aspect = 16 / 9) {
+    if (deck !== next) {
+      deck = next;
+      aiFurniture.visible = next === "ai";
+      for (const [i, bay] of bays.entries()) {
+        const caption = next === "ai" ? bay.name : OWNER_STATIONS[i].label;
+        label.rename(bay.name, caption, "floor");
+        label.rename(bay.name, caption, "lintel");
+      }
+    }
+    ownerLight = undefined;
+    if (next === "ai") {
+      if (ownerFloor) ownerFloor.group.visible = false;
+      return;
+    }
+    if (!ownerFloor) {
+      ownerFloor = makeOwnerFloor(roomMaterials, fitWorkstation, label, shade);
+      outer.add(ownerFloor.group);
+    }
+    ownerFloor.group.visible = true;
+    ownerFloor.update(owner, compact, aspect || 16 / 9);
+    for (const s of ownerStations3D) {
+      const { bay, wash } = bayCircuits.get(s.bay)!;
+      const lamp = ownerFloor.lamps.get(s.id)!;
+      const selected = owner?.selected === s.id;
+      bay.emissive.copy(lamp.emissive);
+      bay.emissiveIntensity = selected ? .90 : .11;
+      wash.color.copy(lamp.emissive);
+      wash.visible = selected;
+      wash.opacity = selected ? .20 : 0;
+      if (selected) ownerLight = { source: ownerMarkers.get(s.id)!, color: lamp.emissive };
+    }
+    seatBranch.emissiveIntensity = .09;
+  }
   return { outer, inner, markers, machines, circuits, seatCircuit, checkStamps, light, key, warm, cutaway, marker,
+    ownerMarkers, setDeck, get deck() { return deck; }, get ownerLight() { return ownerLight; },
+    ownerRoute(id: OwnerStation) { return ownerFloor?.routes.get(id); },
     receiver, faultCable, materials: roomMaterials,
     dispose() { faultCable.dispose(); chamber.dispose(); } };
 }

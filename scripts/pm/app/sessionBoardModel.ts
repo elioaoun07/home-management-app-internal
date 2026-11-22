@@ -3,7 +3,8 @@ import { CHIP_ID_SOURCE, normalizeWorkId } from "../shared/work-id.mjs";
 import { isTerminal, phaseLabel, sessionStatus } from "../shared/product.mjs";
 import { sessionHref } from "./cockpitModel";
 import { bareTitle } from "./deliveryHomeModel";
-import { progress, uatLabel, uatReviewGroup } from "./uatModel";
+import { localRunLabel } from "./localRunModel";
+import { localRunOf, progress, uatLabel, uatReviewGroup } from "./uatModel";
 import { branchLabel, outcomeLabel, runningLabel } from "./v2model";
 import type { Flight } from "./cockpitTypes";
 import type {
@@ -222,11 +223,14 @@ export function sessionBoard(input: SessionBoardInput) {
     recordIds: [],
   });
   const latestUat = new Map<string, UatSummary>();
+  const localStages = new Map(v2.filter(run => run.lane === "local").map(run => [`v2:${run.run_id}`, run.stage]));
   for (const handover of [...uat].sort(
     (a, b) => stamp(a.created_at) - stamp(b.created_at),
   )) {
-    const key = handover.subject.run_id
-      ? linkedRunKey(handover.subject.run_id)
+    const localId = localRunOf(handover.subject.delivery_ref);
+    const runId = handover.subject.run_id || (localId && localStages.has(`v2:${localId}`) ? localId : null);
+    const key = runId
+      ? linkedRunKey(runId)
       : handover.subject.work_id && handover.subject.campaign
         ? `item:${itemKey(handover.subject.campaign, handover.subject.work_id)}`
         : `uat:${handover.subject.delivery_ref || handover.handover_id}`;
@@ -235,6 +239,16 @@ export function sessionBoard(input: SessionBoardInput) {
   const applyUat = (card: SessionBoardCard, handover: UatSummary) => {
     card.handoverId = handover.handover_id;
     card.testProgress = progress(handover);
+    const localStage = localStages.get(card.key);
+    if (localStage) {
+      if (localStage === "uat-ready") {
+        const accepted = handover.acceptance.state === "accepted";
+        card.status = accepted ? "Signed off" : uatLabel(handover);
+        card.lane = accepted ? "needs" : "uat";
+        card.action = "Open run";
+      }
+      return;
+    }
     const group = uatReviewGroup(handover);
     if (card.lane === "running") return;
     if (card.lane === "needs" && group === "not-ready") {
@@ -326,6 +340,14 @@ export function sessionBoard(input: SessionBoardInput) {
     ) {
       card.lane = "waiting";
       card.status = run.ownerAction || "Queued";
+    }
+    if (run.lane === "local") {
+      card.stage = localRunLabel({ phase: run.stage });
+      if (["merged", "committed", "refresh-conflict", "refresh-failed", "push-pending", "revert-push-pending", "uat-ready", "pushed"].includes(run.stage)) {
+        card.status = card.stage;
+        card.lane = run.stage === "uat-ready" ? "uat" : "needs";
+        card.action = "Open run";
+      } else if (run.lifecycle === "CLOSED") card.status = card.stage;
     }
     const handover = latestUat.get(key);
     if (handover) applyUat(card, handover);

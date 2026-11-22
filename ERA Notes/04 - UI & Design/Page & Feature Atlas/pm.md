@@ -18,6 +18,8 @@ tags:
 
 ## Files
 
+**Local Delivery workflow (DLV-168).** Game has an AI room with the eleven SDK stages and an Owner room with six workstations. Each room has a board. Explore 3D opens a two-floor observatory with a working elevator. Both floors share walking, sprint, mouse and touch look, Map, the seat and ERA’s core. Test, Review, Merge, Commit, Push and Clean up open one inspector at a time. Merge shows the selected file on the hologram and in a line-numbered reader. Choose Run base or Repo HEAD to compare recorded revisions. Calm opens the same station controls and puts the session records under Session evidence. Setup Overview holds the publication destination and worktree cleanup preview. [Owner walkthrough](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>)
+
 **Orbital Library (R140).** In Game mode, open Search and choose Library to enter a panoramic observatory. Each cabinet opens a campaign’s shelves. Kitchen items open as books, Budget items as tablets and Hub & ERA items on glass. Deliver opens operator and model selection. Local admission returns the actual session ID before the transition into Walk.
 
 **Explore 3D (2026-11-21, R132).** In the local Game run view, Explore 3D opens first-person exploration. Map and Seat use the same 3D level. The phase strip opens the plan and recorded outputs. Q or Ask ERA opens local questions and sources. Delivery topics choose a sphere profile. Board returns to the flat view. [Owner UAT](<../../../docs/Delivery-UAT.md#walk-inside-eras-brain--r132>).

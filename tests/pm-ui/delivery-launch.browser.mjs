@@ -68,6 +68,8 @@ await page.route("**/*", async (route) => {
   const request = route.request(), url = new URL(request.url());
   if (url.origin !== origin) return route.abort();
   const path = url.pathname;
+  if (path === "/api/delivery/v2/local/start-plan") return json(route, {
+    start_nonce: "00000000-0000-4000-8000-000000000001", token: "fixture-plan", commands: [["git","worktree","add","fixture"]] });
   if (path === "/api/data" && withRecommendation) {
     const response = await route.fetch();
     const snapshot = await response.json();

@@ -1,6 +1,6 @@
 // DLV-150–153. Local worktree supervision over the existing run/job/activity store.
 import { randomUUID, createHash } from "node:crypto";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { runProcess } from "./process.mjs";
 import { decisiveLines } from "./failure-lines.mjs";
@@ -13,10 +13,11 @@ import { makeJobRequest } from "./adapters/adapter.mjs";
 import { parseWorkItems } from "./work-ref.mjs";
 import { idSection } from "../pm/shared/work-id.mjs";
 import { bindDirect, freezeHandover, viewOne } from "./uat.mjs";
-import { archiveItem, insertDatedStamp, itemBody, removeLine, shippedStamp } from "../pm/archive.mjs";
-import { tickById, buildIndexBlock, refreshIndex, ship as shipPm } from "../pm/ship.mjs";
-import { normalizeAnswers, normalizeMessage, normalizeQuestion, projectQuestions, readLedger, resumePrompt, writeLedger } from "./local-questions.mjs";
+import { applyCopy, createPublication, obstructedCopyPath, prepareCopy } from "./local-publication.mjs";
+import { localMessageBodies, normalizeAnswers, normalizeMessage, normalizeQuestion, projectQuestions, readLedger, resumePrompt, writeLedger } from "./local-questions.mjs";
 import { createPreviews } from "./local-preview.mjs";
+import { needsRefreshPlan, refreshCandidate, refreshPlan } from "./local-refresh.mjs";
+import { createLocalStorage, individualDiscard } from "./local-storage.mjs";
 import { fileURLToPath } from "node:url";
 
 const ASK_SERVER = fileURLToPath(new URL("./local-ask-mcp.mjs", import.meta.url));
@@ -39,11 +40,11 @@ const HOOK_STAGES = new Map([
  * session?:typeof nativeLocalSession, authenticate?:typeof localWorkerSubscription,
  * dependencies?:typeof installedDependencies, checks?:typeof hostChecks,
  * prepareDependencies?:((workspace:string)=>Promise<{status:number|null}>)|null,
- * baseBranch?:string, remote?:string, hasStore?:()=>boolean, catalog?:()=>object|null,
+ * baseBranch?:string, hasStore?:()=>boolean, catalog?:()=>object|null,
  * limits?:{hookMs?:number, pushMs?:number}, previews?:ReturnType<typeof createPreviews>|null}} options */
 export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession,
   authenticate = localWorkerSubscription, dependencies = installedDependencies, checks = hostChecks,
-  prepareDependencies = null, baseBranch = "main", remote = "origin", hasStore = () => true, limits = {},
+  prepareDependencies = null, baseBranch = "main", hasStore = () => true, limits = {},
   catalog = () => { const loaded = loadExecutionPolicy({ root }); return loaded.ok ? loaded.policy.executors.catalog : null; },
   previews = null }) {
   const s = () => typeof store === "function" ? store() : store;
@@ -54,12 +55,6 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
   const { hookMs = 25 * 60_000, pushMs = 5 * 60_000 } = limits;
   async function git(cwd, ...args) {
     const out = await run("git", ["--no-optional-locks", ...args], { cwd, env: env(), timeout: 30_000 });
-    if (out.status !== 0 || out.error) throw new Error(`git ${args[0]}: ${out.stderr || out.error?.message || out.status}`);
-    return out.stdout.trimEnd();
-  }
-  async function gitSlow(cwd, limitMs, onLine, ...args) {
-    const out = await run("git", ["--no-optional-locks", ...args], { cwd, env: env(), timeout: limitMs, onStderrLine: onLine });
-    if (out.error?.code === "ETIMEDOUT") throw new Error(`git ${args[0]}: timed out after ${limitMs / 1000} s`);
     if (out.status !== 0 || out.error) throw new Error(`git ${args[0]}: ${out.stderr || out.error?.message || out.status}`);
     return out.stdout.trimEnd();
   }
@@ -100,6 +95,68 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     });
   }
   const event = (id, message) => s().appendActivity(id, id, [{ at: at(), kind: "status", summary: message }]);
+
+  function activeCommand(id) {
+    try {
+      const owner = parse(readFileSync(join(root, ".delivery/local-command.lock/owner.json"), "utf8"));
+      if (!owner || owner.run_id !== id || !Number.isSafeInteger(owner.pid) || owner.pid < 1) return null;
+      process.kill(owner.pid, 0);
+      return owner.action;
+    } catch (error) { return error.code === "EPERM" ? "busy" : null; }
+  }
+
+  async function buildGit(id, cwd, args, timeout, onStderrLine = undefined) {
+    const argv = ["git", "--no-optional-locks", ...args];
+    event(id, JSON.stringify(argv));
+    const result = await run("git", argv.slice(1), { cwd, env: env(), timeout, onStderrLine });
+    const tail = [result.stdout, result.stderr, result.error?.message].filter(Boolean).join("\n").trim().slice(-1800);
+    event(id, `Git exit ${result.status ?? "unknown"} · ${JSON.stringify(argv)}\n${tail}`);
+    if (result.error?.code === "ETIMEDOUT") throw new Error(`git ${args[0]}: timed out after ${timeout / 1000} s`);
+    if (result.status !== 0 || result.error) throw new Error(`git ${args[0]}: ${result.stderr || result.error?.message || result.status}`);
+  }
+  const storage = createLocalStorage({ root, run, env, getRecord: dataOf, rows: list,
+    activity: id => s().listActivity(id, 200, true), busy: id => tasks.has(id) && !tasks.get(id).releasing, record: event, stopPreview: id => apps.stop(id) });
+  function prepareRunDependencies(id, d) {
+    return prepareDependencies ? prepareDependencies(d.workspace) : storage.prepare(id, d, pnpmCommand);
+  }
+  async function releaseStorage(id, witness, individual) {
+    const row = s().getRun(id), d = dataOf(id);
+    if (d.cleaned_at) return { run_id: id, cleaned_at: d.cleaned_at };
+    const fields = await storage.clean(id, witness, individual);
+    const discarded = individualDiscard.has(d.phase) || (d.phase === "shipped" && d.applied && !d.pushed);
+    const phase = discarded ? "discarded" : d.phase;
+    save(id, { ...d, ...fields, phase, cleanup_outcome: phase }, "CLOSED", discarded ? phase : row.closed_outcome || phase);
+    event(id, "Delivery files archived and cleaned");
+    return { run_id: id, ...fields };
+  }
+  async function autoClean(id) {
+    try {
+      const plan = await storage.preview(id);
+      if (plan) await releaseStorage(id, plan.witness, true);
+    } catch (error) {
+      const row = s().getRun(id);
+      save(id, { ...dataOf(id), cleanup_error: String(error.message) }, row.lifecycle, row.closed_outcome);
+      event(id, "Cleanup pending: " + error.message);
+    }
+  }
+  async function cleanAfterPush(id, witness) {
+    try { await releaseStorage(id, witness, true); }
+    catch (error) {
+      const row = s().getRun(id);
+      save(id, { ...dataOf(id), cleanup_error: String(error.message) }, row.lifecycle, row.closed_outcome);
+      event(id, "Pushed; cleanup pending: " + error.message);
+    }
+  }
+  function discard(id, witness) {
+    return locked("discard", id, () => releaseStorage(id, witness, true));
+  }
+  function cleanup(selections) {
+    return locked("cleanup", null, async () => {
+      const results = [];
+      for (const { run_id, witness } of selections) results.push(await releaseStorage(run_id, witness, false));
+      return { cleaned: results };
+    });
+  }
 
   // DLV-164/165. The conversation ledger lives outside `.delivery/local/<id>/`,
   // whose credential home is disposable. A question parks the session: no
@@ -236,6 +293,14 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return { lane: "local", ready: LOCAL_LAUNCH_GATES.every(name => facts[name].state === "pass"), facts, base, executor };
   }
 
+  function visiblePhase(d) {
+    if (d.phase === "discarded") return "discarded";
+    if (d.pushed && d.cleaned_at) return "cleaned";
+    if (d.pushed) return "pushed";
+    if (d.committed) return "committed";
+    if (d.applied) return "merged";
+    return d.phase;
+  }
   function list() {
     if (!hasStore()) return [];
     return s().listRuns().filter(localRecord).map(row => {
@@ -249,7 +314,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         lifecycle: row.lifecycle, closed_outcome: row.closed_outcome, waiting_reason: null, executor: d.settings.executor, model: d.settings.model,
         effort: d.settings.effort, ownerAction: interrupted ? "Interrupted" : asking ? "Question" : d.phase,
         ownerActionKind: asking ? "local-question" : row.lifecycle === "CLOSED" || active ? "none" : d.phase === "uat-ready" ? "local-review" : "inspect-session", active,
-        created_at: row.created_at, updated_at: row.updated_at, resources: null, application: null, stage: d.phase, branch: d.branch };
+        created_at: row.created_at, updated_at: row.updated_at, resources: null, application: null, stage: visiblePhase(d), branch: d.branch };
     });
   }
 
@@ -261,6 +326,37 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       files.push({ path, before: await read(data.base), after: await read(head) });
     }
     return { files, risk: classifyLocalDiff(files), patch: await git(data.workspace, "diff", "--no-ext-diff", "--no-textconv", data.base, head) };
+  }
+
+  // A station inspects immutable Git objects, even after a file-copy merge or
+  // worktree removal. Opening it must never satisfy the owner's review gate.
+  async function comparison(id, expectedHead, path = null, against = "base", expectedSource = null) {
+    const d = dataOf(id);
+    const revision = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
+    if (!revision.test(d.base) || !revision.test(d.head)) throw new Error("No recorded candidate comparison");
+    if (expectedHead !== d.head) throw new Error("Candidate changed. Reopen the comparison.");
+    const source = against === "repo" ? await git(root, "rev-parse", "HEAD") : d.base;
+    if (expectedSource && expectedSource !== source) throw new Error("Repository HEAD changed. Reload the file list.");
+    const args = ["--no-optional-locks", "--literal-pathspecs", "-c", "color.ui=false", "diff",
+      "--no-ext-diff", "--no-textconv", "--no-renames"];
+    if (path === null) args.push("--name-status", "-z");
+    else {
+      const match = await git(root, "--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+        "--name-only", "-z", d.base, d.head, "--", path);
+      if (match !== path + "\0") throw new Error("File is outside the recorded change");
+    }
+    // The picker lists only the candidate's own changes. An advanced checkout
+    // may contain unrelated commits; those files do not belong to this run.
+    args.push(path === null ? d.base : source, d.head, "--");
+    if (path !== null) args.push(path);
+    const result = await run("git", args, { cwd: root, env: env(), timeout: 15_000, maxBuffer: 4 * 1024 * 1024 });
+    if (result.error?.code === "ENOBUFS") throw new Error("Comparison exceeds the 4 MB reader limit");
+    if (result.status !== 0 || result.error) throw new Error("Recorded Git objects are unavailable");
+    if (path !== null) return { base: source, head: d.head, path, patch: result.stdout };
+    const fields = result.stdout.split("\0");
+    const files = [];
+    for (let i = 0; i + 1 < fields.length; i += 2) files.push({ status: fields[i], path: fields[i + 1] });
+    return { base: source, head: d.head, files };
   }
 
   async function detail(id, { inspect = false } = {}) {
@@ -288,17 +384,22 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const running = s().getRun(id)?.lifecycle !== "CLOSED" && ["preparing", "building"].includes(d.phase);
     const passed = !!d.checks?.length && d.checks.every(c => c.exit === 0 && !c.error);
     let mergePlan = null;
-    if (d.phase === "uat-ready" && current) {
+    if ((d.phase === "uat-ready" && current) || needsRefreshPlan(d)) {
       try { mergePlan = await planMerge(d); } catch (error) { mergePlan = { files: [], conflicts: [], branch: null, expected: baseBranch, error: String(error.message) }; }
     }
-    return { ...d, run_id: id, current_head: head, clean, risk: changes.risk, patch: changes.patch, activity: s().listActivity(id), usage: observed?.usage || null,
-      handover, questions: chat.questions, messages: chat.messages, parked, preview: apps.view(id),
+    const publicationPlan = await publication.plan({...d,run_id:id});
+    const cancelCleanupCommands = ["preparing", "building", "checking"].includes(d.phase)
+      ? await storage.cleanupCommands(d.workspace, d.branch).catch(() => []) : [];
+    const window = s().listActivity(id, 201, true);
+    return { ...d, phase: visiblePhase(d), publication: publicationPlan, run_id: id, current_head: head, clean, risk: changes.risk, patch: changes.patch,
+      activity: localMessageBodies(window.slice(-200), observed), earlier_activity: window.length > 200, usage: observed?.usage || null,
+      handover, questions: chat.questions, messages: chat.messages, parked, preview: apps.view(id), activeCommand: activeCommand(id), cancelCleanupCommands,
       canMessage: running && (!!task?.accepting || parked),
-      canShip: current && reviewed && signed && ["uat-ready", "merging"].includes(d.phase) && d.checks?.every(c => c.exit === 0 && !c.error),
-      mergePlan, canMerge: current && reviewed && signed && passed && !!mergePlan && !mergePlan.error && mergePlan.branch === baseBranch
-        && mergePlan.files.length > 0 && mergePlan.conflicts.length === 0,
+      canShip: false,
+      mergePlan, canMerge: !!d.merge_pending || (d.phase === "uat-ready" && current && reviewed && signed && passed && !!mergePlan && !mergePlan.error && mergePlan.branch === baseBranch
+        && mergePlan.files.length > 0 && mergePlan.conflicts.length === 0),
       // A file-copy merge (DLV-167) has no merge commit to revert.
-      canUndo: d.phase === "shipped" && !!d.merge, interrupted: ["preparing", "building", "checking"].includes(d.phase) && !task && !parked };
+      canUndo: false, interrupted: ["preparing", "building", "checking"].includes(d.phase) && !task && !parked };
   }
 
   // DLV-167. The run started from `main` at d.base (ALPHA); the owner's checkout
@@ -315,31 +416,57 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       files.push({ status: parts[i][0], path });
     }
     const branch = await git(root, "symbolic-ref", "--quiet", "--short", "HEAD").catch(() => null);
-    if (!files.length) return { files, conflicts: [], branch, expected: baseBranch };
+    const target = await git(root, "rev-parse", "HEAD");
+    if (!files.length) return refreshPlan(d, { files, conflicts: [], branch, expected: baseBranch }, target);
     const paths = files.map(file => file.path);
-    const committed = new Set((await git(root, "diff", "--no-renames", "--name-only", "-z", d.base, "HEAD", "--", ...paths)).split("\0").filter(Boolean));
-    const uncommitted = new Set((await git(root, "status", "--porcelain", "-z", "--no-renames", "--untracked-files=all", "--", ...paths))
-      .split("\0").filter(Boolean).map(entry => entry.slice(3)));
-    const conflicts = paths.filter(path => committed.has(path) || uncommitted.has(path))
-      .map(path => ({ path, committed: committed.has(path), uncommitted: uncommitted.has(path) }));
-    return { files, conflicts, branch, expected: baseBranch };
+    const committed = new Set((await git(root, "--literal-pathspecs", "diff", "--no-renames", "--name-only", "-z", d.base, target, "--", ...paths)).split("\0").filter(Boolean));
+    const uncommitted = (await git(root, "--literal-pathspecs", "status", "--porcelain", "-z", "--no-renames", "--ignored=matching", "--untracked-files=all", "--", ...paths))
+      .split("\0").filter(Boolean).map(entry => entry.slice(3).replace(/\/$/u,""));
+    const overlaps = (changed, path) => changed === path || changed.startsWith(path + "/") || path.startsWith(changed + "/");
+    const conflicts = files.map(({path, status}) => {
+      const inHistory = [...committed].some(name => overlaps(name,path));
+      const occupied = obstructedCopyPath(root,path) || (status === "A" && !inHistory && existsSync(join(root,path)));
+      return {path, committed:inHistory, uncommitted:occupied || uncommitted.some(name => overlaps(name,path))};
+    }).filter(file => file.committed || file.uncommitted);
+    return refreshPlan(d, { files, conflicts, branch, expected: baseBranch }, target);
   }
 
-  /** Records the owner's sign-off on the item's `**UAT:** pending` line, inside its own section only. */
-  function recordUatPassed(bookAbs, workId, handoverId) {
-    if (!existsSync(bookAbs)) return;
-    const raw = readFileSync(bookAbs, "utf8");
-    const section = idSection(raw, workId);
-    if (!section) return;
-    const lines = raw.split("\n");
-    for (let index = section.line + 1; index < lines.length && !/^#{1,3}\s/u.test(lines[index]); index++) {
-      const match = /^(\s*(?:-\s*)?)\*\*UAT:\*\*\s*pending\b[^\r]*(\r?)$/iu.exec(lines[index]);
-      if (!match) continue;
-      lines[index] = `${match[1]}**UAT:** passed ${at().slice(0, 10)} (owner sign-off, Test steps ${handoverId})${match[2]}`;
-      writeFileSync(bookAbs, lines.join("\n"));
-      return;
-    }
+  async function refresh(id, expectedBase, expectedHead) {
+    return locked("refresh", id, async () => {
+      await refreshCandidate({ id, root, d: dataOf(id), expectedBase, expectedHead, git, run, env, save,
+        event, planMerge, checks, inspect: diff, freeze: freezeCandidate, stopPreview: key => apps.stop(key), hookMs,
+        ensureDeps: async (key, candidate) => {
+          assertNoLocalSecrets(candidate.workspace);
+          const changed = await git(candidate.workspace, "diff", "--name-only", candidate.refresh.old_base,
+            candidate.base, "--", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc");
+          if (changed || !dependencies(candidate.workspace)) {
+            const install = await prepareRunDependencies(key, candidate);
+            if (install.status !== 0 || install.error || !dependencies(candidate.workspace))
+              throw new Error("Refreshed dependencies could not be prepared");
+          }
+        } });
+      return detail(id);
+    });
   }
+
+  function freezeCandidate(id, d, head) {
+    const handoverFile = join(d.workspace, HANDOVER_FILE);
+    if (!existsSync(handoverFile)) throw new Error("handover incomplete: .delivery-handover.json missing");
+    let content;
+    try { content = JSON.parse(readFileSync(handoverFile, "utf8")); }
+    catch (error) { throw new Error(`handover incomplete: .delivery-handover.json unparsable: ${error.message}`); }
+    event(id, "Freezing handover");
+    const frozen = freezeHandover({ root, subject: { delivery_ref: `local:${id}`, work_id: d.work.id, campaign: d.work.campaign, title: d.work.title },
+      binding: bindDirect({ delivery_ref: `local:${id}`, source_revision: head }), environment: { target: "local", build: head },
+      content, source: { kind: "local-supervisor", ref: id }, ready: true, now: at() });
+    if (!frozen.ok || frozen.handover.status !== "ready") {
+      const problems = frozen.handover?.problems || frozen.refusals || [];
+      throw new Error(`handover incomplete: .delivery-handover.json incomplete: ${problems.map(p => [p.code, p.detail, p.scenario, p.step].filter(value => value != null).join(" ")).join("; ") || "not ready"}`);
+    }
+    return frozen.handover.handover_id;
+  }
+
+
 
   /** The private home for the native CLI: subscription credential, config, hooks. Idempotent for resumes. */
   function prepareHome(id, d) {
@@ -397,10 +524,8 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const task = tasks.get(id);
     try {
       if (!resumeWith) {
-        const [bin, launcher] = pnpmCommand();
         event(id, "Installing dependencies");
-        const install = prepareDependencies ? await prepareDependencies(d.workspace) : await run(bin,
-          [launcher, "install", "--offline", "--frozen-lockfile", "--ignore-scripts"], { cwd: d.workspace, env: env(), timeout: 10 * 60_000 });
+        const install = await prepareRunDependencies(id, d);
         if (install.status !== 0 || install.error || !dependencies(d.workspace)) {
           failure.detail = (install.stderr || install.error?.message || "offline frozen install failed or dependencies do not match the lock").trimEnd().split(/\r?\n/u).slice(-20).join("\n");
           throw new Error(`worktree dependencies unavailable; offline frozen install failed\n${install.stderr || failure.detail}`);
@@ -426,11 +551,18 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         // makeJobRequest carries model/effort; executor is the local dispatch choice.
         if (prompt) s().updateJob(id, { status: "active" }); else s().markDispatchStarted(id, at());
         failure = { code: "native-error", step: "Build", detail: "" };
+        let lastNativeSeq = -1;
         try {
           result = await session({
             request: { ...request, settings: d.settings, ...(prompt ? { resume: { dispatch_key: id, native_ref: d.native_ref } } : {}) },
             env: childEnv, signal: controller.signal,
-            onActivity: value => s().appendActivity(id, id, [value]),
+            onActivity: value => {
+              // Native ordinals restart at zero per segment. Preserve stream
+              // deduplication while sharing the store sequence with supervisor rows.
+              if (Number.isInteger(value.seq) && value.seq <= lastNativeSeq) return;
+              s().appendActivity(id, id, [{ ...value, seq: undefined }]);
+              if (Number.isInteger(value.seq)) lastNativeSeq = value.seq;
+            },
             onQuestion: value => recordQuestion(id, value),
             onDelivered: ids => markDelivered(id, ids),
             onChannel: send => {
@@ -465,6 +597,11 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       }
       if (task) task.accepting = false;
       closeQuestions(id);
+      await storage.removeHome(id);
+      if (!dependencies(d.workspace) || await git(d.workspace, "diff", "--name-only", d.base, "--", "package.json", "pnpm-lock.yaml")) {
+        const install = await prepareRunDependencies(id, d);
+        if (install.status !== 0 || !dependencies(d.workspace)) throw new Error("updated dependency installation failed");
+      }
       s().updateJob(id, { status: "finished", reservation_open: false, observations_json: observations, outcome: observations?.nativeOutcome });
       s().markAfterJob(id, "done");
       failure = { code: "secrets", step: "Setup", detail: "" };
@@ -474,14 +611,14 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       // repository hooks, without giving the worker push/merge authority.
       failure = null;
       if (await git(d.workspace, "status", "--porcelain", "--untracked-files=all")) {
-        await git(d.workspace, "add", "--all");
+        await buildGit(id, d.workspace, ["add", "--all"], 30_000);
         event(id, "Committing candidate");
         const seen = new Set();
         failure = { code: "commit-hook", step: "Seal", detail: "" };
-        await gitSlow(d.workspace, hookMs, line => {
+        await buildGit(id, d.workspace, ["commit", "-m", `Build ${d.work.id}`], hookMs, line => {
           const stage = HOOK_STAGES.get(line.trim());
           if (stage && !seen.has(stage)) { seen.add(stage); event(id, `Hook: ${stage}`); }
-        }, "commit", "-m", `Build ${d.work.id}`);
+        });
       }
       failure = null;
       const head = await git(d.workspace, "rev-parse", "HEAD");
@@ -507,20 +644,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         throw new Error(`host checks failed: ${checking}\n${raw}`);
       }
       failure = { code: "handover", step: "Handover", detail: "" };
-      const handoverFile = join(d.workspace, ".delivery-handover.json");
-      if (!existsSync(handoverFile)) throw new Error("handover incomplete: .delivery-handover.json missing");
-      let content;
-      try { content = JSON.parse(readFileSync(handoverFile, "utf8")); }
-      catch (error) { throw new Error(`handover incomplete: .delivery-handover.json unparsable: ${error.message}`); }
-      event(id, "Freezing handover");
-      const frozen = freezeHandover({ root, subject: { delivery_ref: `local:${id}`, work_id: d.work.id, campaign: d.work.campaign, title: d.work.title },
-        binding: bindDirect({ delivery_ref: `local:${id}`, source_revision: head }), environment: { target: "local", build: head },
-        content, source: { kind: "local-supervisor", ref: id }, ready: true, now: at() });
-      if (!frozen.ok || frozen.handover.status !== "ready") {
-        const problems = frozen.handover?.problems || frozen.refusals || [];
-        throw new Error(`handover incomplete: .delivery-handover.json incomplete: ${problems.map(p => [p.code, p.detail, p.scenario, p.step].filter(value => value != null).join(" ")).join("; ") || "not ready"}`);
-      }
-      d = { ...d, phase: "uat-ready", handover_id: frozen.handover.handover_id }; save(id, d); event(id, "Ready for owner UAT");
+      d = { ...d, phase: "uat-ready", handover_id: freezeCandidate(id, d, head) }; save(id, d); event(id, "Ready for owner UAT");
     } catch (error) {
       const message = String(error.message);
       if (controller.signal.aborted) failure = { code: "cancelled", step: "—", detail: "—" };
@@ -532,7 +656,34 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       save(id, d, "CLOSED", d.phase);
       s().updateJob(id, { status: "finished", reservation_open: false, outcome: d.phase }); s().markAfterJob(id, "done");
       event(id, d.error);
-    } finally { tasks.delete(id); }
+    } finally {
+      try {
+        if (["failed", "cancelled"].includes(dataOf(id).phase)) {
+          if (task) task.releasing = true;
+          try { await storage.removeHome(id); } catch (error) { event(id, "Credential home cleanup pending: " + error.message); }
+          try { await locked("cleanup", id, () => autoClean(id)); }
+          catch (error) { event(id, "Cleanup pending: " + error.message); }
+        }
+      } finally { tasks.delete(id); }
+    }
+  }
+
+  async function startPlan(input) {
+    const work = selected(input.file, input.id);
+    const base = await git(root, "rev-parse", "--verify", `refs/heads/${baseBranch}`);
+    const nonce = input.start_nonce || randomUUID();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(nonce)) throw new Error("Invalid Start preview");
+    const previous = list().some(row => row.alias === work.id && row.file === work.file);
+    const suffix = previous ? `${work.id}-${nonce}` : work.id;
+    const workspace = join(dirname(root), `${root.split(/[/\\]/u).at(-1)}-delivery`, suffix);
+    const branch = `delivery/${suffix}`;
+    const commands = [
+      ["git", "--no-optional-locks", "worktree", "add", "-b", branch, workspace, base],
+      ["git", "--no-optional-locks", "add", "--all"],
+      ["git", "--no-optional-locks", "commit", "-m", `Build ${work.id}`],
+    ];
+    const cleanupCommands = await storage.cleanupCommands(workspace, branch);
+    return { start_nonce: nonce, token: sha(JSON.stringify([commands, cleanupCommands])), commands, cleanupCommands, workspace, branch, base };
   }
 
   async function start(input) {
@@ -544,15 +695,14 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       const work = selected(input.file, input.id);
       const ready = await readiness(input);
       if (!ready.ready) return { ok: false, readiness: ready, error: "local-preflight-failed" };
-      const id = "local-" + randomUUID();
-      // A failed attempt owns its worktree and evidence permanently. A fresh
-      // owner Start uses a new branch/path instead of deleting or reusing it.
-      const previous = list().filter(row => row.alias === input.id && row.file === input.file);
-      const suffix = previous.length ? `${input.id}-${id.slice(6)}` : input.id;
-      const workspace = join(dirname(root), `${root.split(/[/\\]/u).at(-1)}-delivery`, suffix);
+      const plan = await startPlan(input);
+      if ((input.requirePreview || input.preview_id) && plan.token !== input.preview_id) throw new Error("Start preview changed. Reload the launch page.");
+      if (plan.base !== ready.base) throw new Error("Main changed. Refresh the Start preview.");
+      const id = "local-" + plan.start_nonce;
+      storage.checkCapacity();
+      // Each retry gets a new branch and a separate archive.
+      const { workspace, branch } = plan;
       if (existsSync(workspace)) throw new Error("worktree-already-exists; inspect the previous attempt");
-      const branch = `delivery/${suffix}`;
-      await git(root, "worktree", "add", "-b", branch, workspace, ready.base);
       const d = { lane: "local", work, settings: settings.settings, supervisor, workspace, base: ready.base, branch, phase: "preparing", checks: [], head: null };
       s().insertRun({ run_id: id, work_id: input.id, contract_id: id, contract_revision: 1, lifecycle: "ACTIVE" });
       save(id, d);
@@ -560,6 +710,13 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         contract_id: id, contract_revision: 1, grant_id: "local-owner", grant_revision: 1,
         reservation: { unit: "tokens", basis: "subscription-advisory" }, settings: d.settings });
       s().updateJob(id, { status: "active" });
+      try { await buildGit(id, root, plan.commands[0].slice(2), 30_000); }
+      catch (error) {
+        save(id, { ...d, phase: "failed", error: error.message }, "CLOSED", "failed");
+        s().updateJob(id, { status: "finished", reservation_open: false, outcome: "failed" });
+        s().markAfterJob(id, "done");
+        throw error;
+      }
       const controller = new AbortController();
       tasks.set(id, { controller, promise: null, send: null, accepting: true });
       tasks.get(id).promise = build(id, controller);
@@ -567,13 +724,17 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     });
   }
 
-  async function review(id) {
-    const view = await detail(id, { inspect: true });
-    if (!view.clean || view.current_head !== view.head) throw new Error("candidate-changed");
-    const d = dataOf(id);
-    save(id, { ...d, reviewed_head: view.current_head, reviewed_risk: sha(JSON.stringify(view.risk)) });
-    event(id, "Owner opened diff review");
-    return view.patch;
+  async function review(id, expectedHead = null) {
+    return locked("review", id, async () => {
+      const d = dataOf(id);
+      if (expectedHead && d.head !== expectedHead) throw new Error("Candidate changed. Reopen the comparison.");
+      if (d.phase !== "uat-ready" || d.merge_pending || s().getRun(id)?.lifecycle === "CLOSED") throw new Error("Review needs a candidate ready to test");
+      const view = await detail(id, { inspect: true });
+      if (!view.clean || view.current_head !== view.head) throw new Error("candidate-changed");
+      save(id, { ...d, reviewed_head: view.current_head, reviewed_risk: sha(JSON.stringify(view.risk)) });
+      event(id, "Owner opened diff review");
+      return view.patch;
+    });
   }
 
   /** DLV-166: serve the candidate for owner UAT from its own worktree. Not
@@ -597,210 +758,48 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return detail(id);
   }
 
-  /** DLV-167, phase 0: copy the tested files into the main checkout. No Git write;
-   * the owner commits and pushes. Refused if any of those files moved there. */
   async function merge(id) {
     return locked("merge", id, async () => {
-      const view = await detail(id, { inspect: true });
-      const plan = view.mergePlan;
-      if (plan?.conflicts?.length) throw new Error(`changed-in-your-repo: ${plan.conflicts.map(c => c.path).join(", ")}`);
-      if (plan && plan.branch !== baseBranch) throw new Error(`checkout-${baseBranch}-first`);
-      if (!view.canMerge) throw new Error(plan?.error || "merge-needs-passed-checks-sign-off-and-review");
-      const d = dataOf(id), pmDir = join(root, PM);
-      const dry = shipPm({ pmDir, repoRoot: root, ids: [d.work.id], dryRun: true });
-      if (dry.aborted) throw new Error(dry.aborted);
-      const written = [];
-      for (const file of plan.files) {
-        const target = resolve(root, file.path);
-        if (file.status === "D") { if (existsSync(target)) unlinkSync(target); }
-        else { mkdirSync(dirname(target), { recursive: true }); copyFileSync(resolve(d.workspace, file.path), target); }
-        written.push(file.path);
-      }
-      recordUatPassed(join(pmDir, d.work.book), d.work.id, d.handover_id);
-      const pm = shipPm({ pmDir, repoRoot: root, ids: [d.work.id], note: `merged from Local run ${id}` });
-      const pmError = pm.aborted || pm.errors.join("; ") || null;
-      save(id, { ...dataOf(id), phase: "shipped", applied: { at: at(), files: written, main_head: await git(root, "rev-parse", "HEAD"), pm_error: pmError } }, "CLOSED", "shipped");
-      event(id, `Owner merged ${written.length} file${written.length === 1 ? "" : "s"} into the main checkout`);
-      apps.stop(id);
-      return detail(id);
-    });
-  }
-
-  async function operationHead(ref) {
-    const out = await run("git", ["--no-optional-locks", "rev-parse", "--verify", "--quiet", ref], { cwd: root, env: env(), timeout: 30_000 });
-    if (out.status === 1 && !out.error) return null;
-    if (out.status !== 0 || out.error) throw new Error(`git rev-parse: ${out.stderr || out.error?.message || out.status}`);
-    return out.stdout.trim();
-  }
-
-  async function cleanAt(head) {
-    return await git(root, "symbolic-ref", "--short", "HEAD") === baseBranch &&
-      await git(root, "rev-parse", "HEAD") === head &&
-      !(await git(root, "status", "--porcelain", "--untracked-files=all"));
-  }
-
-  async function ownedShipState(d) {
-    if (await git(root, "ls-files", "--others", "--exclude-standard") || await git(root, "ls-files", "--unmerged")) return false;
-    // No supervisor PM write changes a mode, renames a path or removes a file.
-    if (await git(root, "diff", "--cached", "--summary", "--no-renames", d.head) || await git(root, "diff", "--summary", "--no-renames")) return false;
-    const staged = (await git(root, "diff", "--cached", "--name-only", "--no-renames", "-z", d.head)).split("\0").filter(Boolean);
-    const unstaged = (await git(root, "diff", "--name-only", "--no-renames", "-z")).split("\0").filter(Boolean);
-    const owned = d.ship_owned_files || {};
-    if ([...staged, ...unstaged].some(path => !Object.hasOwn(owned, path))) return false;
-    for (const [path, hashes] of Object.entries(owned)) {
-      const file = await run("git", ["--no-optional-locks", "show", `:${path}`], { cwd: root, env: env(), timeout: 30_000 });
-      if (file.status !== 0 || file.error || !hashes.includes(sha(file.stdout)) || !hashes.includes(sha(readFileSync(join(root, path))))) return false;
-    }
-    return true;
-  }
-
-  async function ownedUndoState(d) {
-    if (await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch ||
-      await git(root, "rev-parse", "HEAD") !== d.undo_base ||
-      await git(root, "diff", "--no-ext-diff", "--no-textconv") ||
-      await git(root, "ls-files", "--others", "--exclude-standard")) return false;
-    const inverse = await git(root, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", "--full-index", d.merge, `${d.merge}^1`);
-    const staged = await git(root, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--cached", "--binary", "--full-index", d.undo_base);
-    return !!inverse && staged === inverse;
-  }
-
-  async function abortShip(id, d, message) {
-    try {
-      const merge = await operationHead("MERGE_HEAD");
-      if (merge) {
-        if (merge !== d.head || await git(root, "rev-parse", "HEAD") !== d.base ||
-          await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch) throw new Error("foreign-merge");
-        if (!await ownedShipState(d)) throw new Error("foreign-merge-changes");
-        await git(root, "merge", "--abort");
-      }
-      if (!await cleanAt(d.base)) throw new Error("main-not-restored");
-      save(id, { ...d, phase: "uat-ready", ship_error: message });
-      event(id, "Recovered Ship; main restored");
-      return true;
-    } catch (error) {
-      save(id, { ...d, phase: "merging", ship_error: "merge-abort-failed", ship_error_detail: String(error.message) });
-      return false;
-    }
-  }
-
-  async function abortUndo(id, d, message) {
-    try {
-      const revert = await operationHead("REVERT_HEAD");
-      if (revert) {
-        if (revert !== d.merge || await git(root, "rev-parse", "HEAD") !== d.undo_base ||
-          await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch) throw new Error("foreign-revert");
-        if (!await ownedUndoState(d)) throw new Error("foreign-revert-changes");
-        await git(root, "revert", "--abort");
-      }
-      if (!revert && !await cleanAt(d.undo_base)) {
-        // A failed commit-message hook can leave the inverse staged without
-        // REVERT_HEAD. Reset only the exact recorded inverse, never owner work.
-        if (!await ownedUndoState(d)) throw new Error("foreign-revert-changes");
-        await git(root, "reset", "--merge", d.undo_base);
-      }
-      if (!await cleanAt(d.undo_base)) throw new Error("main-not-restored");
-      save(id, { ...d, phase: "shipped", undo_error: message }, "CLOSED", "shipped");
-      event(id, "Recovered Undo; main restored");
-      return true;
-    } catch (error) {
-      save(id, { ...d, phase: "shipped", undo_error: "revert-abort-failed", undo_error_detail: String(error.message) }, "CLOSED", "shipped");
-      return false;
-    }
-  }
-
-  async function ship(id) {
-    return locked("ship", id, async () => {
       let d = dataOf(id);
-      if (d.phase === "shipped") return detail(id);
-      if (d.phase === "merging") {
-        if (!await abortShip(id, d, "ship-interrupted")) throw new Error("ship-interrupted; inspect main");
-        d = dataOf(id);
-      }
-      if (d.phase !== "push-pending") {
-        const v = await detail(id, { inspect: true });
-        if (!v.canShip) throw new Error("current-head-uat-checks-and-risk-review-required");
-        if (await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch || await git(root, "status", "--porcelain", "--untracked-files=all")) throw new Error("main-checkout-must-be-clean");
-        if (await git(root, "rev-parse", "HEAD") !== d.base) throw new Error("main-advanced; rebuild and repeat UAT");
+      if (d.applied) return detail(id);
+      if (!d.merge_pending) {
+        const view = await detail(id, { inspect: true });
+        const plan = view.mergePlan;
+        if (plan?.conflicts?.length) throw new Error("changed-in-your-repo: " + plan.conflicts.map(c => c.path).join(", "));
+        if (plan && plan.branch !== baseBranch) throw new Error("checkout-" + baseBranch + "-first");
+        if (!view.canMerge) throw new Error(plan?.error || "merge-needs-passed-checks-sign-off-and-review");
         const current = selected(d.work.file, d.work.id);
-        if (current.row !== d.work.row || current.brief !== d.work.brief) throw new Error("acceptance-changed; repeat delivery");
-        if (await git(root, "rev-parse", d.branch) !== d.head) throw new Error("branch-head-changed");
-        let candidateTick;
-        try { candidateTick = tickById(await git(d.workspace, "show", `${d.head}:${PM}/${d.work.file.replace(/\\/gu, "/")}`), d.work.id); }
-        catch { throw new Error("candidate-edits-pm-row"); }
-        if (candidateTick.state !== "ticked") throw new Error("candidate-edits-pm-row");
-        d = { ...d, phase: "merging", ship_error: null, ship_owned_files: {} }; save(id, d);
-        try {
-          await gitSlow(root, hookMs, undefined, "merge", "--no-ff", "--no-commit", d.head);
-          if (!await ownedShipState(d)) throw new Error("foreign-merge-changes");
-          const checklist = join(root, PM, d.work.file);
-          const checklistRaw = readFileSync(checklist, "utf8");
-          const tick = tickById(checklistRaw, d.work.id);
-          if (tick.state !== "ticked") throw new Error("candidate-edits-pm-row");
-          const row = parseWorkItems(tick.raw).find(row => row.alias === d.work.id);
-          const bookPath = `${PM}/${d.work.book.replace(/\\/gu, "/")}`;
-          const bookRaw = readFileSync(join(root, bookPath), "utf8");
-          const date = at().slice(0, 10);
-          const archivedBook = insertDatedStamp(bookRaw, /^##\s+Shipped Log\s*$/iu, shippedStamp(itemBody(tick.raw.split("\n")[row.line]), date), date, "Shipped Log");
-          d = { ...d, ship_owned_files: {
-            [`${PM}/${d.work.file.replace(/\\/gu, "/")}`]: [checklistRaw, tick.raw, removeLine(tick.raw, row.line)].map(sha),
-            [bookPath]: [bookRaw, archivedBook].map(sha),
-          } }; save(id, d);
-          writeFileSync(checklist, tick.raw);
-          const pm = archiveItem({ pmDir: join(root, PM), repoRoot: root, pmRelFromRoot: PM, file: d.work.file, cbidx: row.cbidx, mode: "ship", date });
-          if (!pm.ok) throw new Error("PM trace failed; inspect the uncommitted merge");
-          const indexPath = join(root, PM, "_index.md");
-          if (existsSync(indexPath)) {
-            const raw = readFileSync(indexPath, "utf8"), next = refreshIndex(raw, buildIndexBlock(join(root, PM)));
-            d = { ...d, ship_owned_files: { ...d.ship_owned_files, [`${PM}/_index.md`]: [sha(raw), sha(next)] } }; save(id, d);
-            writeFileSync(indexPath, next);
-          }
-          if (!await ownedShipState(d)) throw new Error("foreign-merge-changes");
-          await git(root, "add", "--", PM);
-          if (!await ownedShipState(d)) throw new Error("foreign-merge-changes");
-          await gitSlow(root, hookMs, undefined, "commit", "-m", `Ship ${d.work.id}`);
-          d = { ...d, merge: await git(root, "rev-parse", "HEAD"), phase: "push-pending" }; save(id, d);
-        } catch (error) {
-          await abortShip(id, d, String(error.message));
-          throw error;
-        }
+        if (current.brief !== d.work.brief || current.row !== d.work.row) throw new Error("Acceptance changed. Review the current item.");
+        const pending = await prepareCopy(root, d, plan, id, git);
+        d = { ...d, merge_pending:pending }; save(id,d);
       }
-      if (await git(root, "rev-parse", "HEAD") !== d.merge) throw new Error("ship-head-changed");
-      await gitSlow(root, pushMs, undefined, "push", remote, `HEAD:refs/heads/${baseBranch}`);
-      save(id, { ...d, phase: "shipped" }, "CLOSED", "shipped"); event(id, "Owner shipped merge");
+      if (await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch || await git(root,"rev-parse","HEAD") !== d.merge_pending.main_head) throw new Error("Checkout moved during Merge");
+      applyCopy(root, id, d.merge_pending);
+      const applied = {...d.merge_pending, at:at(), pm_error:null};
+      save(id,{...d,merge_pending:null,applied,phase:"merged"});
+      event(id, "Owner merged " + applied.files.length + " file" + (applied.files.length === 1 ? "" : "s") + " into the main checkout");
       apps.stop(id);
       return detail(id);
     });
   }
 
-  async function undo(id) {
-    return locked("undo", id, async () => {
-      let d = dataOf(id);
-      if (d.phase === "reverted") return detail(id);
-      if (!["shipped", "revert-push-pending"].includes(d.phase)) throw new Error("nothing-to-undo");
-      if (d.phase === "shipped" && !d.merge) throw new Error("merged-by-file-copy; undo it in your repo");
-      if (d.phase === "shipped" && (await operationHead("REVERT_HEAD") || d.undo_error === "revert-abort-failed")) {
-        if (!d.undo_base || !await abortUndo(id, d, "undo-interrupted")) throw new Error("undo-interrupted; inspect main");
-        d = dataOf(id);
-      }
-      if (await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch || await git(root, "status", "--porcelain", "--untracked-files=all")) throw new Error("main-checkout-must-be-clean");
-      if (d.phase === "shipped") {
-        const head = await git(root, "rev-parse", "HEAD");
-        if (d.undo_base && head !== d.undo_base) throw new Error("undo-interrupted; inspect main");
-        d = { ...d, undo_base: head, undo_error: null }; save(id, d, "CLOSED", "shipped");
-        try {
-          await gitSlow(root, hookMs, undefined, "revert", "--no-edit", "-m", "1", d.merge);
-          d = { ...d, revert: await git(root, "rev-parse", "HEAD"), phase: "revert-push-pending" }; save(id, d, "CLOSED", "shipped");
-        } catch (error) {
-          await abortUndo(id, d, String(error.message));
-          throw error;
-        }
-      }
-      if (await git(root, "rev-parse", "HEAD") !== d.revert) throw new Error("revert-head-changed");
-      await gitSlow(root, pushMs, undefined, "push", remote, `HEAD:refs/heads/${baseBranch}`);
-      save(id, { ...d, phase: "reverted" }, "CLOSED", "reverted"); event(id, "Owner reverted merge");
-      return detail(id);
-    });
-  }
+  const publication = createPublication({root, git, run, env, dataOf, save, event, hookMs, pushMs,
+    cleanupPreview: id => storage.previewAfterPush(id).catch(() => null)});
+  const pushSettings = publication.pushSettings;
+  const inspectPushDestination = publication.inspectPushDestination;
+  /** @param {string} [expectedUrl] */
+  const configurePush = (expectedUrl = undefined) => locked("configure-push", null, () => publication.configurePush(expectedUrl));
+  const commit = (id, token) => locked("commit", id, async () => {
+    await publication.publish(id, "commit", token);
+    return detail(id);
+  });
+  const push = (id, token) => locked("push", id, async () => {
+    const witness = await publication.publish(id, "push", token);
+    if (!dataOf(id).cleaned_at) await cleanAfterPush(id, witness);
+    return detail(id);
+  });
+  async function ship() { throw new Error("Ship retired. Use Merge, Commit and Push."); }
+  async function undo() { throw new Error("Undo retired. Review the run in your checkout."); }
   async function cancel(id) {
     return locked("cancel", id, async () => {
       const task = tasks.get(id);
@@ -814,6 +813,8 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         s().updateJob(id, { status: "finished", reservation_open: false, outcome: "cancelled" });
         s().markAfterJob(id, "done");
         event(id, "Owner cancelled waiting session");
+        await storage.removeHome(id);
+        await autoClean(id);
         return { ok: true };
       }
       if (row.lifecycle === "CLOSED" || !["preparing", "building", "checking"].includes(d.phase)) throw new Error("session-not-running-in-this-process");
@@ -824,10 +825,19 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       s().updateJob(id, { status: "finished", reservation_open: false, outcome: "cancelled" });
       s().markAfterJob(id, "done");
       event(id, "Owner cancelled interrupted attempt");
+      await storage.removeHome(id);
+      await autoClean(id);
       return { ok: true };
     });
   }
-  return { readiness, start, list, detail, review, preview, stopPreview, merge, ship, undo, cancel, answer, message,
+  return { readiness, startPlan, start, list, detail, comparison, refresh, review, preview, stopPreview, merge, ship, undo, cancel, answer, message,
+    commit, push, pushSettings, configurePush, inspectPushDestination,
+    storage: options => storage.view(options), discard, cleanup,
+    earlierActivity(id, before) {
+      dataOf(id);
+      const rows = s().earlierLocalActivity(id, before);
+      return { activity: localMessageBodies(rows.slice(-30), parse(s().getJob(id)?.observations_json)), more: rows.length > 30 };
+    },
     isWorking: () => tasks.size > 0,
     wait: id => tasks.get(id)?.promise || Promise.resolve(),
   };

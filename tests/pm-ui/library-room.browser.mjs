@@ -7,7 +7,7 @@ import { appAsset, buildAppShell } from "../../scripts/pm/app-shell.mjs";
 
 const { chromium } = await import(process.env.ERA_PLAYWRIGHT_MODULE || "playwright");
 const bundle = await buildApp();
-const evidence = ".pm/library-room-evidence";
+const evidence = process.env.ERA_LIBRARY_EVIDENCE || ".pm/library-room-evidence";
 mkdirSync(evidence, { recursive: true });
 const browser = await chromium.launch({
   executablePath: process.env.ERA_CHROME_PATH, headless: true,
@@ -76,6 +76,8 @@ async function exercise(width, motion, webgl) {
     if (path === "/api/delivery/v2/session") return json(session);
     if (path === "/api/delivery/v2/runs") return json({ runs: [], requests: [] });
     if (path === "/api/delivery/v2/command") return json({ error: "unrecorded" }, 404);
+    if (path === "/api/delivery/v2/local/start-plan") return json({
+      start_nonce: "00000000-0000-4000-8000-000000000001", token: "fixture-plan", commands: [["git","worktree","add","fixture"]] });
     if (path === "/api/delivery/v2/local/run") {
       assert.equal(url.searchParams.get("id"), run.run_id);
       return json(run);

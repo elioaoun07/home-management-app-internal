@@ -1,4 +1,4 @@
-import { slideAgainstRoom, type Area, type Point } from "./layout";
+import { slideAgainstRoom, type Area, type Floor, type Point } from "./layout";
 import type { Pose } from "./protocol";
 
 const walkSpeed = 2.4;
@@ -25,6 +25,7 @@ export function advanceWalk(
   side: number,
   elapsed: number,
   sprint = false,
+  floor: Floor = "ai",
 ) {
   // A suspended page can miss the normal visibility notification on resume.
   if (elapsed <= 0 || !Number.isFinite(elapsed)) return 0;
@@ -50,7 +51,7 @@ export function advanceWalk(
     pose.z += targetZ * dt + (velocity.z - targetZ) * smoothing * response;
     velocity.x += (targetX - velocity.x) * response;
     velocity.z += (targetZ - velocity.z) * response;
-    if (!slideAgainstRoom(pose, velocity, area, contactNormal)) {
+    if (!slideAgainstRoom(pose, velocity, area, contactNormal, floor)) {
       // Two benches can form a gap narrower than the player's shoulders.
       pose.x = oldX; pose.z = oldZ;
       velocity.x = 0; velocity.z = 0;

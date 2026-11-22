@@ -173,15 +173,7 @@ export function deliveredIds(
   return ids;
 }
 
-/** A title without its leading item id, which the kicker already shows. */
-export function bareTitle(title: string, id?: string | null) {
-  if (!id) return title;
-  const rest = title.slice(id.length);
-  return title.slice(0, id.length).toUpperCase() === id.toUpperCase() &&
-    /^[\s·:—–]/u.test(rest)
-    ? rest.replace(/^[\s·:—–-]+/u, "")
-    : title;
-}
+export { bareTitle } from "../shared/text.mjs";
 
 export const historyCounts = (past: HomeGroups["past"]) => {
   const counts: Record<PastOutcome, number> = {

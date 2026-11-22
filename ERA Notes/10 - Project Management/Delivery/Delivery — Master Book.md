@@ -72,7 +72,7 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 🔴 **Local Ship pushes to `origin`, not the remote the owner uses (2026-11-22).** `createLocalLane` defaults `remote = "origin"` (`local-lane.mjs:45`) and `service.mjs` never overrides it; Ship then runs `git push origin HEAD:refs/heads/main`. In this checkout `internal` (home-management-app-internal) is current with `main`, while `origin` (home-management-app, its own Vercel project) was last pushed 2026-05-30 and is 201 commits behind. One Ship would publish those 201 commits (1,348 `src/` files, migrations since August) to the stale repository and leave `internal` without the merge. `main` has no upstream configured. Fix: push to the upstream of `main` and refuse when none is set. Found in source; no Ship was pressed.
 
-🟠 **Local Ship does not match how the owner ships (2026-11-22).** The owner's real flow is three steps: ask an AI to fix file A; `git add` and commit A; `git push --force internal main`. Work on `main` keeps going while a session runs. Local Ship assumes the opposite. It merges, commits and pushes by itself, to `origin` (see the 🔴 above). It refuses once `main` has moved past the run's base (`main-advanced`): BUD-95's base `24b981c3` was passed by a one-line `BrainRoom.tsx` commit 17 minutes after the build, so a passed UAT needed a full rebuild. It also merges the run's `.delivery-handover.json` into `main`. The owner, mid-UAT, could not tell how a tested worktree change reaches the repo folder and then GitHub. **Phase 0:** [DLV-167](<#dlv-167>). A run starts from `main` at ALPHA; parallel owner work moves `main` to BETA. **Merge** copies the session's files into the main checkout only if none of them changed between ALPHA and BETA, committed or not. Otherwise it shows a red alert and refuses. The owner then commits and pushes as usual. A neater end-to-end flow comes later.
+🟠 **Local Ship does not match how the owner ships (2026-11-22).** The owner's real flow is three steps: ask an AI to fix file A; `git add` and commit A; `git push --force internal main`. Work on `main` keeps going while a session runs. Local Ship assumes the opposite. It merges, commits and pushes by itself, to `origin` (see the 🔴 above). It refuses once `main` has moved past the run's base (`main-advanced`): BUD-95's base `24b981c3` was passed by a one-line `BrainRoom.tsx` commit 17 minutes after the build, so a passed UAT needed a full rebuild. It also merges the run's `.delivery-handover.json` into `main`. The owner, mid-UAT, could not tell how a tested worktree change reaches the repo folder and then GitHub. **Phase 0:** [DLV-167](<#dlv-167>). A run starts from `main` at ALPHA; parallel owner work moves `main` to BETA. **Merge** copies the session's files into the main checkout only if none of them changed between ALPHA and BETA, committed or not. Otherwise it shows a red alert and refuses. The owner then commits and pushes as usual. **Full flow and disk budget:** [DLV-168](<#dlv-168>), [plan and prompt](<../Plans/Delivery Local Workflow — Rethink.md>).
 
 🔴 **DLV-159 — A Local candidate with changes cannot be committed (2026-11-15).** `local-lane.mjs:37` limits every Git command to 30 s; the build commit, ship commit and revert run the repository hook, whose test stage alone took 300.91 s on run `local-cac958d7`. The runner returns `ETIMEDOUT` with `status: null`, so the lane throws even when the hook passes. Seven real attempts, none reached host checks. [Evidence and fix](<../Plans/Agentic OS Delivery Reliability.md#dlv-159--supervisor-git-steps-outlive-the-hook>). Fixture resolution reverified 2026-11-15; owner W1 and real hook timing remain pending.
 
@@ -199,9 +199,11 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Acceptance:** Ship validates the candidate's checklist row before merging, aborts the merge on any failure and returns to `uat-ready`; a run found in `merging` recovers. A lock held by a dead process is reclaimed with a recorded row. The private credential home is removed when a run ends, and for runs already closed. An owner `discard` removes a closed attempt's worktree and branch and keeps its record.
 - **Tier:** `CLAUDE_HIGH`.
-**Implementation:** pending
-
 **2026-11-16 progress — parts 1–2:** candidate checklist validation now precedes merge; failed/matching interrupted Ship and Undo restore retry state only after proving ownership of the staged/worktree bytes. Exact recorded inverse recovery also handles Git's hook failure without `REVERT_HEAD`. Extra owner edits, foreign operations, advanced HEAD and ambiguous post-commit interruptions fail closed. Dead-PID command locks recover with an activity row; live/unknown locks remain protected. Twenty-four focused recovery/safety cases passed before the final broad run. W1 is pending. Parts 3–4 (credential-home cleanup and Discard files) are not implemented; this parent remains open. [Owner scenarios](<../../../docs/Delivery-UAT.md#agentic-os-v0-corrections--dlv-161-parts-12--r121--r129--r130>).
+
+**2026-11-22 completion:** DLV-170 archives failed and discarded candidates and releases run-owned credentials, dependencies, branch and checkout. DLV-171 retires the compound Ship and Undo operations covered by the earlier recovery work. Fixtures exercise cleanup after partial failure and preserve the original patch.
+**Implementation:** done (parts 3–4 under DLV-170).
+**UAT:** pending. [Storage and recovery witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
 
 ### DLV-162
 
@@ -270,6 +272,97 @@ No live provider run.
 - Codex gets messages only between turns, not mid-turn.
 - Still desktop-only.
 **UAT:** pending. [Owner scenarios](<../../../docs/Delivery-UAT.md#local-questions-and-chat--dlv-164--dlv-165>).
+
+### DLV-168
+
+**Outcome:** One page per Local run takes an item from Start to Pushed with owner buttons only. Every git command is shown before it runs, nothing reaches `origin`, and the delivery folders stay small.
+**Kind:** feature
+**Source:** owner, 2026-11-22: "write me a prompt that guides AI on implementing a full organized workflow … make sure the PM delivery session for an item is clear … the delivery cloned repos are more than 18 GB … not acceptable". Plan and prompt: [Delivery Local Workflow — Rethink](<../Plans/Delivery Local Workflow — Rethink.md>).
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** the stepper, status words and buttons in plan §5. Commit stages only the run's files plus its PM files. Push uses the one configured command, and Ship and Push refuse when it is unset.
+- **Acceptance:** the disk budget in plan §6. With no active run `<repo>-delivery/` is empty, and one active run takes under 300 MB as Explorer reports it. Closed runs leave no worktree, branch or credential home.
+- **Acceptance:** agents never run state-changing git; owner clicks may, limited to plan §2.3. Every git test uses a fixture repository.
+- **Tier:** `CLAUDE_HIGH`.
+**Implementation:** done (S0–S5, 2026-11-22). Fresh Local runs use one Calm/Game page through Test steps, sign-off, Merge, Commit, Push and cleanup. The tested branch, file manifest, PM changes, commit, published tip and archive have separate records. Native execution and real publication remain owner actions.
+**UAT:** pending. [Owner walkthrough](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>). Chromium fixture witnesses at 1280 px and 390 px reached Pushed and Cleaned after a reload. Temporary Git repositories exercised the real filesystem, command router, lease rejection and rebase. The real owner push and Explorer budget measurement are outstanding.
+
+**Stage 0 decision, 2026-11-22.** The owner approved all six defaults and requested completion of the whole workflow in one implementation session. The remote guard comes first. The stage witnesses remain separate owner acceptance scenarios.
+
+| Decision | Approved default | Owner answer |
+|---|---|---|
+| D1 · Push | Preview outgoing commits, then `git push --force-with-lease internal main`. Ordinary `git push internal main` also supports the routine fast-forward case. | Approved |
+| D2 · Commit title | `<ID> <title>` | Approved |
+| D3 · Worktrees | Limit to two. A run awaiting a question, test, recovery, commit or push keeps its place. At capacity, show the two runs. | Approved |
+| D4 · Dependencies | Share matching dependencies only when the target is protected against writes by the worker, hooks, checks and preview. Otherwise use private dependencies, including for dependency changes. | Approved |
+| D5 · Commit scope | Only the run's tested changes and the PM changes attributable to this item. Preserve unrelated staged and unstaged edits, including edits in a shared PM file. | Approved |
+| D6 · Remotes | Refuse `origin` across Local actions, including legacy Ship, Retry push and Undo. An unset destination blocks a push. | Approved |
+
+### DLV-171
+
+**Outcome:** S2. Every Local action that can publish uses the owner's saved destination and push mode.
+**Kind:** bug
+**Depends on:** DLV-169
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** Configure the destination once in Setup. Enforce the setting in the backend on new and retained runs. Refuse an unset destination, the wrong branch and `origin` before any write. Retire old compound Ship/Undo paths that would merge, revert or push implicitly in the main checkout. Exercise direct legacy requests and retries against two fixture remotes.
+- **Witness:** After restart, the owner sees the chosen destination and can inspect an old run without being offered an unsafe retry.
+- **Implementation:** done. An authenticated owner previews and binds the credential-free push URL. The backend refuses a changed destination and both obsolete combined commands. Two isolated remotes verified the destination and lease.
+- **UAT:** pending. [Destination witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
+
+### DLV-170
+
+**Outcome:** S1. The owner can reclaim closed runs from Setup and see how much disk each active run uses.
+**Kind:** feature
+**Depends on:** DLV-169
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** Implement DLV-161 parts 3–4 once. Preview eligible run IDs and paths before the cleanup click. Protect resumable sessions, pending post-delivery work and unproven ownership. Preserve the final patch, logs, handover and run record before removing owned temporary files, branch and credential home. Cleanup is retryable and never repeats a successful push. Failures with unsaved work retain a recoverable copy.
+- **Acceptance:** Enforce D3 at Start. Measure distinct stored files across the lane and report the active checkout size separately. Verify the 300 MB Explorer target on the normal matched-dependency path and identify any private-install exception with the owner before accepting it. Test junction removal with a surviving target, candidate writes and preview cache isolation. A manifest match alone cannot make a writable junction safe.
+- **Evidence (2026-11-22):** Ten sibling worktrees, nine CLI homes totaling 883.1 MiB by file length, including 616.8 MiB of Codex sandbox binaries. The BUD-95 preview has 147.1 MiB in `.next`. Sampled Next package files share an NTFS file ID across the worktrees and main. These are separate measurements.
+- **Witness:** The owner reviews the eligible list, cleans it, starts one run and checks its size in Explorer. Once all runs are closed and cleaned, the sibling directory is empty and closed runs have no credential home.
+- **Implementation:** done. Setup previews each eligible checkout, the branch deletion, and the file sizes. Private dependencies and the preview cache use run-owned targets. Offline pnpm installation, an HTTP 200 Next preview, guarded junction removal, archive recovery and the worktree limit were exercised in disposable fixtures. Read-only inspection of the owner's ten worktrees found nine eligible for bulk cleanup and one protected historical file-copy merge (BUD-95).
+- **Windows cleanup follow-up.** Git for Windows rejected a 264-character pnpm dependency path in the closed TRIP-33 retry after unregistering its worktree. Cleanup now enables long paths for its Git commands. A matching archive and branch allow a fresh preview to recover the detached folder, archive surviving source and remove generated dependencies and preview caches.
+- **UAT:** pending. The owner confirms cleanup of the remaining eligible checkouts. [Disk witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
+
+### DLV-172
+
+**Outcome:** S3. A Local run in Calm or Game stays on one page through sign-off and shows the next action after a reload.
+**Kind:** feature
+**Depends on:** DLV-169, DLV-170, DLV-171
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** Reuse the current Run app, Test steps and risk review. Use one projection of persisted run facts for the page, session list and Game rail. An old file-copy receipt means Merged in your folder. Only a confirmed push means Pushed. A failed PM update offers recovery. Keep merged runs reachable until their next action is resolved. Keep standalone UAT links usable.
+- **Witness:** From Sessions the owner opens a run, signs off, switches views and reloads. The run still opens on the same next action.
+- **Implementation:** done. Calm and Game share the run actions and recorded milestones. Local Test steps stay on the run URL. Browser fixtures completed the desktop and phone-width paths with a reload after Merge.
+- **2026-11-22 owner-room revision.** Game opens the handoff in its own six-station board or 3D workshop. Calm exposes the same station inspector. Read-only inspection and explicit review use the recorded candidate revision. BUD-95 desktop and phone-width checks reached the transaction route patch and all 69 recorded events. Browser fixtures exercised sign-off through push. The owner's publication witness remains pending.
+- **Explore 3D follow-up.** The elevator joins two floors of the same observatory. The renderer, gait, camera, touch controls, seat and core persist during travel. Six interactive owner bays use the run’s existing actions and the Merge projector shows the chosen file.
+- **UAT:** pending. [Run page witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
+
+### DLV-173
+
+**Outcome:** S4. The owner can commit and then push the tested changes from the run page.
+**Kind:** feature
+**Depends on:** DLV-172
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/`, `tests/delivery-v2/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** Freeze the copied candidate paths and the item's actual PM changes at Merge. The current global PM sweep can touch other campaigns. Isolate the item's changes and refuse overlapping owner edits before altering shared PM files. Before Commit, show and recheck exact paths, contents, branch and argv. A bare commit consumes pre-staged unrelated files. Refuse that case under the current git allowlist, or use an explicitly agreed path-limited commit. Cover added/deleted files and edits made after Merge.
+- **Acceptance:** A separate Push click previews the destination, command and all outgoing commits, including parallel work on the branch. Record the confirmed commit and pushed tip, exit codes and output tails. Reconcile interrupted operations before retrying. A failed push stays Committed and retries only the push. Record cleanup independently so retrying it cannot republish.
+- **Witness:** One fresh real item goes Start → Pushed on one page. Parallel local edits survive. The owner can reopen the run and see the push receipt.
+- **Implementation:** done. The selected item's PM receipt and exact file changes are computed before Merge. Commit preserves unrelated staging. Push previews every outgoing commit and pins the expected remote tip. A remote read can verify an external push. The authenticated fixture exercised separate merge, commit and publication with two remotes and parallel owner work.
+- **UAT:** pending. [Real publication witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
+
+### DLV-174
+
+**Outcome:** S5. A blocked Merge names the overlapping files and offers an action appropriate to their state.
+**Kind:** feature
+**Depends on:** DLV-173
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/app/`, `tests/delivery-v2/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** For committed overlap, an owner-clicked Refresh operates inside the run worktree only. A clean refresh requires new host checks, UAT and any applicable diff review for the new head. A rebase conflict lists the files and preserves the recoverable candidate. For an overlapping uncommitted edit in the owner's checkout, identify the file and allow a recheck after resolution. Discard identifies what it will release and preserves the run archive.
+- **Witness:** Exercise both overlap types in fixture repos, then observe a real conflict and its recovery with the owner.
+- **Implementation:** done. Uncommitted overlaps get a recheck. Committed overlaps can rebase the session worktree. A clean refresh freezes a handover on the new head after checks. A conflict records its files and restores the previous candidate. Fixture coverage includes stale previews and failed-check retries.
+- **UAT:** pending. [Conflict witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
 
 ### DLV-167
 
@@ -1974,6 +2067,14 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-11-21 — **DLV-165** Park Local sessions on questions, chat with the agent both ways, and let Codex ask → [record](<../_Archive/Shipped/Delivery.md#dlv-165>)
 - ✅ 2026-11-22 — **DLV-166** Run a Local candidate from its Test steps page → [record](<../_Archive/Shipped/Delivery.md#dlv-166>)
 - ✅ 2026-11-22 — **DLV-167** Merge a tested Local candidate's files into the main checkout → [record](<../_Archive/Shipped/Delivery.md#dlv-167>)
+- ✅ 2026-11-22 — **DLV-161** Recover Ship, Undo and locks, and clean up closed attempts → [record](<../_Archive/Shipped/Delivery.md#dlv-161>)
+- ✅ 2026-11-22 — **DLV-168** Take one item from Start to Pushed on one page, within a disk budget → [record](<../_Archive/Shipped/Delivery.md#dlv-168>)
+- ✅ 2026-11-22 — **DLV-169** Set the Local workflow defaults and stage order → [record](<../_Archive/Shipped/Delivery.md#dlv-169>)
+- ✅ 2026-11-22 — **DLV-171** Restrict Local pushes to the configured destination → [record](<../_Archive/Shipped/Delivery.md#dlv-171>)
+- ✅ 2026-11-22 — **DLV-170** Release closed Local worktrees and bound dependency storage → [record](<../_Archive/Shipped/Delivery.md#dlv-170>)
+- ✅ 2026-11-22 — **DLV-172** Keep the next action on the same Local run page → [record](<../_Archive/Shipped/Delivery.md#dlv-172>)
+- ✅ 2026-11-22 — **DLV-173** Commit and push the tested changes from the run page → [record](<../_Archive/Shipped/Delivery.md#dlv-173>)
+- ✅ 2026-11-22 — **DLV-174** Recover a blocked Merge and retest the refreshed candidate → [record](<../_Archive/Shipped/Delivery.md#dlv-174>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

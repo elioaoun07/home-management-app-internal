@@ -14,6 +14,11 @@ import type {
 
 export const RESULT_LABEL = { pending: "Pending", pass: "Pass", fail: "Fail", blocked: "Blocked" } as const;
 
+/** Local handovers use a direct source binding carrying the exact run in its reference. */
+export function localRunOf(deliveryRef: string | null | undefined): string | null {
+  return /^local:(local-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/u.exec(deliveryRef ?? "")?.[1] ?? null;
+}
+
 const ACCEPTANCE_LABEL: Record<UatAcceptance, string> = {
   pending: "Test",
   "in-progress": "Testing",
@@ -25,9 +30,10 @@ const ACCEPTANCE_LABEL: Record<UatAcceptance, string> = {
 };
 
 /** One short word for where a delivery stands. A draft or incomplete handover says so first. */
-export function uatLabel(item: Pick<UatSummary, "status" | "acceptance">): string {
+export function uatLabel(item: Pick<UatSummary, "status" | "acceptance"> & Partial<Pick<UatSummary, "subject">>): string {
   if (item.status === "incomplete") return "Incomplete";
   if (item.status === "draft") return "Draft";
+  if (item.acceptance.state === "accepted" && item.subject?.delivery_ref?.startsWith("local:")) return "Signed off";
   return ACCEPTANCE_LABEL[item.acceptance.state];
 }
 
@@ -81,7 +87,7 @@ export function reviewUat(list: UatSummary[], filter: UatReviewFilter, search = 
 
 /** The newest handover for a run, whatever its state. */
 export function forRun(list: UatSummary[] | undefined, run_id: string): UatSummary | undefined {
-  return (list ?? []).filter((item) => item.subject.run_id === run_id).sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  return (list ?? []).filter(item => (item.subject.run_id || localRunOf(item.subject.delivery_ref)) === run_id).sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
 }
 
 /**

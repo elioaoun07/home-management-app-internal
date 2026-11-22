@@ -58,6 +58,25 @@ export function normalizeMessage(value) {
   return { ok: true, text: message };
 }
 
+/** Keep the game timeline on its compact SDK summary. Older recordings may
+ * also hold the full final reply, independently of the activity excerpt. Bind
+ * it only to the same observed main-thread row with an unambiguous timestamp. */
+export function localMessageBodies(rows, observed) {
+  const last = observed?.activity?.findLast(entry => entry.kind === "message" && entry.agent?.role === "main");
+  const final = typeof observed?.finalText === "string" ? observed.finalText : "";
+  const candidates = last?.summary && final.startsWith(last.summary)
+    ? rows.filter(row => row.kind === "message" && row.at === last.at && row.summary && final.startsWith(row.summary))
+    : [];
+  return rows.map(row => {
+    if (row.kind !== "message" || !row.summary) return row;
+    const recovered = candidates.length === 1 && candidates[0] === row;
+    const text = recovered ? final : row.summary;
+    const excerpt = !recovered && [240, 400, 16_384].includes(text.length);
+    return { ...row, summary: row.summary.slice(0, 240),
+      ...(text.length > 240 && { message_text: text }), message_excerpt: excerpt };
+  });
+}
+
 /** `{questions, messages}`; a phase-1 array file reads as questions only. */
 export function readLedger(file) {
   if (!existsSync(file)) return { questions: [], messages: [] };

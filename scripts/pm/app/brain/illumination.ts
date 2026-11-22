@@ -1,4 +1,5 @@
 import * as T from "three";
+import type { OwnerStation } from "../ownerStations";
 import type { makeRoom, makeSphere } from "./art";
 import type { Area } from "./layout";
 import type { Signal, WorldState } from "./protocol";
@@ -106,20 +107,40 @@ export function createIllumination(scene: T.Scene, room: Room) {
   const sparkMaterial = new T.MeshBasicMaterial({ color: "#d6fbff", toneMapped: false });
   const spark = new T.Mesh(new T.SphereGeometry(.068, 12, 8), sparkMaterial);
   spark.visible = false;
-  scene.add(coreLight, bayLamp, ...traces, spark);
+  const halo = new T.Mesh(new T.RingGeometry(.70, .747, 64), new T.MeshBasicMaterial({
+    color: colors.owner, transparent: true, opacity: 0, toneMapped: false, depthWrite: false, blending: T.AdditiveBlending,
+  }));
+  halo.rotation.x = -Math.PI / 2;
+  halo.visible = false;
+  scene.add(coreLight, bayLamp, ...traces, spark, halo);
 
   const bayParts = [...new Map([...room.circuits.values()].map(part => [part.bay, part])).values()];
   const machineRest = new Map([...room.machines].map(([zone, machine]) => [zone, machine.moving.position.z]));
   const sparkPosition = new T.Vector3();
   let routed: WorldState["lighting"]["endpoint"] = null;
   let flight: { signal: Signal; path: T.CatmullRomCurve3; start: number } | null = null;
+  let ownerPulse: { source: T.Vector3; start: number } | null = null;
   let energy = .05, prior = 0, clock = 0, rotationClock = 0, firstWork = true, steady = false;
 
   function clear() {
     flight = null;
+    ownerPulse = null;
+    halo.visible = false;
+    current.mesh.visible = false;
     leader.mesh.visible = false;
     spark.visible = false;
     for (const trace of traces) trace.visible = false;
+  }
+  function pulseOwner(id: OwnerStation, start: number) {
+    const source = room.ownerMarkers.get(id), route = room.ownerRoute(id);
+    if (room.deck !== "owner" || !source || !route) return;
+    clear();
+    // Reuse the AI floor's traveling conductor over the physical desk lead.
+    // Invalidate its cached SDK endpoint when that circuit is borrowed.
+    routed = null;
+    current.write(0, (fraction, sample) => { route.getPointAt(fraction, sample); sample.y += .035; });
+    ownerPulse = { source, start };
+    halo.position.set(source.x, .055, source.z);
   }
   function play(signal: Signal, start: number) {
     const branch = room.circuits.get(signal.zone);
@@ -182,7 +203,7 @@ export function createIllumination(scene: T.Scene, room: Room) {
   }
   function paint(now: number, state: WorldState, sphere: Sphere, area: Area, animate: boolean, ambient: boolean) {
     const { lighting } = state;
-    room.faultCable.set(lighting.faultZone);
+    room.faultCable.set(room.deck === "ai" ? lighting.faultZone : null);
     room.faultCable.paint(now / 1000, animate && area === "room");
     const dt = prior ? Math.min(.1, (now - prior) / 1000) : 0;
     prior = now;
@@ -237,6 +258,35 @@ export function createIllumination(scene: T.Scene, room: Room) {
     coreLight.position.copy(sphere.orb.position);
     coreLight.color.copy(sphere.tint);
     coreLight.intensity = lighting.failed ? 0 : 6 + energy * 13 + boost * 12;
+
+    if (room.deck === "owner") {
+      if (flight) clear();
+      const lamp = room.ownerLight;
+      bayLamp.intensity = lamp && area === "room" ? 17 : 0;
+      if (lamp) {
+        bayLamp.position.copy(lamp.source);
+        bayLamp.position.y += 1;
+        bayLamp.color.copy(lamp.color);
+      }
+      current.mesh.visible = false;
+      if (ownerPulse) {
+        const phase = T.MathUtils.clamp((now - ownerPulse.start) / 900, 0, 1);
+        if (!animate || area !== "room" || phase >= 1) { clear(); return; }
+        const glow = Math.sin(Math.PI * phase);
+        current.mesh.visible = true;
+        current.uniforms.tint.value.copy(colors.owner);
+        current.uniforms.tick.value = phase * 1.48;
+        current.uniforms.gain.value = glow;
+        halo.visible = true;
+        halo.scale.setScalar(.85 + .50 * phase);
+        halo.material.opacity = glow * .78;
+        bayLamp.position.copy(ownerPulse.source); bayLamp.position.y += .7;
+        bayLamp.color.copy(colors.owner);
+        bayLamp.intensity = 17 + 23 * glow;
+      }
+      return;
+    }
+    if (ownerPulse) clear();
 
     for (const part of bayParts) {
       part.bay.emissiveIntensity = .018;
@@ -302,6 +352,6 @@ export function createIllumination(scene: T.Scene, room: Room) {
       if (machine) machine.stamp.visible = index === 3 || state.core[index];
     }
   }
-  return { play, clear, paint, opticalObjects: [leader.mesh, current.mesh, spark, ...traces],
-    get flying() { return flight !== null; }, get steady() { return steady; }, resetClock() { prior = 0; } };
+  return { play, pulseOwner, clear, paint, opticalObjects: [leader.mesh, current.mesh, spark, halo, ...traces],
+    get flying() { return !!(flight || ownerPulse); }, get steady() { return steady; }, resetClock() { prior = 0; } };
 }

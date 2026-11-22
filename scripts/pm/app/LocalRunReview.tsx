@@ -1,16 +1,13 @@
-import { useEffect, useState } from "react";
-import { Check, FileText, GitBranch, ListChecks } from "lucide-react";
-import { Markdown, RunOrb } from "./components";
-import { LocalActions, type LocalAction, type LocalRunView } from "./LocalDelivery";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, FolderOpen } from "lucide-react";
+import { RunOrb } from "./components";
+import { LocalActions, type LocalAct, type LocalRunView } from "./LocalDelivery";
 import { useGameLayer } from "./GameLayer";
 import { LocalRunGame } from "./LocalRunGame";
 import { LocalChat } from "./LocalChat";
-import {
-  displayTitle,
-  LOCAL_CHECKS,
-  localCheckLabel,
-  localRunStages,
-} from "./localRunModel";
+import { displayTitle } from "./localRunModel";
+import { OwnerWorkspace } from "./OwnerWorkspace";
+import { LocalRunConsole, type Tool } from "./LocalRunConsole";
 import "./local-run.css";
 import { liveness, clock } from "./localRunLiveness";
 import { localRunFailure, stripAnsi } from "./localRunFailure";
@@ -26,13 +23,18 @@ export function LocalRunReview({
 }: {
   run: LocalRunView;
   busy: boolean;
-  act: (action: LocalAction) => void;
+  act: LocalAct;
   patch: string | null;
   poll?: { dataUpdatedAt: number; isError: boolean };
   retry?: () => void;
 }) {
   const game = useGameLayer();
   const [now, setNow] = useState(Date.now);
+  const [tool, setTool] = useState<Tool>("activity");
+  const [file, setFile] = useState<string | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const panel = useRef<HTMLElement>(null);
+  const timeline = useMemo(() => buildTimeline(run), [run]);
   useEffect(() => {
     if (game.enabled) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -55,8 +57,7 @@ export function LocalRunReview({
     !run.interrupted &&
     !run.parked;
   const health = liveness(run, now, poll);
-  const snapshot = sceneAt(buildTimeline(run), now);
-  const stages = localRunStages(run);
+  const snapshot = sceneAt(timeline, now);
   const failure = localRunFailure(run);
   const title = displayTitle(run);
   return (
@@ -77,7 +78,6 @@ export function LocalRunReview({
           size={90}
         />
         <div>
-          <span className="eyebrow">Local session</span>
           <h2 aria-live="off">
             {health.caption}
             {snapshot.elapsed !== null && (
@@ -103,31 +103,8 @@ export function LocalRunReview({
           )}
         </div>
       </section>
-      <nav className="journey" aria-label="Delivery stages">
-        {stages.map((stage, index) => (
-          <div
-            key={stage.label}
-            className={
-              stage.state === "done"
-                ? "visited"
-                : stage.state === "pending"
-                  ? ""
-                  : "current"
-            }
-            data-stage-state={stage.state}
-            aria-current={
-              stage.state === "current" || stage.state === "stopped"
-                ? "step"
-                : undefined
-            }
-          >
-            <span>
-              {stage.state === "done" ? <Check size={13} /> : index + 1}
-            </span>
-            <strong>{stage.label}</strong>
-          </div>
-        ))}
-      </nav>
+      {["preparing", "building", "checking"].includes(run.phase) &&
+        <LocalActions run={run} busy={busy} act={act} station="session" />}
       {(run.error || run.failure || run.interrupted) && (
         <section className="local-run-failure" aria-label="Session issue">
           <h2 role="alert">
@@ -154,136 +131,13 @@ export function LocalRunReview({
           )}
         </section>
       )}
-      <LocalActions run={run} busy={busy} act={act} />
-      <LocalChat run={run} />
-      <div className="run-story-grid local-run-story">
-        <section className="local-run-plan" aria-label="Plan">
-          <h2>
-            <FileText size={18} />
-            Plan
-          </h2>
-          {run.work.brief ? (
-            <>
-              <span className="eyebrow">Work brief</span>
-              <Markdown raw={run.work.brief} />
-            </>
-          ) : (
-            <p className="quiet">Plan not recorded</p>
-          )}
-        </section>
-        <section className="run-checks" aria-label="Verification">
-          <h2>
-            <ListChecks size={18} />
-            Verification
-          </h2>
-          {LOCAL_CHECKS.map((name) => {
-            const check = run.checks.find((entry) => entry.name === name);
-            return (
-              <details className="local-check" key={name}>
-                <summary>
-                  <span>{name}</span>
-                  <strong
-                    data-pass={
-                      check ? check.exit === 0 && !check.error : undefined
-                    }
-                  >
-                    {localCheckLabel(check)}
-                  </strong>
-                </summary>
-                {check && (
-                  <pre>
-                    {[check.stdout, check.stderr, check.error]
-                      .filter(Boolean)
-                      .join("\n") || "No output recorded"}
-                  </pre>
-                )}
-              </details>
-            );
-          })}
-          <div className="resource-line">
-            <span>Owner test</span>
-            <strong>
-              {run.handover ? run.handover.acceptance.state : "Not ready"}
-            </strong>
-          </div>
-          {run.usage && (
-            <details>
-              <summary>Usage</summary>
-              <dl>
-                {Object.entries(run.usage)
-                  .filter(([, value]) => typeof value === "number")
-                  .map(([name, value]) => (
-                    <div className="resource-line" key={name}>
-                      <dt>{name}</dt>
-                      <dd>{value}</dd>
-                    </div>
-                  ))}
-              </dl>
-            </details>
-          )}
-        </section>
-      </div>
-      <section className="local-run-activity" aria-label="Activity">
-        <h2>Activity</h2>
-        {run.activity.length ? (
-          <ol>
-            {run.activity.slice(-30).map((entry, index) => (
-              <li key={index}>
-                <time dateTime={entry.at}>
-                  {entry.at.replace(/^.*T/u, "").slice(0, 8)} UTC
-                </time>
-                <span>
-                  {entry.summary === run.error ||
-                  entry.summary?.startsWith("native session exited")
-                    ? "Session failed · see error details"
-                    : entry.summary}
-                </span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="quiet">No activity recorded</p>
-        )}
-      </section>
-      <section className="local-run-changes" aria-label="Changes">
-        <h2>
-          <GitBranch size={18} />
-          Changes
-        </h2>
-        {run.head ? (
-          <p>
-            <code>{run.head.slice(0, 12)}</code>
-          </p>
-        ) : (
-          <p className="quiet">No candidate recorded</p>
-        )}
-        {patch !== null && <pre>{patch || "No changes"}</pre>}
-        {run.risk?.required && (
-          <details>
-            <summary>Review required</summary>
-            <ul>
-              {run.risk.flagged.map((file) => (
-                <li key={file.path}>
-                  <code>{file.path}</code> · {file.domains.join(", ")}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-        <details>
-          <summary>Worktree</summary>
-          <dl>
-            <dt>Branch</dt>
-            <dd>
-              <code>{run.branch}</code>
-            </dd>
-            <dt>Path</dt>
-            <dd>
-              <code>{run.workspace}</code>
-            </dd>
-          </dl>
-        </details>
-      </section>
+      {run.parked && <LocalChat run={run} compact limit={1} composer={false} />}
+      <OwnerWorkspace key={run.run_id} calm run={run} busy={busy} act={act} patch={patch} />
+      <details className="calm-evidence" open={evidenceOpen} onToggle={event => setEvidenceOpen(event.currentTarget.open)}>
+        <summary><FolderOpen size={17} />Session evidence<ChevronDown size={16} /></summary>
+        {evidenceOpen && <LocalRunConsole run={run} snapshot={snapshot} timeline={timeline} replay={false} patch={patch}
+          tool={tool} setTool={setTool} panel={panel} busy={busy} act={act} fileFilter={file} setFileFilter={setFile} />}
+      </details>
     </>
   );
 }

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -91,6 +91,14 @@ describe("DLV-166 previews", () => {
     await tick();
     expect(f.previews.view("run-a")).toMatchObject({ state: "ready" });
     expect(f.previews.view("run-a")?.tail).not.toContain("\u001b");
+  });
+
+  it("resolves a private dependency junction in the candidate's preview", async () => {
+    const f = setup(), workspace = checkout({ "package.json": JSON.stringify({ scripts: { dev: "next dev --turbopack" } }) });
+    symlinkSync(checkout({}), join(workspace, "node_modules"), "junction");
+    await f.previews.start("new-run", { workspace });
+    expect(f.calls[0].args).toEqual(["pnpm.cjs", "exec", "next", "dev", "--webpack", "--port", "3100"]);
+    expect(f.calls[0].options.cwd).toBe(workspace);
   });
 
   it("reuses a live preview, keeps one at a time and stops the tree", async () => {

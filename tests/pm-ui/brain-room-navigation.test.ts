@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { bays, canStand, coreStations, playerRadius, roomPoint, spawn } from "../../scripts/pm/app/brain/layout";
+import { bays, canStand, coreStations, liftAngle, liftPassenger, liftPoint, liftThreshold, ownerStationForZone,
+  ownerStations3D, playerRadius, roomPoint, spawn } from "../../scripts/pm/app/brain/layout";
+import { liftDuration, liftFrame } from "../../scripts/pm/app/brain/elevator";
 import { advanceGait, advanceWalk, movementKey, restingGait } from "../../scripts/pm/app/brain/navigation";
 import { roomRenderBudget } from "../../scripts/pm/app/brain/renderBudget";
 
@@ -12,6 +14,42 @@ function travel(rate: number, forward = 1, side = 0) {
 }
 
 describe("room navigation", () => {
+  it("admits the same walking capsule through the elevator on both floors", () => {
+    for (const floor of ["ai", "owner"] as const) {
+      const pose = { ...liftThreshold, yaw: liftAngle, pitch: 0 };
+      const velocity = { x: 0, z: 0 };
+      expect(canStand(liftPassenger, "room", floor)).toBe(true);
+      for (let tick = 0; tick < 120; tick++) {
+        advanceWalk(pose, velocity, "room", 1, 0, 1 / 60, false, floor);
+        expect(canStand(pose, "room", floor)).toBe(true);
+      }
+      const back = liftPoint(0, -1.06);
+      expect(Math.hypot(pose.x - back.x, pose.z - back.z)).toBeCloseTo(playerRadius + .08, 4);
+      for (let tick = 0; tick < 90; tick++) advanceWalk(pose, velocity, "room", -1, 0, 1 / 60, false, floor);
+      expect(Math.hypot(pose.x - back.x, pose.z - back.z)).toBeGreaterThan(3);
+    }
+    for (const station of ownerStations3D) {
+      expect(canStand(station, "room", "owner"), station.id).toBe(false);
+      expect(canStand(station.arrival, "room", "owner"), station.id).toBe(true);
+    }
+  });
+
+  it("changes decks behind closed doors and opens at both ends", () => {
+    expect(liftFrame(0)).toMatchObject({ closed: 0, travel: 0, arrived: false, done: false });
+    expect(liftFrame(liftDuration * .52)).toMatchObject({ closed: 1, arrived: false });
+    expect(liftFrame(liftDuration * .53)).toMatchObject({ closed: 1, arrived: true });
+    expect(liftFrame(liftDuration)).toEqual({ closed: 0, travel: 1, arrived: true, done: true });
+  });
+
+  it("sends shared receipts to the relevant owner workstation", () => {
+    expect(ownerStationForZone("build")).toBe("merge");
+    expect(ownerStationForZone("verify")).toBe("review");
+    expect(ownerStationForZone("test")).toBe("test");
+    expect(ownerStationForZone("handover")).toBe("test");
+    expect(ownerStationForZone("seal")).toBe("commit");
+    expect(ownerStationForZone("ship")).toBe("push");
+  });
+
   it("travels the same distance at 30, 60, and 120 Hz and normalizes diagonals", () => {
     const { distance } = travel(60);
     expect(distance).toBeGreaterThan(4.5);

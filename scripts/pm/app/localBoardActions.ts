@@ -8,13 +8,14 @@ export function localBoardActionAllowed(
   action: LocalAction,
 ) {
   if (busy) return false;
-  if (action === "review") return !!run.head;
-  // DLV-167: Merge replaces Ship; only an existing push-pending run retries a push.
-  if (action === "merge") return run.phase === "uat-ready" && !!run.canMerge;
-  if (action === "ship") return run.phase === "push-pending";
-  if (action === "undo")
-    return run.canUndo || run.phase === "revert-push-pending";
-  return ["preparing", "building", "checking"].includes(run.phase);
+  if (action === "review") return !!run.head && run.phase === "uat-ready" && !run.merge_pending;
+  if (action === "test") return !!run.handover;
+  if (action === "refresh") return !!run.mergePlan?.canRefresh;
+  if (action === "recheck" || action === "discard") return true;
+  if (action === "commit" || action === "push")
+    return run.publication?.action === action && !!run.publication.token && !run.publication.reason;
+  if (action === "merge") return (run.phase === "uat-ready" || !!run.merge_pending) && !!run.canMerge;
+  return action === "cancel" && ["preparing", "building", "checking"].includes(run.phase);
 }
 export function attentionActionAllowed(
   run: LocalRunView,
@@ -22,14 +23,9 @@ export function attentionActionAllowed(
   item: AttentionItem,
 ) {
   const action = item.action.run;
-  if (action === "test") return !!item.action.href;
+  if (action === "test") return !busy && !!run.handover && !!item.action.href;
   if (action === "review" || action === "cancel")
     return localBoardActionAllowed(run, busy, action);
-  if (action === "retry")
-    return localBoardActionAllowed(
-      run,
-      busy,
-      run.phase === "revert-push-pending" ? "undo" : "ship",
-    );
+  if (action === "retry") return false;
   return true;
 }

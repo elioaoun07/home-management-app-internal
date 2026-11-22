@@ -2,7 +2,7 @@
 // The worktree never holds `.env` (assertNoLocalSecrets refuses one): the main
 // checkout's values reach only the child's environment, never a file.
 import { spawn as nodeSpawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import dotenv from "dotenv";
@@ -92,7 +92,13 @@ export function createPreviews({ root, spawn = nodeSpawn, choose = () => chooseP
       if (p.stopping) return view(id);
       const [bin, launcher] = command();
       p.port = port; p.url = `http://localhost:${port}`;
-      const child = spawn(bin, [launcher, "dev", "--port", String(port)], { cwd: workspace, env: { ...baseEnv(env), ...values },
+      const deps = lstatSync(join(workspace, "node_modules"), { throwIfNoEntry: false });
+      // Turbopack fences dependency resolution at the project root. Webpack
+      // resolves our private external package junction while keeping .next in
+      // the candidate. Preserve custom dev scripts and older ordinary installs.
+      const externalNext = deps?.isSymbolicLink() && JSON.parse(readFileSync(join(workspace, "package.json"), "utf8")).scripts?.dev === "next dev --turbopack";
+      const devArgs = externalNext ? ["exec", "next", "dev", "--webpack"] : ["dev"];
+      const child = spawn(bin, [launcher, ...devArgs, "--port", String(port)], { cwd: workspace, env: { ...baseEnv(env), ...values },
         windowsHide: true, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
       p.child = child;
       const take = chunk => {

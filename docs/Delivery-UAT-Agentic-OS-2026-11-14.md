@@ -309,7 +309,7 @@ These instructions supersede navigation names in older handovers: **Plan** opens
 **Source:** [Existing Local handover](Delivery-UAT.md#local-lane--dlv-150153), `scripts/delivery-v2/local-cli.mjs`, `local-lane.mjs`.
 
 1. From the project terminal run `node scripts/delivery-v2/local-cli.mjs readiness codex` (or the chosen `claude`). Expect Source, Sign-in and Dependencies to identify any blocking prerequisite.
-2. Only for the approved item, run `node scripts/delivery-v2/local-cli.mjs start <ID> "<Campaign>/4 - Checklist.md" codex` with its real ID/file and chosen executor. Expect one local run and a sibling `delivery/<ID>` worktree; an existing branch is retained instead of overwritten.
+2. Open the approved item in the laptop Command Center, choose the Local executor, inspect **Start commands**, and press **Start**. Expect one Local run and a sibling worktree on its recorded branch.
 3. When that owner-started worker finishes, open the same run in Sessions and inspect Checks/Activity. Expect separately recorded typecheck, lint, tests and pm:lint results from host checks.
 4. Inspect the retained worker setup evidence without printing secret values. Expect the repository instructions/skills/hooks and no copied `.env` or production/provider API key in its allowed environment.
 

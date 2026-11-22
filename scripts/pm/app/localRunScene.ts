@@ -1,4 +1,5 @@
 import type { LocalRunView } from "./LocalDelivery";
+import { localRunLabel } from "./localRunModel";
 import {
   localRunActivity,
   type LocalActivityEvent,
@@ -7,7 +8,7 @@ import {
 import { LOCAL_CHECKS } from "./localRunModel";
 import { localRunFailure } from "./localRunFailure";
 
-const closedPhases = new Set(["failed", "cancelled", "shipped", "reverted"]);
+const closedPhases = new Set(["failed", "cancelled", "shipped", "reverted", "pushed", "discarded", "cleaned"]);
 const instant = (value: string | undefined) => {
   const parsed = value ? Date.parse(value) : NaN;
   return Number.isFinite(parsed) ? parsed : null;
@@ -234,6 +235,20 @@ export function sceneAt(
     head: candidateObserved ? timeline.run.head : null,
     current_head: candidateObserved ? timeline.run.current_head : null,
     risk: candidateObserved ? timeline.run.risk : undefined,
+    mergePlan: final ? timeline.run.mergePlan : null,
+    merge_pending: final ? timeline.run.merge_pending : null,
+    publication_log: final ? timeline.run.publication_log : undefined,
+    activeCommand: final ? timeline.run.activeCommand : null,
+    applied: final ? timeline.run.applied : null,
+    committed: final ? timeline.run.committed : null,
+    pushed: final ? timeline.run.pushed : null,
+    publication: final ? timeline.run.publication : null,
+    refresh: final ? timeline.run.refresh : null,
+    cleaned_at: final ? timeline.run.cleaned_at : null,
+    cleanup_error: final ? timeline.run.cleanup_error : null,
+    cleanup_archive: final ? timeline.run.cleanup_archive : null,
+    cleanup_outcome: final ? timeline.run.cleanup_outcome : null,
+    canMerge: final && timeline.run.canMerge,
     merge: final ? timeline.run.merge : null,
     interrupted: final && timeline.run.interrupted,
     error: final ? timeline.run.error : undefined,
@@ -317,7 +332,7 @@ export function sceneAt(
     "revert-push-pending": "Push pending",
     failed: "Failed",
     cancelled: "Stopped",
-    shipped: "Shipped",
+    shipped: localRunLabel(filteredRun),
     reverted: "Reverted",
   };
   const pose: EraPose = filteredRun.interrupted
@@ -364,7 +379,7 @@ export function sceneAt(
       timeline.start === null
         ? null
         : Math.max(0, recordedEnd - timeline.start),
-    caption: captions[phase] ?? "Building",
+    caption: captions[phase] ?? localRunLabel(filteredRun),
     band: phase,
   };
 }

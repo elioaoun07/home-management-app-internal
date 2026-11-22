@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Armchair, CircleDot, Footprints, Map, MessageCircle, ScanLine, X } from "lucide-react";
+import { Armchair, ArrowDownUp, CircleDot, Footprints, Map, MessageCircle, ScanLine, X } from "lucide-react";
 import { ERAMark } from "@/components/shared/ERAMark";
 import { useRoomSettled } from "./LibraryArrival";
 import type { LocalActivityEvent } from "./localRunActivityModel";
@@ -8,7 +8,9 @@ import type { LocalScene, LocalTimeline } from "./localRunScene";
 import type { LocalLiveness } from "./localRunLiveness";
 import { roomRows, roomZone } from "./transferRoomModel";
 import type { ZoneId } from "./stage/config";
-import { stations, zoneNames, type Finish, type View } from "./brain/layout";
+import { ownerStationForZone, stations, zoneNames, type Finish, type View } from "./brain/layout";
+import { OWNER_STATIONS, type OwnerStation } from "./ownerStations";
+import type { DeliveryRoom } from "./OwnerWorkspace";
 import type { Presence, RoomLighting, Signal, Target, WorldApi, WorldControls, WorldState } from "./brain/protocol";
 import { deliveryTopic, isModuleTopic, topics } from "./brain/topics";
 import { answerQuestion, questionLabels, questionsForPhase, signalFor, suggestions, type Answer, type Context, type Evidence, type Question } from "./brain/questions";
@@ -20,13 +22,14 @@ const initialPresence: Presence = { target: null, zone: null, area: "room" };
 const seekKinds = ["previous", "present", "next"] as const;
 const isStation = (target: Target | null): target is ZoneId =>
   !!target && stations.some(station => station.id === target);
+const ownerBay = (target: string | null) => OWNER_STATIONS.find(station => "owner:" + station.id === target);
 const safePref = (key: string, value?: string) => {
   try { if (value !== undefined) localStorage.setItem(key, value); else return localStorage.getItem(key); } catch { return null; }
 };
 
 export function BrainRoom({
   view, onView, onBoard, scene, timeline, health, lighting, replay, playing, question, reading, inspected,
-  onZone, onEvidence, onQuestion,
+  onZone, onEvidence, onQuestion, floor, owner, onFloor, onStation, currentStation, inspectedStation,
 }: {
   view: View; onView: (view: View) => void; onBoard: () => void;
   scene: LocalScene; timeline: LocalTimeline; health: LocalLiveness;
@@ -35,6 +38,10 @@ export function BrainRoom({
   onZone: (zone: ZoneId | "all", source: HTMLElement) => void;
   onEvidence: (row: LocalActivityEvent, source: HTMLElement) => void;
   onQuestion: () => void;
+  floor: DeliveryRoom; owner: NonNullable<WorldState["owner"]>;
+  onFloor: (floor: DeliveryRoom) => void;
+  onStation: (id: OwnerStation, source: HTMLElement) => void;
+  currentStation: OwnerStation; inspectedStation: OwnerStation | null;
 }) {
   const viewport = useRef<HTMLDivElement>(null), api = useRef<WorldApi | null>(null);
   const controlsHelp = useId();
@@ -68,16 +75,22 @@ export function BrainRoom({
   const paused = opened || reading || load !== "ready";
   const hasPrevious = !!previous, hasNext = !!next;
   const worldState = useMemo<WorldState>(() => ({
-    view, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting,
+    view, floor, owner, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting,
     signal: openQuestionId ? { id: "owner-question:" + openQuestionId, zone: "handover", kind: "question" } : visibleSignal,
     core: [hasPrevious, cursor !== null, hasNext],
-  }), [view, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting, openQuestionId, visibleSignal, hasPrevious, hasNext]);
+  }), [view, floor, owner, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting, openQuestionId, visibleSignal, hasPrevious, hasNext]);
   const current = useRef({ state: worldState, controls: {} as WorldControls });
   current.current.state = worldState;
 
   function showAsk(source: HTMLElement | null) {
-    const zone = inspected ? roomZone(inspected) : isStation(presence.target) ? presence.target : presence.zone;
-    const row = inspected ?? (zone ? roomRows(scene, zone).at(-1) ?? null : null);
+    const berth = ownerBay(presence.target);
+    const bayEvent = berth && scene.events.findLast(event => {
+      const zone = roomZone(event);
+      return zone && ownerStationForZone(zone) === berth.id;
+    });
+    const contextEvent = inspected ?? bayEvent;
+    const zone = contextEvent ? roomZone(contextEvent) : isStation(presence.target) ? presence.target : presence.zone;
+    const row = contextEvent ?? (zone ? roomRows(scene, zone).at(-1) ?? null : null);
     opener.current = source;
     setCapture({ scene, context: { zone, row }, replay, health, question });
     setExpanded(false);
@@ -94,6 +107,9 @@ export function BrainRoom({
   function inspect(target: Target) {
     const source = viewport.current;
     if (!source) return;
+    if (target === "lift") { onFloor(floor === "owner" ? "ai" : "owner"); return; }
+    const berth = ownerBay(target);
+    if (berth) { onStation(berth.id, source); return; }
     if (target === "seat") { onView("seat"); showAsk(source); return; }
     if (target === "core") { api.current?.enter(); return; }
     if (target === "exit") { api.current?.exit(); return; }
@@ -185,13 +201,16 @@ export function BrainRoom({
   const candidates = capture ? suggestions(capture.context, capture.scene.phase) : [];
   const list = expanded ? [...new Set([...candidates, ...questionsForPhase(capture?.scene.phase ?? "")])] : candidates;
   const chosenTarget = presence.target;
-  const targetLabel = isStation(chosenTarget) ? zoneNames[chosenTarget] : chosenTarget === "seat" ? "Take seat" :
+  const displayedFloor = presence.floor ?? floor;
+  const elevatorLabel = "Elevator to " + (displayedFloor === "ai" ? "Owner room" : "AI room");
+  const targetLabel = chosenTarget === "lift" ? "Ride elevator" : ownerBay(chosenTarget)?.label ??
+    (isStation(chosenTarget) ? zoneNames[chosenTarget] : chosenTarget === "seat" ? "Take seat" :
     chosenTarget === "core" ? "Inside ERA" : chosenTarget === "exit" ? "Back to room" :
-    chosenTarget === "previous" ? "Previous action" : chosenTarget === "next" ? "Step forward" : "Selected action";
+    chosenTarget === "previous" ? "Previous action" : chosenTarget === "next" ? "Step forward" : "Selected action");
   const canInspect = chosenTarget && (!seekKinds.some(key => key === chosenTarget) ||
     (chosenTarget === "previous" ? previous : chosenTarget === "next" ? next : present));
 
-  return <div className="era-brain" data-view={view} data-load={load} data-area={presence.area} data-finish={finish}
+  return <><div className="era-brain" data-view={view} data-floor={displayedFloor} data-load={load} data-area={presence.area} data-finish={finish}
     data-core-state={lighting.failed ? "damaged" : "healthy"} data-fault-station={lighting.faultZone ?? undefined}
     data-active-station={lighting.endpoint ?? undefined}>
     <div ref={viewport} className="era-brain-viewport" tabIndex={0} role="region" aria-label="3D room"
@@ -210,7 +229,8 @@ export function BrainRoom({
         {isModuleTopic(topic) ? <ERAMark module={topic} size={22} /> :
           <CircleDot size={18} aria-hidden="true" style={{ color: `hsl(${topics[topic][1]} 72% 70%)` }} />}
         <strong>{topics[topic][0]}</strong>
-        <span>{presence.area === "core" ? "Inside ERA" : presence.zone ? zoneNames[presence.zone] : view === "map" ? "Overview" : view === "seat" ? "Seat" : "Walk"}</span>
+        <span>{presence.area === "core" ? "Inside ERA" : ownerBay(chosenTarget)?.label ??
+          (presence.zone ? zoneNames[presence.zone] : view === "map" ? "Overview" : view === "seat" ? "Seat" : "Walk")}</span>
       </div>
       <div className="era-brain-actions">
         <button type="button" aria-pressed={finish === "illustrated"} onClick={() => {
@@ -237,13 +257,26 @@ export function BrainRoom({
         <button type="button" onClick={event => showAsk(event.currentTarget)}><MessageCircle size={16} /> Ask ERA</button>
       </div>
       <div className="era-brain-actions" role="group" aria-label="Room actions">
-        {canInspect && <button type="button" onClick={() => inspect(chosenTarget)}><ScanLine size={16} /> {targetLabel}</button>}
+        <button type="button" className="era-brain-elevator" aria-label={elevatorLabel} title={elevatorLabel}
+          disabled={load !== "ready" || displayedFloor !== floor} onClick={() => {
+            inspect("lift");
+            if (view === "walk") viewport.current?.focus({ preventScroll: true });
+          }}><ArrowDownUp size={16} />{elevatorLabel}</button>
+        {canInspect && chosenTarget !== "lift" && <button type="button" onClick={() => inspect(chosenTarget)}><ScanLine size={16} /> {targetLabel}</button>}
         {view === "walk" && load === "ready" && <>
           {presence.area === "room" ? <label className="era-brain-travel">
             <span className="stage-announcement">Go to station</span>
             <select aria-label="Go to station" value="" onChange={event => {
-              if (isStation(event.target.value as Target)) api.current?.go(event.target.value as ZoneId);
-            }}><option value="" disabled>Go to station</option>{stations.map(s => <option key={s.id} value={s.id}>{zoneNames[s.id]}</option>)}</select>
+              const destination = event.target.value as Target;
+              const berth = ownerBay(destination);
+              if (destination === "lift" || isStation(destination)) api.current?.go(destination);
+              else if (berth) api.current?.go(`owner:${berth.id}`);
+              viewport.current?.focus({ preventScroll: true });
+            }}><option value="" disabled>Go to station</option>
+              {displayedFloor === "owner" ? OWNER_STATIONS.map(s => <option key={s.id} value={"owner:" + s.id}>{s.label}</option>)
+                : stations.map(s => <option key={s.id} value={s.id}>{zoneNames[s.id]}</option>)}
+              <option value="lift">Elevator</option>
+            </select>
           </label> : <button type="button" onClick={() => api.current?.exit()}>Back to room</button>}
           {presence.area === "room" && <button type="button" onClick={() => { api.current?.reset(); viewport.current?.focus(); }}>Recenter</button>}
           <button type="button" className="era-brain-mouse" title="Click to look · WASD to walk · Shift to sprint · Esc to release"
@@ -259,7 +292,7 @@ export function BrainRoom({
       if (view === "walk") api.current?.go(tracking.zone);
       else { queued.current = tracking.zone; focusView("walk"); }
       setTracking(null);
-    }}>Go to {zoneNames[tracking.zone]}</button>}
+    }}>Go to {displayedFloor === "owner" ? ownerBay("owner:" + ownerStationForZone(tracking.zone))?.label : zoneNames[tracking.zone]}</button>}
     {opened && createPortal(<dialog ref={dialog} className="era-brain-dialog"
       aria-labelledby="era-brain-dialog-title" data-seated={view === "seat"}
       onCancel={event => { event.preventDefault(); closeAsk(); }}
@@ -296,5 +329,14 @@ export function BrainRoom({
       </ol></details>}
       {!replay && question && <button type="button" onClick={() => { setOpened(false); onQuestion(); }}>Reply to agent</button>}
     </dialog>, document.body)}
-  </div>;
+  </div>
+    {floor === "owner" && <nav className="room-steps owner-floor-steps" aria-label="Owner workstations">
+      {OWNER_STATIONS.map(({ id, label }) => <button type="button" key={id} aria-pressed={id === inspectedStation}
+        aria-current={id === currentStation ? "step" : undefined} data-reached={owner.signals[id] === "done"}
+        onClick={event => {
+          if (view === "walk") api.current?.go(`owner:${id}`);
+          onStation(id, event.currentTarget);
+        }}>{label}</button>)}
+    </nav>}
+  </>;
 }

@@ -128,6 +128,10 @@ try {
           const live = structuredClone(run);
           live.activity.push({ at: new Date().toISOString(), kind: "status", summary: "lint started", seq: 1000, job_id: "supervisor" });
           await openBoard(page, state, assets, live, theme);
+          const recorder = page.getByRole("button", { name: "Recorder", exact: true });
+          assert.equal(await recorder.getAttribute("aria-expanded"), "false");
+          await recorder.click();
+          await page.getByRole("slider", { name: "Replay", exact: true }).waitFor();
           const rail = page.locator(".board-rail");
           if ((await rail.getAttribute("data-open") === "true") !== railOpen) await rail.locator(".board-rail-heading button").click();
           await page.keyboard.press(mode === "overview" ? "0" : "f");

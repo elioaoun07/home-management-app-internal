@@ -1,3 +1,5 @@
+import { localRunLabel } from "./localRunModel";
+
 export type LocalActivityKind =
   | "read"
   | "edit"
@@ -24,6 +26,8 @@ export interface LocalActivityAgent {
 export interface RecordedActivity {
   at: string;
   summary: string | null;
+  message_text?: string;
+  message_excerpt?: boolean;
   kind?: string | null;
   seq?: number;
   job_id?: string | null;
@@ -46,6 +50,8 @@ export interface LocalActivityEvent {
   label: string;
   detail: string | null;
   summary: string;
+  messageText?: string;
+  messageExcerpt?: boolean;
   station: LocalActivityStation;
   paths: string[];
   command: string | null;
@@ -315,7 +321,9 @@ function activityEvent(
     };
   }
   if (entry.kind === "message") {
-    return { ...result, kind: "message", label: "ERA update" };
+    return { ...result, kind: "message", label: "ERA update",
+      messageText: entry.message_text,
+      messageExcerpt: entry.message_excerpt ?? (!entry.message_text && cappedSummary(summary)) };
   }
   if (entry.kind === "tool" && requestedTools[summary]) {
     return { ...result, ...requestedTools[summary], detail: null };
@@ -505,13 +513,12 @@ export function localRunActivity(run: ActivityRun) {
       "uat-ready": "Ready to test",
       merging: "Merging",
       "push-pending": "Push pending",
-      shipped: "Shipped",
       failed: "Session failed",
       cancelled: "Cancelled",
       reverted: "Reverted",
       "revert-push-pending": "Revert pending",
     };
-    label = labels[run.phase] || run.phase;
+    label = labels[run.phase] || localRunLabel(run);
   }
   if (run.interrupted) label = "Session interrupted";
   return {

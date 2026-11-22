@@ -212,17 +212,12 @@ describe("Local attention evidence", () => {
     expect(run.canShip).toBe(false);
   });
   it.each(["push-pending", "revert-push-pending"])(
-    "Retry push appears for %s and disappears on resolved phase",
+    "keeps retired push retries off the rail for %s",
     (phase) => {
       const run = boardRun({ phase });
       expect(
         attention(run).find((item) => item.kind === "retry"),
-      ).toMatchObject({
-        level: "act",
-        zone: "ship",
-        title: "Retry push",
-        action: { run: "retry" },
-      });
+      ).toBeUndefined();
       expect(
         attention({ ...run, phase: "shipped" }).some(
           (item) => item.kind === "retry",

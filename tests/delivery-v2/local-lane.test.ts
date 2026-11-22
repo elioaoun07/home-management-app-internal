@@ -17,7 +17,6 @@ import { createJourney } from "../../scripts/delivery-v2/journey.mjs";
 import { routeLocal } from "../../scripts/delivery-v2/local-routes.mjs";
 import { listStewardRequests } from "../../scripts/delivery-v2/steward-requests.mjs";
 import { buildSessionOptions } from "../../scripts/delivery-v2/adapters/claude.mjs";
-import { routeDeliveryV2 } from "../../scripts/delivery-v2/entry.mjs";
 import { runProcess } from "../../scripts/delivery-v2/process.mjs";
 import { createPreviews } from "../../scripts/delivery-v2/local-preview.mjs";
 import { EventEmitter } from "node:events";
@@ -41,8 +40,8 @@ async function fixture(risk = false, red = false, failFirst = false, executor = 
   put(root, ".gitignore", "node_modules/\n.delivery/\n");
   put(root, "CLAUDE.md", "Fixture instructions\n");
   put(root, ".claude/skills/start-task/SKILL.md", "Fixture skill\n");
-  put(root, `${PM}/Delivery/4 - Checklist.md`, "# Checklist\n\n## Next\n\n- [ ] **DLV-899** Preserve this other item _(friction - S)_\n- [ ] **DLV-900** Change the greeting _(friction - S)_\n");
-  put(root, `${PM}/Delivery/Delivery — Master Book.md`, "# Delivery\n\n## Acceptance Criteria Index\n\n### DLV-900\n\n**Outcome:** greeting changes\n\n- **Acceptance:** changed greeting\n\n## Shipped Log\n");
+  put(root, `${PM}/Delivery/4 - Checklist.md`, "# Checklist\n\n## Next\n\n- [ ] **DLV-899** Preserve this other item _(friction - S)_\n- [ ] **DLV-900** Change the greeting — [criteria](<Delivery — Master Book.md#dlv-900>) _(friction - S)_\n");
+  put(root, `${PM}/Delivery/Delivery — Master Book.md`, "# Delivery\n\n## Acceptance Criteria Index\n\n### DLV-900\n\n**Outcome:** greeting changes\n\n- **Acceptance:** changed greeting\n- **UAT:** pending\n\n## Shipped Log\n");
   put(root, "package.json", JSON.stringify({ scripts: Object.fromEntries(["typecheck", "lint", "test", "pm:lint"].map(name => [name, `node check.cjs ${name}`])) }));
   put(root, "check.cjs", `process.stdout.write(process.argv[2] + ': host output\\n'); ${red ? "if(process.argv[2]==='lint') process.exitCode=1;" : ""}`);
   put(root, "pnpm-lock.yaml", "lockfileVersion: '9.0'\nimporters:\n  .:\n");
@@ -106,6 +105,142 @@ function accept(root: string, handover: { handover_id: string; revision: number 
   expect(signOff({ ...args, command_id: randomUUID() }).ok).toBe(true);
 }
 
+it("records Local narration beside supervisor events and deduplicates repeated native ordinals", async () => {
+  const text = "The recorded message. ".repeat(30);
+  const f = await fixture(false, false, false, "claude", { session: async ({ onActivity }) => {
+    const row = { seq: 0, at: "2026-11-22T12:00:00Z", kind: "message", summary: text.slice(0, 240), message_text: text };
+    onActivity?.(row);
+    onActivity?.(row);
+    return { status: "finished", observations: { nativeOutcome: "failed", error: "Fixture stopped" } };
+  } });
+  const id = (await f.lane.start(f.input)).run_id!;
+  await f.lane.wait(id);
+  const rows = (await f.lane.detail(id)).activity;
+  expect(rows.some((row: {summary: string}) => row.summary === "Native session started")).toBe(true);
+  expect(rows.filter((row: {kind: string}) => row.kind === "message")).toMatchObject([
+    { summary: text.slice(0, 240), message_text: text, message_excerpt: false },
+  ]);
+  expect(f.store.listActivity(id).find((row: { kind: string }) => row.kind === "message")?.summary).toBe(text.slice(0, 240));
+  f.store.appendActivity(id, id, Array.from({ length: 245 }, (_, index) => ({ kind: "status", summary: String(index) })));
+  const window = await f.lane.detail(id);
+  expect(window.activity).toHaveLength(200);
+  expect(window.earlier_activity).toBe(true);
+  const collected = [...window.activity];
+  let older = window.earlier_activity;
+  while (older) {
+    const page = f.lane.earlierActivity(id, collected[0].seq);
+    expect(page.activity.length).toBeGreaterThan(0);
+    expect(page.activity.length).toBeLessThanOrEqual(30);
+    collected.unshift(...page.activity);
+    older = page.more;
+  }
+  expect(collected.map(row => row.seq)).toEqual(f.store.listActivity(id, 1000).map((row: { seq: number }) => row.seq));
+}, 60_000);
+
+describe("Owner station comparison", () => {
+  it("reads only candidate paths against either revision without accepting review", async () => {
+    const f = await fixture(false, false, false, "claude", { checks: async () => [
+      { name: "fixture", exit: 0, stdout: "", stderr: "", error: null, started_at: "", finished_at: "" },
+    ] });
+    const id = (await f.lane.start(f.input)).run_id!;
+    await f.lane.wait(id);
+    const view = await f.lane.detail(id);
+    const request = (fields: Record<string, string>, peer = true) => routeLocal({
+      method: "GET", path: "/api/delivery/v2/local/comparison", query: new URLSearchParams({ id, head: view.head, ...fields }),
+      loopbackPeer: peer,
+    }, { kind: "browser" }, { local: f.lane });
+    expect((await request({}, false))?.status).toBe(403);
+    expect((await request({}))?.json).toMatchObject({ base: view.base, head: view.head,
+      files: expect.arrayContaining([{ status: "M", path: "greeting.txt" }]) });
+    expect((await request({ path: "greeting.txt" }))?.json).toMatchObject({ patch: expect.stringContaining("-before\n+after") });
+    put(f.root, "greeting.txt", "new owner version\n");
+    put(f.root, "unrelated.txt", "other work\n");
+    git(f.root, "add", "."); git(f.root, "commit", "-m", "owner changes");
+    const source = git(f.root, "rev-parse", "HEAD");
+    expect((await request({ against: "repo" }))?.json).toMatchObject({ base: source });
+    expect((await request({ against: "repo", source, path: "greeting.txt" }))?.json).toMatchObject({ patch: expect.stringContaining("-new owner version\n+after") });
+    expect((await request({ against: "repo", source: view.base, path: "greeting.txt" }))?.status).toBe(409);
+    expect((await request({ against: "repo", path: "unrelated.txt" }))?.status).toBe(409);
+    expect((await request({ path: "." }))?.status).toBe(409);
+    expect((await request({ head: view.base }))?.status).toBe(409);
+    await expect(f.lane.review(id, view.base)).rejects.toThrow("Candidate changed");
+    expect((await f.lane.detail(id)).reviewed_head).toBeFalsy();
+  }, 30_000);
+});
+
+describe("DLV-174 Refresh", () => {
+  async function candidate() {
+    let passes = 0;
+    let failNext = false;
+    const f = await fixture(false, false, false, "claude", {
+      checks: async () => {
+        passes++;
+        const results = ["typecheck", "lint", "test", "pm:lint"].map(name => ({ name, started_at: "", finished_at: "",
+          exit: failNext && name === "test" ? 1 : 0, stdout: "", stderr: "", error: null }));
+        failNext = false;
+        return results;
+      },
+      session: async ({ request }) => {
+        const workspace = request.workspace.root;
+        const content = readFileSync(join(workspace, "greeting.txt"), "utf8").replace("last", "candidate");
+        put(workspace, "greeting.txt", content);
+        put(workspace, ".delivery-handover.json", JSON.stringify({ summary: "Greeting", scenarios: [
+          { id: "greeting", title: "Greeting", required: true, steps: [{ action: "Read", expected: "candidate" }] }] }));
+        return { status: "finished", observations: { nativeOutcome: "succeeded" } };
+      },
+    });
+    const original = ["first", "2", "3", "4", "5", "6", "7", "8", "9", "last", ""].join("\n");
+    put(f.root, "greeting.txt", original);
+    git(f.root, "commit", "-am", "prepare multi-line fixture");
+    const id = (await f.lane.start(f.input)).run_id!;
+    await f.lane.wait(id);
+    const view = await f.lane.detail(id);
+    accept(f.root, view.handover!);
+    return { ...f, original, id, view, passes: () => passes, failChecks: () => { failNext = true; } };
+  }
+  it("rechecks a clean rebase, revokes the old sign-off, and never alters main", async () => {
+    const f = await candidate();
+    put(f.root, "greeting.txt", f.original.replace("first", "owner"));
+    expect((await f.lane.detail(f.id)).mergePlan).toMatchObject({ canRefresh: false, dirtyConflicts: ["greeting.txt"] });
+    git(f.root, "commit", "-am", "owner changed the first line");
+    const base = git(f.root, "rev-parse", "HEAD");
+    const detail = await f.lane.detail(f.id);
+    expect(detail.mergePlan).toMatchObject({ canRefresh: true, refreshBase: base, committedConflicts: ["greeting.txt"] });
+    await expect(f.lane.refresh(f.id, f.view.base, f.view.head)).rejects.toThrow(/preview changed/i);
+    f.failChecks();
+    const refreshRequest = { method: "POST", path: "/api/delivery/v2/local", loopbackPeer: true,
+      body: { action: "refresh", run_id: f.id, expected_base: base, expected_head: f.view.head } };
+    const routed = await routeLocal(refreshRequest, { kind: "browser" }, { local: f.lane });
+    expect(routed?.status).toBe(200);
+    const failed = routed!.json;
+    expect(failed).toMatchObject({ phase: "refresh-failed", handover_id: null, canMerge: false });
+    const next = await f.lane.refresh(f.id, base, failed.head);
+    expect(f.passes()).toBe(3);
+    expect(next).toMatchObject({ phase: "uat-ready", base, canMerge: false, reviewed_head: null });
+    expect(next.head).not.toBe(f.view.head);
+    expect(next.handover!.binding.source_revision).toBe(next.head);
+    expect(next.handover!.revision).toBeGreaterThan(f.view.handover!.revision);
+    accept(f.root, next.handover!);
+    expect((await f.lane.detail(f.id)).canMerge).toBe(true);
+    expect(git(f.root, "rev-parse", "HEAD")).toBe(base);
+    expect(git(f.root, "status", "--porcelain")).toBe("");
+  }, 60_000);
+  it("records the conflicting paths and restores the original tested branch", async () => {
+    const f = await candidate();
+    put(f.root, "greeting.txt", f.original.replace("last", "owner"));
+    git(f.root, "commit", "-am", "overlapping owner change");
+    const base = git(f.root, "rev-parse", "HEAD");
+    const result = await f.lane.refresh(f.id, base, f.view.head);
+    expect(result).toMatchObject({ phase: "refresh-conflict", handover_id: null, canMerge: false,
+      refresh: { conflicts: ["greeting.txt"] } });
+    expect(result.refresh.commands.map((c: { exit: number }) => c.exit)).toEqual([1, 0]);
+    expect(git(result.workspace, "rev-parse", "HEAD")).toBe(f.view.head);
+    expect(git(result.workspace, "status", "--porcelain")).toBe("");
+    expect(git(f.root, "rev-parse", "HEAD")).toBe(base);
+    expect(f.passes()).toBe(1);
+  }, 60_000);
+});
+
 describe("DLV-159 supervisor Git limits", () => {
   const stages = ["Checking AI guidance docs...", "Checking generated agent setup...", "Checking PWA manifests...",
     "Running TypeScript check...", "Running unit tests...", "Running ESLint on staged files..."];
@@ -139,7 +274,7 @@ describe("DLV-159 supervisor Git limits", () => {
     const view = await f.lane.detail(started.run_id!);
     expect(view).toMatchObject({ phase: "failed", error: "git commit: timed out after 1 s" });
     expect(view.failure).toEqual({ code: "commit-timeout", step: "Seal", detail: "timed out after 1 s" });
-    expect(git(view.workspace, "rev-parse", "HEAD")).toBe(view.base);
+    expect(JSON.parse(readFileSync(join(f.root, ".delivery/local-archive", started.run_id!, "archive.json"), "utf8")).head).toBe(view.base);
     const pids: number[] = JSON.parse(readFileSync(pidFile, "utf8"));
     expect(pids).toHaveLength(2);
     for (const pid of pids) await expect.poll(() => {
@@ -154,7 +289,7 @@ describe("DLV-159 supervisor Git limits", () => {
     const view = await f.lane.detail(started.run_id!);
     expect(view.phase).toBe("uat-ready");
     const rows = view.activity.map((row: { summary: string }) => row.summary);
-    expect(rows.slice(rows.indexOf("Committing candidate") + 1, rows.indexOf("Host checks started")))
+    expect(rows.slice(rows.indexOf("Committing candidate") + 1, rows.indexOf("Host checks started")).filter((row: string) => row.startsWith("Hook:")))
       .toEqual(["Hook: docs", "Hook: mirrors", "Hook: manifests", "Hook: typecheck", "Hook: tests", "Hook: lint"]);
   }, 60_000);
   it("preserves the hook's nonzero-exit error text", async () => {
@@ -165,27 +300,13 @@ describe("DLV-159 supervisor Git limits", () => {
     expect(await f.lane.detail(started.run_id!)).toMatchObject({ phase: "failed", error: "git commit: fixture hook rejected\n",
       failure: { code: "commit-hook", step: "Seal", detail: "git commit: fixture hook rejected" } });
   }, 60_000);
-  it.each([{}, { hookMs: 120_000, pushMs: 90_000 }, { hookMs: 120_000 }])("uses configured limits for build, merge, ship, undo and both pushes (%j)", async limits => {
-    const calls: { verb: string; timeout?: number }[] = [];
-    const run: typeof runProcess = (command, args, options) => {
-      if (command === "git") calls.push({ verb: args[1], timeout: options?.timeout });
-      return runProcess(command, args, options);
-    };
-    const f = await fixture(false, false, false, "claude", { run, limits });
-    const started = await f.lane.start(f.input);
-    const id = started.run_id!;
-    await f.lane.wait(id);
-    const view = await f.lane.detail(id);
-    expect(view.phase).toBe("uat-ready");
-    accept(f.root, view.handover!);
-    expect((await f.lane.ship(id)).phase).toBe("shipped");
-    expect((await f.lane.undo(id)).phase).toBe("reverted");
-    expect(calls.filter(call => ["commit", "merge", "revert"].includes(call.verb)))
-      .toEqual(["commit", "merge", "commit", "revert"].map(verb => ({ verb, timeout: limits.hookMs ?? 25 * 60_000 })));
-    expect(calls.filter(call => call.verb === "push"))
-      .toEqual([1, 2].map(() => ({ verb: "push", timeout: limits.pushMs ?? 5 * 60_000 })));
-    expect(calls.filter(call => !["commit", "merge", "revert", "push"].includes(call.verb)).every(call => call.timeout === 30_000)).toBe(true);
-  }, 60_000);
+  it("keeps archived Ship and Undo unable to change the checkout", async () => {
+    const f = await fixture();
+    const head = git(f.root, "rev-parse", "HEAD");
+    await expect(f.lane.ship()).rejects.toThrow("Ship retired");
+    await expect(f.lane.undo()).rejects.toThrow("Undo retired");
+    expect(git(f.root, "rev-parse", "HEAD")).toBe(head);
+  });
 });
 
 describe("DLV-160 recorded failure reasons", () => {
@@ -481,8 +602,8 @@ describe("DLV-164/165 owner questions and messages", () => {
 });
 
 describe("Local history reads", () => {
-  function history(head: string | null = null) {
-    const data = { lane: "local", phase: "failed", workspace: "missing-history-worktree", base: "base", head, checks: [], risk: { required: false, flagged: [] } };
+  function history(head: string | null = null, phase = "failed") {
+    const data = { lane: "local", phase, workspace: "missing-history-worktree", base: "base", head, checks: [], risk: { required: false, flagged: [] } };
     const run = vi.fn(async (_command: string, _args: string[], _options?: unknown) => ({ status: 0, stdout: "candidate\n", stderr: "", error: null, signal: null }));
     const store = { getRun: () => ({ base_manifest_json: JSON.stringify(data) }), getJob: () => null, listActivity: () => [{ summary: "Retained failure" }] };
     return { lane: createLocalLane({ root: temp(), store, run }), run };
@@ -498,9 +619,14 @@ describe("Local history reads", () => {
     expect(f.run.mock.calls.map(call => call[1][1])).toEqual(["rev-parse", "status"]);
   });
   it("refuses review when fresh inspection fails", async () => {
-    const f = history("candidate");
+    const f = history("candidate", "uat-ready");
     f.run.mockImplementation(async (_command, args) => ({ status: args[1] === "diff" ? 1 : 0, stdout: args[1] === "rev-parse" ? "candidate\n" : "", stderr: "", error: null, signal: null }));
     await expect(f.lane.review("history")).rejects.toThrow("candidate-changed");
+  });
+  it("keeps a failed historical run closed when an old client requests review", async () => {
+    const f = history("candidate");
+    await expect(f.lane.review("history")).rejects.toThrow("ready to test");
+    expect(f.run).not.toHaveBeenCalled();
   });
 });
 
@@ -602,7 +728,8 @@ describe("Local worktree to owner merge and revert", () => {
     const next = await f.lane.detail(retry.run_id!);
     expect(next.workspace).not.toBe(old.workspace);
     expect(next.branch).not.toBe(old.branch);
-    expect(existsSync(old.workspace)).toBe(true);
+    expect(existsSync(old.workspace)).toBe(false);
+    expect(existsSync(join(f.root, ".delivery/local-archive", start.run_id!, "diff.patch"))).toBe(true);
     expect((await f.lane.detail(start.run_id!)).error).toBe("synthetic native startup failure");
     expect(f.lane.list().find((row: { run_id: string }) => row.run_id === retry.run_id)).toMatchObject({ active: false, ownerActionKind: "local-review" });
     const restarted = createLocalLane({ root: f.root, store: f.store });
@@ -627,6 +754,12 @@ describe("Local worktree to owner merge and revert", () => {
     expect(f.launches()).toBe(0);
     git(f.root, "add", "pending.txt"); git(f.root, "commit", "-m", "fixture source update");
     request.body.command_id = randomUUID();
+    const getPlan = await routeLocal({ method: "GET", path: "/api/delivery/v2/local/start-plan", loopbackPeer: true,
+      query: new URLSearchParams({ id: f.input.id, file: f.input.file }) }, auth, ctx);
+    expect(getPlan?.status).toBe(200);
+    const plan = getPlan!.json;
+    expect(plan.commands[0]).toContain(git(f.root, "rev-parse", "HEAD"));
+    Object.assign(request.body, { start_nonce: plan.start_nonce, preview_id: plan.token });
     const started = await routeLocal(request, auth, ctx);
     expect(started?.status).toBe(200);
     const replayed = await routeLocal(request, auth, ctx);
@@ -652,7 +785,15 @@ describe("Local worktree to owner merge and revert", () => {
     expect(git(f.view.workspace, "branch", "--show-current")).toBe("delivery/DLV-900");
     expect(f.view.checks.map(c => c.name)).toEqual(["typecheck", "lint", "test", "pm:lint"]);
     expect(f.view.checks.every(c => c.exit === 0 && c.stdout.includes("host output"))).toBe(true);
-    expect(f.store.listActivity(f.id).map((row: { summary: string }) => row.summary)).toEqual([
+    const activity: string[] = f.store.listActivity(f.id).map((row: { summary: string }) => row.summary);
+    const commands = activity.filter(line => line.startsWith('["git"')).map(line => JSON.parse(line));
+    expect(commands).toEqual([
+      ["git", "--no-optional-locks", "worktree", "add", "-b", f.view.branch, f.view.workspace, f.view.base],
+      ["git", "--no-optional-locks", "add", "--all"],
+      ["git", "--no-optional-locks", "commit", "-m", "Build DLV-900"],
+    ]);
+    expect(activity.filter(line => line.startsWith("Git exit 0"))).toHaveLength(3);
+    expect(activity.filter(line => !line.startsWith('["git"') && !line.startsWith("Git exit"))).toEqual([
       "Installing dependencies", "Native session started", "Committing candidate", "Host checks started",
       "typecheck started", "typecheck: 0", "lint started", "lint: 0", "test started", "test: 0",
       "pm:lint started", "pm:lint: 0", "Freezing handover", "Ready for owner UAT",
@@ -674,51 +815,26 @@ describe("Local worktree to owner merge and revert", () => {
     const f = await built(false, true); expect(f.view.phase).toBe("failed"); expect(f.view.canShip).toBe(false);
     expect(f.view.checks.find(c => c.name === "lint")?.exit).toBe(1); expect(f.view.handover).toBeNull();
   }, 60_000);
-  it("ships only after current-head UAT and review; pushes once and reverts the merge", async () => {
-    const f = await built(true); accept(f.root, f.view.handover!);
-    await expect(f.lane.ship(f.id)).rejects.toThrow("risk-review");
-    expect(await f.lane.review(f.id)).toContain("src/features/accounts/change.ts");
-    expect((await f.lane.detail(f.id)).canShip).toBe(true);
-    const ctx = { root: f.root, store: f.store, local: f.lane };
-    const h = { host: "127.0.0.1:4317", "sec-fetch-site": "same-origin" };
-    const boot = await routeDeliveryV2({ method: "GET", path: "/api/delivery/v2/session", headers: h, loopbackPeer: true }, ctx);
-    const headers = { ...h, cookie: boot!.headers!["Set-Cookie"].split(";")[0], "x-era-csrf": boot!.json.csrf };
-    const ownerCommand = (action: string) => routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/local", body: { action, run_id: f.id }, headers, loopbackPeer: true }, ctx);
-    expect((await routeDeliveryV2({ method: "POST", path: "/api/delivery/v2/local", body: { action: "ship", run_id: f.id } }, ctx))?.status).toBe(401);
-    const shipped = await ownerCommand("ship");
-    expect(shipped?.json.phase).toBe("shipped"); expect(git(f.root, "rev-parse", "HEAD^2")).toBe(f.view.head);
-    expect(git(f.root, "ls-remote", "origin", "refs/heads/main")).toContain(git(f.root, "rev-parse", "HEAD"));
-    expect(readFileSync(join(f.root, `${PM}/Delivery/4 - Checklist.md`), "utf8")).not.toContain("**DLV-900**");
-    expect(readFileSync(join(f.root, `${PM}/Delivery/4 - Checklist.md`), "utf8")).toContain("**DLV-899**");
-    expect(readFileSync(join(f.root, `${PM}/Delivery/Delivery — Master Book.md`), "utf8")).toMatch(/✅.*DLV-900/);
-    const merged = git(f.root, "rev-parse", "HEAD"); await f.lane.ship(f.id); expect(git(f.root, "rev-parse", "HEAD")).toBe(merged);
-    expect((await ownerCommand("undo"))?.json.phase).toBe("reverted");
-    expect(existsSync(join(f.root, "src/features/accounts/change.ts"))).toBe(false);
-    expect(readFileSync(join(f.root, `${PM}/Delivery/4 - Checklist.md`), "utf8")).toContain("**DLV-900**");
-    const reverted = git(f.root, "rev-parse", "HEAD"); await f.lane.undo(f.id); expect(git(f.root, "rev-parse", "HEAD")).toBe(reverted);
-  }, 60_000);
-  it("retries failed pushes without a duplicate merge or revert", async () => {
-    const f = await built(); accept(f.root, f.view.handover!);
-    git(f.root, "remote", "set-url", "origin", join(f.parent, "missing.git"));
-    await expect(f.lane.ship(f.id)).rejects.toThrow("git push");
-    expect((await f.lane.detail(f.id)).phase).toBe("push-pending"); const merge = git(f.root, "rev-parse", "HEAD");
-    git(f.root, "remote", "set-url", "origin", f.remote); await f.lane.ship(f.id); expect(git(f.root, "rev-parse", "HEAD")).toBe(merge);
-    git(f.root, "remote", "set-url", "origin", join(f.parent, "missing.git"));
-    await expect(f.lane.undo(f.id)).rejects.toThrow("git push"); const revert = git(f.root, "rev-parse", "HEAD");
-    expect((await f.lane.detail(f.id)).phase).toBe("revert-push-pending");
-    git(f.root, "remote", "set-url", "origin", f.remote); await f.lane.undo(f.id); expect(git(f.root, "rev-parse", "HEAD")).toBe(revert);
+  it("refuses legacy Ship and Undo even for an approved candidate", async () => {
+    const f = await built(true);
+    accept(f.root, f.view.handover!);
+    await f.lane.review(f.id);
+    await expect(f.lane.ship()).rejects.toThrow("retired");
+    await expect(f.lane.undo()).rejects.toThrow("retired");
+    expect(git(f.root, "rev-parse", "HEAD")).toBe(f.view.base);
+    expect(git(f.remote, "rev-parse", "main")).toBe(f.view.base);
   }, 60_000);
   it("allows an unflagged candidate without opening review and refuses retracted UAT", async () => {
-    const f = await built(); accept(f.root, f.view.handover!); expect((await f.lane.detail(f.id)).canShip).toBe(true);
+    const f = await built(); accept(f.root, f.view.handover!); expect((await f.lane.detail(f.id)).canMerge).toBe(true);
     const h = f.view.handover!;
     expect(retractSignOff({ root: f.root, handover_id: h.handover_id, revision: h.revision, actor: "fixture-owner", command_id: randomUUID(), now: new Date().toISOString() }).ok).toBe(true);
-    expect((await f.lane.detail(f.id)).canShip).toBe(false);
+    expect((await f.lane.detail(f.id)).canMerge).toBe(false);
   }, 60_000);
   it("invalidates UAT and review on a changed branch head", async () => {
     const f = await built(true); accept(f.root, f.view.handover!); await f.lane.review(f.id);
     vi.stubEnv("GIT_INDEX_FILE", ".git/index");
     put(f.view.workspace, "later.txt", "later"); git(f.view.workspace, "add", "."); git(f.view.workspace, "commit", "-m", "later");
-    expect((await f.lane.detail(f.id)).canShip).toBe(false); await expect(f.lane.ship(f.id)).rejects.toThrow();
+    expect((await f.lane.detail(f.id)).canMerge).toBe(false); await expect(f.lane.merge(f.id)).rejects.toThrow();
   }, 60_000);
   it("refuses relay/Steward Ship and invalid action payloads at the command boundary", async () => {
     const ctx = { local: { ship: () => { throw new Error("must not execute"); } } };
@@ -760,143 +876,186 @@ describe("DLV-161 Ship, Undo and command recovery / R121 interrupted attempts", 
       return { status: "finished", observations: { nativeOutcome: "succeeded" } };
     } });
     await f.lane.review(f.id);
-    await expect(f.lane.ship(f.id)).rejects.toThrow("candidate-edits-pm-row");
+    await expect(f.lane.merge(f.id)).rejects.toThrow("candidate-edits-pm-row");
     expect(git(f.root, "rev-parse", "HEAD")).toBe(f.view.base);
     expect(git(f.root, "status", "--porcelain")).toBe("");
     expect(git(f.root, "rev-parse", "--git-path", "MERGE_HEAD")).toBe(".git/MERGE_HEAD");
     expect(existsSync(join(f.root, ".git/MERGE_HEAD"))).toBe(false);
     expect((await f.lane.detail(f.id)).phase).toBe("uat-ready");
   }, 60_000);
-  it("aborts a rejected ship commit and lets the second click ship exactly once", async () => {
+  it("keeps the merged files and retries only the reviewed Commit after a hook failure", async () => {
     const f = await ready();
+    const merged = await f.lane.merge(f.id);
+    const base = git(f.root, "rev-parse", "HEAD");
     rejectHook(f.root);
-    await expect(f.lane.ship(f.id)).rejects.toThrow("fixture hook rejected");
-    const failed = await f.lane.detail(f.id);
-    expect(failed).toMatchObject({ phase: "uat-ready", canShip: true, ship_error: expect.stringContaining("fixture hook rejected") });
-    expect(git(f.root, "rev-parse", "HEAD")).toBe(f.view.base);
-    expect(git(f.root, "status", "--porcelain", "--untracked-files=all")).toBe("");
-    expect(existsSync(join(f.root, ".git/MERGE_HEAD"))).toBe(false);
-    expect(readFileSync(join(f.root, `${PM}/Delivery/4 - Checklist.md`), "utf8")).toContain("[ ] **DLV-900**");
-    expect(readFileSync(join(f.root, `${PM}/Delivery/Delivery — Master Book.md`), "utf8")).not.toContain("✅");
+    await expect(f.lane.commit(f.id, merged.publication!.token)).rejects.toThrow("fixture hook rejected");
+    expect(git(f.root, "rev-parse", "HEAD")).toBe(base);
     rmSync(join(f.root, ".git/hooks/pre-commit"));
-    expect((await f.lane.ship(f.id)).phase).toBe("shipped");
-    expect(git(f.root, "rev-list", "--count", "--merges", "HEAD")).toBe("1");
+    const restarted = createLocalLane({root:f.root, store:f.store});
+    const retry = await restarted.detail(f.id);
+    const view = await restarted.commit(f.id, retry.publication!.token);
+    expect(view.phase).toBe("committed");
+    expect(git(f.root,"rev-parse","HEAD^")).toBe(base);
+    expect(view.publication_log.map((row: {exit:number}) => row.exit)).toEqual([0,1,0,0]);
   }, 60_000);
-  it.each([true, false])("recovers an interrupted merging record (MERGE_HEAD %s) through Ship", async present => {
-    const f = await ready();
-    if (present) git(f.root, "merge", "--no-ff", "--no-commit", f.view.head!);
-    setPhase(f, "merging");
-    const restarted = createLocalLane({ root: f.root, store: f.store });
-    expect(await restarted.detail(f.id)).toMatchObject({ phase: "merging", canShip: true });
-    expect((await restarted.ship(f.id)).phase).toBe("shipped");
-    expect(git(f.root, "status", "--porcelain")).toBe("");
-    expect(git(f.root, "rev-list", "--count", "--merges", "HEAD")).toBe("1");
-    expect((await restarted.detail(f.id)).activity.some((row: { summary: string }) => row.summary === "Recovered Ship; main restored")).toBe(true);
-  }, 60_000);
-  it("refuses interrupted recovery when main advanced, preserving owner changes", async () => {
-    const f = await ready();
-    setPhase(f, "merging");
-    put(f.root, "owner.txt", "owner work\n"); git(f.root, "add", "."); git(f.root, "commit", "-m", "owner change");
-    const head = git(f.root, "rev-parse", "HEAD");
-    await expect(f.lane.ship(f.id)).rejects.toThrow("ship-interrupted; inspect main");
-    expect(git(f.root, "rev-parse", "HEAD")).toBe(head);
-    expect(readFileSync(join(f.root, "owner.txt"), "utf8")).toBe("owner work\n");
-    expect(await f.lane.detail(f.id)).toMatchObject({ phase: "merging", ship_error: "merge-abort-failed" });
-  }, 60_000);
-  it.each(["staged", "unstaged", "untracked"])("preserves %s owner work beside a matching interrupted merge", async state => {
-    const f = await ready();
-    git(f.root, "merge", "--no-ff", "--no-commit", f.view.head!);
-    setPhase(f, "merging");
-    const file = state === "untracked" ? "owner.txt" : "CLAUDE.md";
-    put(f.root, file, "owner work\n");
-    if (state === "staged") git(f.root, "add", file);
-    const status = git(f.root, "status", "--porcelain");
-    await expect(f.lane.ship(f.id)).rejects.toThrow("ship-interrupted; inspect main");
-    expect(readFileSync(join(f.root, file), "utf8")).toBe("owner work\n");
-    expect(git(f.root, "status", "--porcelain")).toBe(status);
-    expect(existsSync(join(f.root, ".git/MERGE_HEAD"))).toBe(true);
-    expect(await f.lane.detail(f.id)).toMatchObject({ ship_error: "merge-abort-failed", ship_error_detail: "foreign-merge-changes" });
-  }, 60_000);
-  it("retains merging and the abort error if cleanup itself fails", async () => {
-    let abortsFail = false;
-    const run: typeof runProcess = (command, args, options) => {
-      if (abortsFail && command === "git" && args[1] === "merge" && args.includes("--abort"))
-        return Promise.resolve({ status: 1, stdout: "", stderr: "fixture abort unavailable", error: null, signal: null });
-      return runProcess(command, args, options);
+  it("publishes exactly the run and its PM receipt to internal and preserves the owner's index", async () => {
+    const f = await ready({ session: async ({ request }) => {
+      const workspace = request.workspace.root;
+      rmSync(join(workspace, "greeting.txt"));
+      put(workspace, "new[1].txt", "introduced\n");
+      put(workspace, ".delivery-handover.json", JSON.stringify({ summary: "Replace greeting", scenarios: [{ id:"greeting", title:"Greeting", required:true, steps:[{action:"Read",expected:"introduced"}] }] }));
+      return {status:"finished",observations:{nativeOutcome:"succeeded"}};
+    }});
+    const internal = join(f.parent, "internal.git");
+    const post = async (lane: typeof f.lane, body: Record<string, unknown>) => {
+      const result = await routeLocal({method:"POST",path:"/api/delivery/v2/local",body,loopbackPeer:true},
+        {kind:"browser",actor:"fixture-owner"},{local:lane});
+      expect(result?.status, JSON.stringify(result?.json)).toBe(200);
+      return result!.json;
     };
-    const f = await ready({ run });
-    rejectHook(f.root); abortsFail = true;
-    await expect(f.lane.ship(f.id)).rejects.toThrow("fixture hook rejected");
-    expect(await f.lane.detail(f.id)).toMatchObject({ phase: "merging", canShip: true, ship_error: "merge-abort-failed", ship_error_detail: expect.stringContaining("fixture abort unavailable") });
-    expect(existsSync(join(f.root, ".git/MERGE_HEAD"))).toBe(true);
-    abortsFail = false; rmSync(join(f.root, ".git/hooks/pre-commit"));
-    expect((await f.lane.ship(f.id)).phase).toBe("shipped");
-  }, 60_000);
-  it("preserves an extra staged owner edit to a supervisor-owned PM file", async () => {
-    let main = "";
-    const book = `${PM}/Delivery/Delivery — Master Book.md`;
-    const run: typeof runProcess = (command, args, options) => {
-      if (command === "git" && options?.cwd === main && args[1] === "commit") {
-        put(main, book, readFileSync(join(main, book), "utf8") + "\nOwner note\n");
-        git(main, "add", "--", book);
-        return Promise.resolve({ status: 1, stdout: "", stderr: "fixture hook rejected with owner edit", error: null, signal: null });
-      }
-      return runProcess(command, args, options);
-    };
-    const f = await ready({ run }); main = f.root;
-    await expect(f.lane.ship(f.id)).rejects.toThrow("fixture hook rejected");
-    expect(await f.lane.detail(f.id)).toMatchObject({ phase: "merging", ship_error: "merge-abort-failed", ship_error_detail: "foreign-merge-changes" });
-    expect(git(f.root, "show", `:${book}`)).toContain("Owner note");
-    const status = git(f.root, "status", "--porcelain");
-    await expect(f.lane.ship(f.id)).rejects.toThrow("ship-interrupted; inspect main");
-    expect(git(f.root, "status", "--porcelain")).toBe(status);
-    expect(readFileSync(join(f.root, book), "utf8")).toContain("Owner note");
-  }, 60_000);
-  it("aborts a rejected revert and lets Undo retry without a duplicate commit", async () => {
+    git(f.parent,"init","--bare",internal); git(f.root,"remote","add","internal",internal);
+    const parallelChecklist = PM+"/Budget/4 - Checklist.md";
+    put(f.root,PM+"/_index.md","# Delivery\n<!-- pm:generated:start -->\n<!-- pm:generated:end -->\n");
+    put(f.root,parallelChecklist,"# Budget\n## Now\n- [ ] **BUD-1** Committed label _(friction - S)_\n");
+    git(f.root,"add","--",PM+"/_index.md",parallelChecklist);
+    git(f.root,"commit","-m","Existing PM index");
+    git(f.root,"push","internal","main");
+    const old = git(f.remote,"rev-parse","main");
+    const internalBase = git(internal,"rev-parse","main");
+    put(f.root,parallelChecklist,"# Budget\n## Now\n- [ ] **BUD-1** Private editor draft _(friction - S)_\n");
+    put(f.root, "owner.txt", "already staged\n"); git(f.root, "add", "owner.txt");
+    put(f.root, "owner.txt", "further edit\n");
+    const merged = await f.lane.merge(f.id), commitPlan = merged.publication!;
+    expect(commitPlan.files).toEqual(expect.arrayContaining(["greeting.txt","new[1].txt"]));
+    expect(commitPlan.files).not.toContain("owner.txt");
+    expect(commitPlan.files).not.toContain(parallelChecklist);
+    expect(readFileSync(join(f.root,PM,"_index.md"),"utf8")).toContain("Committed label");
+    expect(readFileSync(join(f.root,PM,"_index.md"),"utf8")).not.toContain("Private editor draft");
+    const committed = await post(f.lane, {action:"commit",run_id:f.id,preview_id:commitPlan.token});
+    expect(committed.phase).toBe("committed");
+    expect(committed.publication!.reason).toContain("Setup");
+    expect(git(f.root,"show","-s","--format=%s","HEAD")).toBe("DLV-900 Change the greeting");
+    expect(git(f.root,"diff","--cached","--name-only")).toBe("owner.txt");
+    expect(git(f.root,"show",":owner.txt")).toBe("already staged");
+    expect(git(f.root,"diff","--name-only","HEAD^","HEAD").split("\n")).not.toContain("owner.txt");
+    expect(git(f.root,"show","HEAD:new[1].txt")).toBe("introduced");
+    expect(git(f.remote,"rev-parse","main")).toBe(old);
+    const destination = await f.lane.inspectPushDestination();
+    await expect(f.lane.configurePush("stale-destination")).rejects.toThrow("Push URL changed");
+    expect(await post(f.lane,{action:"configure-push",expected_url:destination})).toMatchObject({setting:{remote:"internal",branch:"main"}});
+    const restarted = createLocalLane({root:f.root,store:f.store});
+    // Simulate a restart after Git committed but before the receipt was stored.
+    const interrupted = JSON.parse(f.store.getRun(f.id).base_manifest_json);
+    delete interrupted.committed;
+    f.store.updateRun(f.id,{base_manifest_json:{...interrupted,phase:"merged"}});
+    const reconciliation = (await restarted.detail(f.id)).publication!;
+    expect(reconciliation.recover).toBe(true);
+    expect((await restarted.commit(f.id,reconciliation.token)).committed.sha).toBe(committed.committed.sha);
+    put(f.root,"parallel.txt","another owner commit\n");
+    git(f.root,"add","--","parallel.txt"); git(f.root,"commit","--only","-m","Parallel work","--","parallel.txt");
+    const reviewedHead = git(f.root,"rev-parse","HEAD");
+    expect(git(f.root,"diff","--cached","--name-only")).toBe("owner.txt");
+    const pushPlan = (await restarted.detail(f.id)).publication!;
+    expect(pushPlan.commands[0]).toContain("--force-with-lease=refs/heads/main:"+internalBase);
+    expect(pushPlan.outgoing).toHaveLength(2);
+    await expect(restarted.push(f.id,"outdated")).rejects.toThrow("preview changed");
+    const pushed = await post(restarted, {action:"push",run_id:f.id,preview_id:pushPlan.token});
+    expect(pushed.pushed).toMatchObject({remote:"internal",branch:"main",sha:reviewedHead});
+    expect(git(internal,"rev-parse","main")).toBe(reviewedHead);
+    expect(git(f.remote,"rev-parse","main")).toBe(old);
+    expect(pushed.publication_log.map((r: {argv:string[]})=>r.argv)).toEqual([...commitPlan.commands,...pushPlan.commands]);
+    await restarted.push(f.id,pushPlan.token);
+    expect(git(f.root,"diff","--cached","--name-only")).toBe("owner.txt");
+  }, 80_000);
+
+  it("refuses dirty shared PM files, later run-file edits and repointed destinations", async () => {
     const f = await ready();
-    const shipped = await f.lane.ship(f.id), head = git(f.root, "rev-parse", "HEAD");
-    rejectHook(f.root, "prepare-commit-msg");
-    await expect(f.lane.undo(f.id)).rejects.toThrow("fixture hook rejected");
-    expect(await f.lane.detail(f.id)).toMatchObject({ phase: "shipped", canUndo: true, undo_error: expect.stringContaining("fixture hook rejected") });
-    expect(git(f.root, "status", "--porcelain", "--untracked-files=all")).toBe("");
-    expect(git(f.root, "rev-parse", "HEAD")).toBe(head);
-    expect(existsSync(join(f.root, ".git/REVERT_HEAD"))).toBe(false);
-    rmSync(join(f.root, ".git/hooks/prepare-commit-msg"));
-    expect((await f.lane.undo(f.id)).phase).toBe("reverted");
-    expect(git(f.root, "rev-parse", "HEAD^")).toBe(shipped.merge);
-    expect(git(f.root, "show", "HEAD:greeting.txt")).toBe("before");
+    const checklist = PM+"/Delivery/4 - Checklist.md";
+    const original = readFileSync(join(f.root,checklist),"utf8");
+    put(f.root,checklist,original+"\nOwner's unrelated note\n");
+    await expect(f.lane.merge(f.id)).rejects.toThrow("Changed in your checkout");
+    expect(readFileSync(join(f.root,"greeting.txt"),"utf8").trim()).toBe("before");
+    put(f.root,checklist,original);
+    const merged = await f.lane.merge(f.id);
+    put(f.root,"greeting.txt","owner edits after Merge\n");
+    await expect(f.lane.commit(f.id,merged.publication!.token)).rejects.toThrow("Changed since Merge");
+    expect(git(f.root,"diff","--cached","--name-only")).toBe("");
+    git(f.root,"remote","add","internal",f.remote);
+    await expect(f.lane.configurePush()).rejects.toThrow("points to origin");
+    expect(f.lane.pushSettings()).toBe(null);
   }, 60_000);
-  it("preserves unknown files beside a failed markerless revert", async () => {
-    const f = await ready();
-    await f.lane.ship(f.id);
-    put(f.root, ".git/hooks/prepare-commit-msg", "#!/bin/sh\necho 'owner file' > owner.txt\nexit 1\n");
-    if (process.platform !== "win32") chmodSync(join(f.root, ".git/hooks/prepare-commit-msg"), 0o755);
-    await expect(f.lane.undo(f.id)).rejects.toThrow("git revert");
-    expect(await f.lane.detail(f.id)).toMatchObject({ phase: "shipped", undo_error: "revert-abort-failed" });
-    expect(readFileSync(join(f.root, "owner.txt"), "utf8")).toContain("owner file");
-    expect(git(f.root, "diff", "--cached", "--name-only")).toContain("greeting.txt");
+
+  it("verifies an owner's manual push with a remote read and keeps the original candidate receipt", async () => {
+    const f = await ready(), internal = join(f.parent,"internal.git");
+    git(f.parent,"init","--bare",internal); git(f.root,"remote","add","internal",internal);
+    git(f.root,"push","internal","main"); await f.lane.configurePush();
+    const merged = await f.lane.merge(f.id), committed = await f.lane.commit(f.id,merged.publication!.token);
+    git(f.root,"push","internal","main");
+    const plan = (await f.lane.detail(f.id)).publication!;
+    const check = ["git","ls-remote","--refs","internal","refs/heads/main"];
+    expect(plan).toMatchObject({recover:true,outgoing:[],commands:[check]});
+    // A stale local tracking ref alone cannot establish Pushed.
+    git(internal,"update-ref","refs/heads/main",f.view.base);
+    await expect(f.lane.push(f.id,plan.token)).rejects.toThrow("Remote confirmation failed");
+    expect((await f.lane.detail(f.id)).phase).toBe("committed");
+    git(f.root,"push","internal","main");
+    const confirmed = await f.lane.push(f.id,plan.token);
+    expect(confirmed.pushed).toMatchObject({sha:committed.committed.sha,evidence:"verified-external"});
+    expect(confirmed.publication_log.at(-1).argv).toEqual(check);
+    expect(confirmed.publication_log.some((r: {argv:string[]}) => r.argv[1] === "push")).toBe(false);
+    expect(git(f.remote,"rev-parse","main")).toBe(f.view.base);
   }, 60_000);
-  it("preserves staged owner work beside a matching interrupted revert", async () => {
-    const f = await ready();
-    const shipped = await f.lane.ship(f.id), head = git(f.root, "rev-parse", "HEAD");
-    git(f.root, "revert", "--no-commit", "-m", "1", shipped.merge!);
-    put(f.root, ".git/REVERT_HEAD", `${shipped.merge}\n`);
-    const row = f.store.getRun(f.id);
-    f.store.updateRun(f.id, { base_manifest_json: { ...JSON.parse(row.base_manifest_json), undo_base: head } });
-    put(f.root, "CLAUDE.md", "owner staged work\n"); git(f.root, "add", "CLAUDE.md");
-    const status = git(f.root, "status", "--porcelain");
-    await expect(f.lane.undo(f.id)).rejects.toThrow("undo-interrupted; inspect main");
-    expect(git(f.root, "show", ":CLAUDE.md")).toBe("owner staged work");
-    expect(git(f.root, "status", "--porcelain")).toBe(status);
-    expect(existsSync(join(f.root, ".git/REVERT_HEAD"))).toBe(true);
-    expect(await f.lane.detail(f.id)).toMatchObject({ undo_error: "revert-abort-failed", undo_error_detail: "foreign-revert-changes" });
+
+  it("lists ignored additions and file-to-directory collisions without touching the owner's bytes", async () => {
+    const f = await ready({session: async ({request}) => {
+      const workspace = request.workspace.root;
+      rmSync(join(workspace,"greeting.txt"));
+      put(workspace,"new.txt","candidate content\n");
+      put(workspace,".delivery-handover.json",JSON.stringify({summary:"Greeting",scenarios:[{id:"greeting",title:"Greeting",required:true,steps:[{action:"Read",expected:"after"}]}]}));
+      return {status:"finished",observations:{nativeOutcome:"succeeded"}};
+    }});
+    expect((await f.lane.detail(f.id)).canMerge).toBe(true);
+    put(f.root,".git/info/exclude","new.txt\ngreeting.txt/\n");
+    put(f.root,"new.txt","ignored owner file\n");
+    rmSync(join(f.root,"greeting.txt")); put(f.root,"greeting.txt/owner.txt","ignored owner child\n");
+    const view = await f.lane.detail(f.id);
+    expect(view.mergePlan?.conflicts).toEqual([
+      {path:"greeting.txt",committed:false,uncommitted:true},
+      {path:"new.txt",committed:false,uncommitted:true},
+    ]);
+    expect(view.canMerge).toBe(false); expect(view.mergePlan?.canRefresh).toBe(false);
+    await expect(f.lane.merge(f.id)).rejects.toThrow("changed-in-your-repo");
+    expect(readFileSync(join(f.root,"new.txt"),"utf8")).toBe("ignored owner file\n");
+    expect(readFileSync(join(f.root,"greeting.txt/owner.txt"),"utf8")).toBe("ignored owner child\n");
   }, 60_000);
+
+  it("refuses remote movement under the reviewed lease and retains the committed receipt", async () => {
+    const f = await ready(), internal = join(f.parent,"internal.git");
+    git(f.parent,"init","--bare",internal); git(f.root,"remote","add","internal",internal);
+    git(f.root,"push","internal","main"); await f.lane.configurePush();
+    const merged = await f.lane.merge(f.id), committed = await f.lane.commit(f.id,merged.publication!.token);
+    const pushPlan = committed.publication!;
+    git(f.root,"remote","set-url","internal",f.remote);
+    await expect(f.lane.push(f.id,pushPlan.token)).rejects.toThrow("origin");
+    git(f.root,"remote","set-url","internal",internal);
+    const elsewhere = join(f.parent,"elsewhere");
+    git(f.parent,"clone","-b","main",internal,elsewhere);
+    git(elsewhere,"config","user.name","Owner"); git(elsewhere,"config","user.email","another@example.invalid");
+    put(elsewhere,"elsewhere.txt","parallel work\n");
+    git(elsewhere,"add","."); git(elsewhere,"commit","-m","Parallel work"); git(elsewhere,"push","origin","main");
+    await expect(f.lane.push(f.id,pushPlan.token)).rejects.toThrow();
+    const blocked = await f.lane.detail(f.id);
+    expect(blocked.phase).toBe("committed"); expect(blocked.pushed).toBeUndefined();
+    expect(blocked.publication_log.at(-1)).toMatchObject({argv:pushPlan.commands[0],exit:1});
+    expect(git(internal,"rev-parse","main")).toBe(git(elsewhere,"rev-parse","HEAD"));
+    expect(git(f.remote,"rev-parse","main")).toBe(f.view.base);
+  }, 80_000);
   it("reclaims only a provably dead command owner and records the recovery", async () => {
     const f = await ready();
     const dead = Number(execFileSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { encoding: "utf8", windowsHide: true }));
     expect(() => process.kill(dead, 0)).toThrow();
     put(f.root, ".delivery/local-command.lock/owner.json", JSON.stringify({ pid: dead, action: "ship", run_id: f.id, at: "2026-11-16T00:00:00Z" }));
-    expect((await f.lane.ship(f.id)).phase).toBe("shipped");
+    expect((await f.lane.merge(f.id)).phase).toBe("merged");
     expect((await f.lane.detail(f.id)).activity.filter((row: { summary: string }) => row.summary === "Recovered stale lock")).toHaveLength(1);
     expect(existsSync(join(f.root, ".delivery/local-command.lock"))).toBe(false);
   }, 60_000);
@@ -904,7 +1063,7 @@ describe("DLV-161 Ship, Undo and command recovery / R121 interrupted attempts", 
     const f = await ready(), lock = ".delivery/local-command.lock";
     mkdirSync(join(f.root, lock), { recursive: true });
     if (owner !== "missing") put(f.root, `${lock}/owner.json`, owner === "invalid" ? "{" : JSON.stringify({ pid: process.pid, action: "ship", run_id: f.id, at: new Date().toISOString() }));
-    await expect(f.lane.ship(f.id)).rejects.toThrow(owner === "live" ? `local-command-busy; ship ${f.id}` : "local-command-busy; unknown action unknown run");
+    await expect(f.lane.merge(f.id)).rejects.toThrow(owner === "live" ? `local-command-busy; ship ${f.id}` : "local-command-busy; unknown action unknown run");
     expect(git(f.root, "rev-parse", "HEAD")).toBe(f.view.base);
     expect(existsSync(join(f.root, lock))).toBe(true);
   }, 60_000);
@@ -929,8 +1088,8 @@ describe("DLV-161 Ship, Undo and command recovery / R121 interrupted attempts", 
     const nextView = await f.lane.detail(next.run_id!);
     expect(nextView.workspace).not.toBe(f.view.workspace);
     expect(nextView.branch).not.toBe(f.view.branch);
-    expect(existsSync(f.view.workspace)).toBe(true);
-    expect(git(f.root, "rev-parse", f.view.branch)).toBe(f.view.head);
+    expect(existsSync(f.view.workspace)).toBe(false);
+    expect(JSON.parse(readFileSync(join(f.root, ".delivery/local-archive", f.id, "archive.json"), "utf8")).head).toBe(f.view.head);
     expect((await restarted.detail(f.id)).activity.filter((row: { summary: string }) => row.summary === "Owner cancelled interrupted attempt")).toHaveLength(1);
   }, 60_000);
   it("does not close a live sibling supervisor's native session", async () => {
@@ -1015,8 +1174,8 @@ describe("DLV-166 Run app from Test steps", () => {
     const f = await previewing();
     await f.lane.preview(f.id);
     accept(f.root, f.view.handover!);
-    const shipped = await f.lane.ship(f.id);
-    expect(shipped.phase).toBe("shipped");
+    const shipped = await f.lane.merge(f.id);
+    expect(shipped.phase).toBe("merged");
     expect(shipped.preview?.state).toBe("stopped");
     expect(f.kill).toHaveBeenCalledWith(7001);
   }, 60_000);
@@ -1029,7 +1188,6 @@ describe("DLV-167 Merge into the main checkout", () => {
     // Parallel owner work on other files: committed (ALPHA → BETA) and uncommitted.
     put(f.root, "other.txt", "owner\n"); git(f.root, "add", "other.txt"); git(f.root, "commit", "-m", "owner work");
     put(f.root, "scratch.txt", "wip\n");
-    writeFileSync(book(f.root), readFileSync(book(f.root), "utf8").replace("- **Acceptance:** changed greeting\n", "- **Acceptance:** changed greeting\n- **UAT:** pending\n"));
     accept(f.root, f.view.handover!);
     const before = await f.lane.detail(f.id);
     expect(before.mergePlan).toMatchObject({ files: [{ status: "M", path: "greeting.txt" }], conflicts: [], branch: "main", expected: "main" });
@@ -1042,7 +1200,7 @@ describe("DLV-167 Merge into the main checkout", () => {
     expect(readFileSync(join(f.root, "scratch.txt"), "utf8")).toBe("wip\n");
     expect(git(f.root, "rev-parse", "HEAD")).toBe(head);
     expect(git(f.remote, "rev-parse", "main")).toBe(remoteMain);
-    expect(view).toMatchObject({ phase: "shipped", canUndo: false, canMerge: false, applied: { files: ["greeting.txt"], main_head: head, pm_error: null } });
+    expect(view).toMatchObject({ phase: "merged", canUndo: false, canMerge: false, applied: { files: ["greeting.txt"], main_head: head, pm_error: null } });
     const checklist = readFileSync(join(f.root, PM, "Delivery/4 - Checklist.md"), "utf8");
     expect(checklist).not.toMatch(/- \[ \] \*\*DLV-900\*\*/u);
     expect(checklist).toContain("DLV-899");
@@ -1052,7 +1210,7 @@ describe("DLV-167 Merge into the main checkout", () => {
     expect(pm).toMatch(/\*\*UAT:\*\* passed \d{4}-\d{2}-\d{2} \(owner sign-off, Test steps /u);
     expect(pm).not.toContain("**UAT:** pending");
     expect(view.activity.map((row: { summary: string | null }) => row.summary)).toContain("Owner merged 1 file into the main checkout");
-    await expect(f.lane.undo(f.id)).rejects.toThrow("merged-by-file-copy");
+    await expect(f.lane.undo()).rejects.toThrow("retired");
   }, 60_000);
 
   it("refuses and lists the file when the repo changed it since the clone, committed or not", async () => {

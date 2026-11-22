@@ -122,7 +122,7 @@ export function openQuestion(run: {
 }
 
 export type ChatEntry =
-  | { kind: "agent"; key: string; at: string; text: string }
+  | { kind: "agent"; key: string; at: string; text: string; excerpt?: boolean }
   | { kind: "owner"; key: string; at: string; message: LocalOwnerMessage }
   | { kind: "question"; key: string; at: string; question: LocalQuestion }
   | {
@@ -136,6 +136,8 @@ export type ChatEntry =
 interface ChatActivity {
   at: string;
   summary: string | null;
+  message_text?: string;
+  message_excerpt?: boolean;
   kind?: string;
   seq?: number;
   agent_json?: { role?: string } | string | null;
@@ -164,7 +166,8 @@ export function chatThread(
       kind: "agent",
       key: `m:${entry.seq ?? index}:${entry.at}`,
       at: entry.at,
-      text: entry.summary,
+      text: entry.message_text || entry.summary,
+      ...(entry.message_excerpt ? { excerpt: true } : {}),
     });
   });
   for (const question of run.questions ?? []) {
