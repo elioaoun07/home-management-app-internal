@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, symlinkSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const maxWorktrees = 2;
+const generatedDirectories = ["node_modules", ".next"];
 const localId = /^local-[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/u;
 const terminal = new Set(["failed", "cancelled", "reverted", "pushed", "discarded"]);
 export const individualDiscard = new Set(["uat-ready", "refresh-conflict", "refresh-failed", "merged", "committed", "push-pending", "revert-push-pending"]);
@@ -11,6 +12,11 @@ const digest = value => createHash("sha256").update(value).digest("hex");
 const same = (left, right) => relative(left, right) === "";
 const statIfPresent = path => lstatSync(path, { throwIfNoEntry: false });
 const absentOkay = async fn => { try { return await fn(); } catch (error) { if (error.code !== "ENOENT") throw error; } };
+
+async function removeGenerated(workspace, names) {
+  for (const name of names)
+    await rm(join(workspace, name), { recursive: true, force: true, maxRetries: 6, retryDelay: 250 });
+}
 
 // Check every existing ancestor. Never recurse through a replacement junction in
 // a runtime, archive or checkout path, even if that path came from our own DB.
@@ -146,7 +152,7 @@ export function createLocalStorage({ root, run, env, getRecord, rows, activity, 
     }
     if (!pathExists && !entry && !head && !existsSync(privatePath(id)) && !receipt) throw new Error("run-has-no-owned-storage");
     if (!entry && head && receipt?.head !== head) throw new Error("unarchived-branch");
-    let patch = "", staged = "", extras = [];
+    let patch = "", staged = "", extras = [], generated = [];
     if (entry) {
       // Keep incomplete attempts, including binary and untracked candidate files.
       // Reject an unrelated replacement repository or diverged branch.
@@ -154,8 +160,8 @@ export function createLocalStorage({ root, run, env, getRecord, rows, activity, 
       if (!same(common, admin) || (await git(workspace, ["symbolic-ref", "HEAD"])).trim() !== ref) throw new Error("worktree-identity-changed");
       await git(workspace, ["merge-base", "--is-ancestor", d.base, head]);
       const envFile = /(^|[/\\])\.env(?:\.|$)/iu;
-      const tracked = await git(workspace, ["ls-files", "-z"]);
-      if (tracked.split("\0").some(name => envFile.test(name))) throw new Error("candidate-contains-env-file");
+      const tracked = (await git(workspace, ["ls-files", "-z"])).split("\0").filter(Boolean);
+      if (tracked.some(name => envFile.test(name))) throw new Error("candidate-contains-env-file");
       patch = await git(workspace, ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", d.base, "--"]);
       staged = await git(workspace, ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", d.base, "--"]);
       for (const name of (await git(workspace, ["ls-files", "--others", "--exclude-standard", "-z"])).split("\0").filter(Boolean)) {
@@ -164,6 +170,11 @@ export function createLocalStorage({ root, run, env, getRecord, rows, activity, 
         if (!lstatSync(path).isFile()) throw new Error("unarchivable-file: " + name);
         extras.push({ name, hash: digest(await readFile(path)) });
       }
+      // Git for Windows can leave a legacy pnpm tree behind after deleting its
+      // worktree registration. Let Node remove generated files and links first.
+      const sourcePaths = [...tracked, ...extras.map(file => file.name)];
+      generated = generatedDirectories.filter(name =>
+        !sourcePaths.some(path => path.toLowerCase() === name || path.toLowerCase().startsWith(name + "/")));
     }
     const commands = [];
     if (entry) commands.push(removeTree);
@@ -173,7 +184,7 @@ export function createLocalStorage({ root, run, env, getRecord, rows, activity, 
       recovering ? [remainder, interrupted, remainingDirectory.dev, remainingDirectory.ino] : null]));
     const preview = { run_id: id, phase: d.phase, title: d.work.title, workspace, branch: d.branch, expectedHead: head || null, branchInput, commands, witness,
       remainder: recovering ? remainder : null };
-    return { preview, head, patch, staged, extras, receipt, archive, entry, interrupted };
+    return { preview, head, patch, staged, extras, receipt, archive, entry, interrupted, generated, workspaceStat };
   }
   async function preview(id, individual = true) {
     const d = getRecord(id);
@@ -183,6 +194,13 @@ export function createLocalStorage({ root, run, env, getRecord, rows, activity, 
     const d = getRecord(id);
     if (busy(id) || d.parked || d.cleaned_at) return null;
     return (await snapshot(id, { ...d, phase: "pushed" })).preview;
+  }
+  async function archiveRemainder(id, d, plan) {
+    assertWorktree(id, d);
+    const remainder = checked(plan.archive, "remaining-worktree");
+    if (plan.interrupted) await rename(d.workspace, remainder);
+    // Preserve surviving source and unrecognized files alongside the patch.
+    await removeGenerated(checked(plan.archive, "remaining-worktree"), generatedDirectories);
   }
   async function clean(id, witness, individual = true) {
     const d = getRecord(id);
@@ -209,21 +227,28 @@ export function createLocalStorage({ root, run, env, getRecord, rows, activity, 
       await writeFile(archivedPath("archive.json"), JSON.stringify({ id, base: d.base, head, extras, checks: d.checks, error: d.error, handover_id: d.handover_id }));
     }
     if (entry) {
-      if ((await snapshot(id, d)).preview.witness !== witness) throw new Error("cleanup-preview-changed");
-      const link = join(d.workspace, "node_modules");
-      if (statIfPresent(link)?.isSymbolicLink()) await unlink(link);
-      const next = checked(d.workspace, ".next"), dev = join(next, "dev");
-      if (statIfPresent(dev)?.isSymbolicLink()) await unlink(dev);
+      const current = await snapshot(id, d);
+      if (current.preview.witness !== witness) throw new Error("cleanup-preview-changed");
+      await removeGenerated(d.workspace, current.generated);
     }
     if (plan.preview.remainder) {
       if ((await snapshot(id, d)).preview.witness !== witness) throw new Error("cleanup-preview-changed");
-      if (plan.interrupted) await rename(d.workspace, plan.preview.remainder);
-      // Keep surviving source and unrecognized files. These two ignored
-      // directories are generated by dependency installation and Run app.
-      for (const name of ["node_modules", ".next"])
-        await rm(join(plan.preview.remainder, name), { recursive: true, force: true, maxRetries: 3 });
+      await archiveRemainder(id, d, plan);
     }
-    for (const cmd of plan.preview.commands) await git(parent, cmd.slice(2), id, cmd.at(-1) === "--stdin" ? plan.preview.branchInput : undefined);
+    for (const cmd of plan.preview.commands) {
+      try {
+        await git(parent, cmd.slice(2), id, cmd.at(-1) === "--stdin" ? plan.preview.branchInput : undefined);
+      } catch (error) {
+        if (!entry || cmd.at(-4) !== "worktree") throw error;
+        const retry = await snapshot(id, d).catch(() => null);
+        // Only finish automatically if Git detached the same directory and
+        // branch we just archived. Otherwise a fresh preview is required.
+        if (!retry?.interrupted || retry.head !== head ||
+            retry.workspaceStat.dev !== plan.workspaceStat.dev || retry.workspaceStat.ino !== plan.workspaceStat.ino)
+          throw error;
+        await archiveRemainder(id, d, retry);
+      }
+    }
     await removeHome(id);
     for (const name of ["dependencies", "merge-inputs", "hooks"])
       await rm(privatePath(id, name), { recursive: true, force: true, maxRetries: 3 });

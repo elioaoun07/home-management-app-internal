@@ -42,9 +42,21 @@ function longDependencyPath(workspace: string) {
 }
 
 describe("delivery disk and retention", { timeout: 60_000 }, () => {
-  it.skipIf(process.platform !== "win32")("cleans Windows paths longer than 260 characters", async () => {
-    const f = fixture();
+  it.skipIf(process.platform !== "win32")("clears long pnpm paths and nested junctions before Git removes the worktree", async () => {
+    const f = fixture((bin, args, options) => {
+      if (args.includes("worktree") && args.includes("remove")) {
+        expect(existsSync(join(f.workspace, "node_modules"))).toBe(false);
+        expect(existsSync(join(f.workspace, ".next"))).toBe(false);
+      }
+      return runProcess(bin, args, options);
+    });
     const file = longDependencyPath(f.workspace);
+    const target = join(f.root, "owner-packages");
+    mkdirSync(target);
+    writeFileSync(join(target, "keep"), "owner");
+    symlinkSync(target, join(f.workspace, "node_modules", ".pnpm", "linked"), "junction");
+    mkdirSync(join(f.workspace, ".next", "dev"), { recursive: true });
+    writeFileSync(join(f.workspace, ".next", "dev", "cache"), "cache");
     expect(existsSync(file)).toBe(true);
     const preview = (await f.storage.preview(f.id))!;
     expect(preview.commands[0]).toContain("core.longpaths=true");
@@ -52,6 +64,30 @@ describe("delivery disk and retention", { timeout: 60_000 }, () => {
     expect(result.cleaned_at).toBeTruthy();
     expect(existsSync(f.workspace)).toBe(false);
     expect(f.git("branch", "--list", f.data.branch)).toBe("");
+    expect(readFileSync(join(target, "keep"), "utf8")).toBe("owner");
+  });
+
+  it.skipIf(process.platform !== "win32")("finishes the confirmed cleanup if Git detaches the same directory and leaves files behind", async () => {
+    const f = fixture((bin, args, options) => {
+      if (args.includes("worktree") && args.includes("remove")) {
+        longDependencyPath(f.workspace);
+        mkdirSync(join(f.workspace, "remaining"));
+        writeFileSync(join(f.workspace, "remaining", "notes.txt"), "survived");
+        return runProcess(bin, args.map(arg => arg === "core.longpaths=true" ? "core.longpaths=false" : arg), options);
+      }
+      return runProcess(bin, args, options);
+    });
+    writeFileSync(join(f.workspace, "tracked.txt"), "archived\n");
+    const preview = (await f.storage.preview(f.id))!;
+    const result = await f.storage.clean(f.id, preview.witness);
+    expect(existsSync(f.workspace)).toBe(false);
+    const archived = join(f.root, result.cleanup_archive);
+    expect(readFileSync(join(archived, "diff.patch"), "utf8")).toContain("+archived");
+    expect(existsSync(join(archived, "remaining-worktree", "node_modules"))).toBe(false);
+    expect(f.git("branch", "--list", f.data.branch)).toBe("");
+    const [removeExit, branchExit] = f.activity.map(line => JSON.parse(line).exit);
+    expect(removeExit).toBeGreaterThan(0);
+    expect(branchExit).toBe(0);
   });
 
   it("recovers a worktree Git unregistered partway through cleanup", async () => {

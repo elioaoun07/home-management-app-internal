@@ -152,9 +152,12 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
   }
   function cleanup(selections) {
     return locked("cleanup", null, async () => {
-      const results = [];
-      for (const { run_id, witness } of selections) results.push(await releaseStorage(run_id, witness, false));
-      return { cleaned: results };
+      const cleaned = [], failed = [];
+      for (const { run_id, witness } of selections) {
+        try { cleaned.push(await releaseStorage(run_id, witness, false)); }
+        catch (error) { failed.push({ run_id, reason: error.message }); }
+      }
+      return { cleaned, failed };
     });
   }
 

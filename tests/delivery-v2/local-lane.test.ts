@@ -105,6 +105,21 @@ function accept(root: string, handover: { handover_id: string; revision: number 
   expect(signOff({ ...args, command_id: randomUUID() }).ok).toBe(true);
 }
 
+it("continues bulk cleanup after a selection fails its preview check", async () => {
+  const f = await built();
+  const record = JSON.parse(f.store.getRun(f.id).base_manifest_json);
+  f.store.updateRun(f.id, { base_manifest_json: { ...record, phase: "failed" } });
+  const preview = (await f.lane.storage()).runs.find(run => run.run_id === f.id)!;
+  const missing = "local-" + randomUUID();
+  const result = await f.lane.cleanup([
+    { run_id: missing, witness: preview.witness },
+    { run_id: f.id, witness: preview.witness },
+  ]);
+  expect(result.failed).toEqual([{ run_id: missing, reason: "unknown-local-run" }]);
+  expect(result.cleaned).toMatchObject([{ run_id: f.id }]);
+  expect(existsSync(record.workspace)).toBe(false);
+}, 60_000);
+
 it("records Local narration beside supervisor events and deduplicates repeated native ordinals", async () => {
   const text = "The recorded message. ".repeat(30);
   const f = await fixture(false, false, false, "claude", { session: async ({ onActivity }) => {

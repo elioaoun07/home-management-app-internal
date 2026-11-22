@@ -14,7 +14,7 @@
 
 The push in step 4 publishes every outgoing commit shown. Setup's bulk cleanup only acts on the selected eligible runs. The fixture tests use disposable repositories for both actions.
 
-If an earlier Windows cleanup hit **Filename too long**, restart the local PM server and reopen **Clean up closed runs**. Expand **Files and commands**. A retry with a matching archive shows where Delivery will keep the remaining source files. Confirm cleanup to release the worktree folder and its generated dependencies and preview cache.
+If an earlier Windows cleanup hit **Filename too long** or **Directory not empty**, restart the local PM server and reopen **Clean up closed runs**. Expand **Files and commands**. A retry with a matching archive shows where Delivery will keep the remaining source files. Confirm cleanup to release the worktree folder and its generated dependencies and preview cache. If an individual run fails, check the results for its name and retry it after reviewing a fresh preview.
 
 ## Local workflow defaults — DLV-169
 
