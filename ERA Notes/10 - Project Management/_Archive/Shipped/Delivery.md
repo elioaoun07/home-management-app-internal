@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-21
+updated: 2026-11-22
 type: archive
 status: superseded
 owner: Elio
@@ -525,6 +525,14 @@ owner: Elio
 ### DLV-165
 
 - ✅ 2026-11-21 — **DLV-165** Park Local sessions on questions, chat with the agent both ways, and let Codex ask — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-165>) (Replay-only: delivery-v2 + pm-ui + delivery suites 219 files / 3,571 tests passed (8 skipped); typecheck and changed-file ESLint clean; 390 px render of chat + composer checked. UAT pending: one owner-started Local run per executor (Claude interrupt/resume, Codex MCP + resume are fake-verified only).)
+
+### DLV-166
+
+- ✅ 2026-11-22 — **DLV-166** Run a Local candidate from its Test steps page — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-166>) (local-preview.test.ts + DLV-166 lane block pass; tests/delivery-v2 1322 passed/8 skipped; tests/pm-ui + lane 1157 passed; typecheck, scoped eslint, pm:build-app clean; real smoke on BUD-95 worktree: Ready 4 s on 3100, /api/health 200, /login 200 without Supabase env error, Stop freed port, no .env in worktree. Owner UAT pending (restart pnpm pm).)
+
+### DLV-167
+
+- ✅ 2026-11-22 — **DLV-167** Merge a tested Local candidate's files into the main checkout — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-167>) (DLV-167 lane block, route case, board/delivery UI tests pass; tests/delivery-v2 + tests/pm-ui 2384 passed / 8 skipped; typecheck, scoped eslint, pm:build-app clean. Owner UAT pending (restart pnpm pm, Merge BUD-95).)
 
 ## State log
 

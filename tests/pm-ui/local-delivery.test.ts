@@ -26,12 +26,14 @@ describe("Local delivery controls", () => {
     renderToStaticMarkup(
       createElement(LocalActions, { run, busy, act: () => {} }),
     );
-  it("keeps Ship disabled until the supervisor confirms current-head checks, review and UAT", () => {
-    expect(actions()).toMatch(/disabled="">Ship/);
-    expect(actions({ ...base, canShip: true })).not.toMatch(/disabled="">Ship/);
-    expect(actions({ ...base, canShip: true }, true)).toMatch(
-      /disabled="">Ship/,
+  // DLV-167: Merge replaces Ship, whose push targets `origin` rather than the owner's remote.
+  it("keeps Merge disabled until the supervisor confirms current-head checks, review, UAT and no repo conflicts", () => {
+    expect(actions()).toMatch(/disabled="">Merge/);
+    expect(actions({ ...base, canMerge: true } as typeof base)).not.toMatch(/disabled="">Merge/);
+    expect(actions({ ...base, canMerge: true } as typeof base, true)).toMatch(
+      /disabled="">Merge/,
     );
+    expect(actions({ ...base, canShip: true })).not.toContain(">Ship<");
   });
   it("offers Undo after a shipped merge and Retry push for a retained merge", () => {
     expect(actions()).not.toContain(">Undo<");

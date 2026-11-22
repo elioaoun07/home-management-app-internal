@@ -1,5 +1,26 @@
 # Delivery — owner UAT
 
+## Merge into your repo — DLV-167
+
+**Activation:** restart `pnpm pm` yourself. **Actual:** Pending for every case.
+
+1. **M1 / merge.** Open the BUD-95 run (`#/delivery/run/local-38c4d389-54ea-4446-a0db-ab3b9d3795c1`). If the run asks for it, press **Review diff**. Then press **Merge**. Expect "Merged 4 files · commit and push in your repo". In VS Code, Source Control lists `route.ts`, `route.test.ts`, `Performance Optimizations.md`, the Budget Master Book and the PM files from shipping BUD-95. No `.delivery-handover.json` appears. Your own pending changes are untouched, and nothing was committed or pushed. Then commit, and run `git push --force internal main`.
+2. **M2 / conflict alert.** On a later ready run, edit one of its files in your repo, saved or committed. Open the run: a red box lists that file and Merge is grey. Undo your edit: Merge comes back.
+3. **M3 / no Ship.** No run shows **Ship**. Retry push appears only on an old run stuck in push-pending.
+
+**Automated:** the `DLV-167` block in `tests/delivery-v2/local-lane.test.ts` (copies only the session's files with parallel owner work present, UAT line recorded, PM item shipped, HEAD and remote untouched, Undo refused; committed and uncommitted conflicts refused; sign-off and `main` required), the route dispatch in `local-preview.test.ts`, and the button tests in `tests/pm-ui/local-board-actions.test.ts` and `local-delivery.test.ts`.
+
+## Run app from Test steps — DLV-166
+
+**Activation:** restart `pnpm pm` yourself. The backend loads the new commands only at start. **Actual:** Pending for every case.
+
+1. **M1 / run.** Open a Local run that is ready for test, then **Test steps**. Press **Run app**: expect **Starting…**, then a `localhost:<port>` link and **Stop**. The port is 3000 if your own dev server is off, else 3100 or higher. Open the link: the app loads signed in, with no Supabase URL/Key error. **Reset:** Stop.
+2. **M2 / candidate code.** With BUD-95 as the run, open DevTools → Network → `/api/transactions`. Expect `Cache-Control: private, no-store`, which only the candidate sends. **Reset:** Stop.
+3. **M3 / one at a time and Stop.** Press Run app twice: only one server starts. Start another run's app: the first stops. Press Stop: the link goes away and the port is free. The worktree has no `.env` file, and Merge stays enabled when everything else allows it. **Reset:** none.
+4. **M4 / failure.** Rename your main `.env` for a moment and press Run app: expect a refusal naming the missing `.env` and no server. Restore it. **Reset:** rename back.
+
+**Automated:** `tests/delivery-v2/local-preview.test.ts` (env precedence, no `process.env` change, port choice, spawn arguments/cwd/env, ready detection, reuse, one at a time, failure tail, route) and the `DLV-166` block in `tests/delivery-v2/local-lane.test.ts` (real worktree: cwd, env, no file written, `assertNoLocalSecrets` passes, refusals, Ship stops it). Agent smoke on 2026-11-22 against the real BUD-95 worktree: Ready in 4 s on 3100, `/api/health` 200, `/login` 200 without the Supabase env error, port freed by Stop, no `.env` in the worktree. **Not verified:** the button in a browser (needs the restart) and 390 px layout.
+
 ## Walk motion and failure — R139
 
 In **Game → Explore 3D**, walk and turn while looking at a ceiling edge, the station lettering and the outline of ERA. Stop in the same aisle and compare. The healthy collector keeps rotating while you watch, even at a held replay cursor. **Low motion** holds it still.

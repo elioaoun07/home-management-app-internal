@@ -152,6 +152,33 @@
   margin: 0;
   min-width: 0;
 }
+/* DLV-166: Run app on a Local handover. */
+.uat-preview {
+  margin: 0 0 14px;
+}
+.uat-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.uat-preview-row a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.uat-preview-log {
+  max-height: 240px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
 .uat-build {
   display: flex;
   align-items: flex-end;

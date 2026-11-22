@@ -25,7 +25,7 @@ A blank Notes cell means "measured, not audited".
 | Plan My Day | `src/features/day-plan` 155 lines; `src/components/planner/WebDayPlanner.tsx` 2,155 | 0 | day-plans: 2 / 2 / 0 / 0 | |
 | Meal Planning | `src/features/meal-planning` 164 lines | 1 coverage test | meal-plans: 3 / 3 / 3 / 0 | |
 | Prerequisites | `src/lib/prerequisites` | 1 route test | (under items) | `item_prerequisites` has RLS disabled in the committed snapshot |
-| Activity Log | `src/features/activity-log` 233 lines | 2 + 1 route test | activity-log: 1 / 0 / 0 / 0 | Sets `private, no-store` and `Vary: Cookie`; the model for [BUD-95](<../../Budget/Budget — Master Book.md#bud-95>) |
+| Activity Log | `src/features/activity-log` 233 lines | 2 + 1 route test | activity-log: 1 / 0 / 0 / 0 | Sets `private, no-store` and `Vary: Cookie`; the model for [BUD-95](<../../_Archive/Shipped/Budget.md#bud-95>) |
 | Voice | `src/features/voice-conversation` 1,991 lines | 1 | azure-speech, tts: 2 / 2 / 1 / 0 | Not examined |
 | PM live (phone relay) | `src/features/pm-live` 2,099 lines | 0 in `src`; relay tests under `tests/` | pm: 1 / 1 / 0 / 1 | Part of the tool, shipped inside the product bundle |
 

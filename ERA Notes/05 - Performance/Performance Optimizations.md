@@ -90,7 +90,7 @@ return <Dashboard transactions={transactions} /> // renders instantly from cache
 - `src/app/providers.tsx` — `STABLE_KEYS` list for localStorage persistence
 - `src/app/dashboard/DashboardClientPage.tsx` — client-side dashboard with caching
 - `src/features/transactions/useDashboardTransactions.ts` — optimal cache config
-- `src/app/api/transactions/route.ts` — GET with date range, household links, `s-maxage=60`
+- `src/app/api/transactions/route.ts` — GET with date range, household links, client-side TanStack caching (response is `private, no-store`; no shared-cache reuse)
 - `src/features/dashboard/prefetchDashboard.ts` — prefetch utility
 - `src/lib/hooks/usePerformance.ts` — deferred computation utilities
 

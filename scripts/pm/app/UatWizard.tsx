@@ -13,6 +13,7 @@ import { v2Post } from "./api";
 import { Back, Empty, ErrorNotice } from "./components";
 import { PairV2, useV2Session } from "./BrowserSession";
 import { client, message, pmKeys, useWorld } from "./state";
+import { LocalPreview, localRunOf } from "./LocalPreview";
 import { useClock } from "./StewardRequests";
 import { PendingCommand as PendingError, PmError, transport } from "./transport";
 import type { UatHandover, UatScenario, UatSummary } from "./types";
@@ -241,6 +242,7 @@ export function Wizard({ handover, refreshError, offline }: { handover: UatHando
   const recordable = handover.status === "ready" && !handover.signoff;
   const outdated = handover.staleDraft || staleLocalDraft(localStorage, handover);
   const done = progress(handover);
+  const localRun = localRunOf(handover.subject.delivery_ref);
 
   // The position and the typed note survive a reload, per revision.
   useEffect(() => {
@@ -334,6 +336,8 @@ export function Wizard({ handover, refreshError, offline }: { handover: UatHando
           ))}
         </ul>
       )}
+
+      {usable && localRun && !handover.signoff && <LocalPreview runId={localRun} />}
 
       {usable && (
         <details className="uat-setup" open={done.done === 0}>

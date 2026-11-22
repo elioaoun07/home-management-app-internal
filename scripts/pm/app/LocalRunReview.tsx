@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, FileText, GitBranch, ListChecks } from "lucide-react";
 import { Markdown, RunOrb } from "./components";
-import { LocalActions, type LocalRunView } from "./LocalDelivery";
+import { LocalActions, type LocalAction, type LocalRunView } from "./LocalDelivery";
 import { useGameLayer } from "./GameLayer";
 import { LocalRunGame } from "./LocalRunGame";
 import { LocalChat } from "./LocalChat";
@@ -26,7 +26,7 @@ export function LocalRunReview({
 }: {
   run: LocalRunView;
   busy: boolean;
-  act: (action: "review" | "ship" | "undo" | "cancel") => void;
+  act: (action: LocalAction) => void;
   patch: string | null;
   poll?: { dataUpdatedAt: number; isError: boolean };
   retry?: () => void;

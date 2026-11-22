@@ -70,6 +70,10 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 ## Pain Inventory
 
+🔴 **Local Ship pushes to `origin`, not the remote the owner uses (2026-11-22).** `createLocalLane` defaults `remote = "origin"` (`local-lane.mjs:45`) and `service.mjs` never overrides it; Ship then runs `git push origin HEAD:refs/heads/main`. In this checkout `internal` (home-management-app-internal) is current with `main`, while `origin` (home-management-app, its own Vercel project) was last pushed 2026-05-30 and is 201 commits behind. One Ship would publish those 201 commits (1,348 `src/` files, migrations since August) to the stale repository and leave `internal` without the merge. `main` has no upstream configured. Fix: push to the upstream of `main` and refuse when none is set. Found in source; no Ship was pressed.
+
+🟠 **Local Ship does not match how the owner ships (2026-11-22).** The owner's real flow is three steps: ask an AI to fix file A; `git add` and commit A; `git push --force internal main`. Work on `main` keeps going while a session runs. Local Ship assumes the opposite. It merges, commits and pushes by itself, to `origin` (see the 🔴 above). It refuses once `main` has moved past the run's base (`main-advanced`): BUD-95's base `24b981c3` was passed by a one-line `BrainRoom.tsx` commit 17 minutes after the build, so a passed UAT needed a full rebuild. It also merges the run's `.delivery-handover.json` into `main`. The owner, mid-UAT, could not tell how a tested worktree change reaches the repo folder and then GitHub. **Phase 0:** [DLV-167](<#dlv-167>). A run starts from `main` at ALPHA; parallel owner work moves `main` to BETA. **Merge** copies the session's files into the main checkout only if none of them changed between ALPHA and BETA, committed or not. Otherwise it shows a red alert and refuses. The owner then commits and pushes as usual. A neater end-to-end flow comes later.
+
 🔴 **DLV-159 — A Local candidate with changes cannot be committed (2026-11-15).** `local-lane.mjs:37` limits every Git command to 30 s; the build commit, ship commit and revert run the repository hook, whose test stage alone took 300.91 s on run `local-cac958d7`. The runner returns `ETIMEDOUT` with `status: null`, so the lane throws even when the hook passes. Seven real attempts, none reached host checks. [Evidence and fix](<../Plans/Agentic OS Delivery Reliability.md#dlv-159--supervisor-git-steps-outlive-the-hook>). Fixture resolution reverified 2026-11-15; owner W1 and real hook timing remain pending.
 
 🟠 **DLV-160 — Failed Local runs hide the stored reason (2026-11-15).** Runs 2–3 showed "native session did not confirm success" while `observations.error` held the sandbox refusal; runs 4–6 showed "candidate needs a change" while the worker's final text said the workspace was read-only. Fixture resolution verified 2026-11-15; owner W1 remains pending.
@@ -266,6 +270,36 @@ No live provider run.
 - Codex gets messages only between turns, not mid-turn.
 - Still desktop-only.
 **UAT:** pending. [Owner scenarios](<../../../docs/Delivery-UAT.md#local-questions-and-chat--dlv-164--dlv-165>).
+
+### DLV-167
+
+**Outcome:** After testing a Local candidate, one **Merge** button copies the session's files into the owner's main checkout. It refuses with a red alert when any of those files changed there since the session started. The owner then commits and pushes as usual (`git push --force internal main`).
+**Kind:** feature
+**Source:** owner, 2026-11-22, after a successful BUD-95 UAT: "add a Button to merge: it will check if files 1,2,3 changed from branch Alpha to Beta; if yes, stop and throw an alert; if not, replace files 1,2,3 in BETA from files 1,2,3 in the cloned Repo", with commit and push staying manual as phase 0. Pain: "Local Ship does not match how the owner ships" above.
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-routes.mjs`, `scripts/pm/app/LocalDelivery.tsx`, `scripts/pm/app/localBoardActions.ts`, `scripts/pm/app/LocalRunGame.tsx`, `scripts/pm/app/LocalRunReview.tsx`, `scripts/pm/app/LocalRunConsole.tsx`, `tests/delivery-v2/`, `tests/pm-ui/`
+
+- **Acceptance (check):** the session's files are `git diff --name-status <base> <head>`, without `.delivery-handover.json`. A file conflicts when `git diff <base> HEAD` in the main checkout touches it (committed) or `git status` shows it (uncommitted). The run detail reports `mergePlan {files, conflicts, branch}`. `canMerge` needs the same gates as Ship (current clean head, passed checks, owner sign-off on that head, diff review when risky), plus `main` checked out, at least one file and no conflict. The main checkout may move on other files.
+- **Acceptance (merge):** `POST /api/delivery/v2/local {action:"merge"}` re-checks everything under the command lock. It confirms the PM row exists (dry run), then copies added and modified files from the clean worktree and deletes deleted ones. It records the owner's sign-off on the item's `**UAT:** pending` line and runs `pm/ship.mjs#ship` for the item. It makes no Git command that writes. The run closes as `shipped` with `applied {at, files, main_head}`, Undo stays off, and any preview stops.
+- **Acceptance (UI):** a `uat-ready` run shows **Merge** in place of **Ship**; Retry push stays for existing push-pending runs. Conflicts show a red alert listing the files. After a merge, the run reads "Merged N files" with the next step: commit and push in your repo.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done (2026-11-22). Replay coverage: the `DLV-167` block in `tests/delivery-v2/local-lane.test.ts`, the route case in `local-preview.test.ts`, `tests/pm-ui/local-board-actions.test.ts`, `local-delivery.test.ts`. Delivery and PM UI suites: 2384 passed, 8 Docker-only skipped. BUD-95 check by hand: none of its four files changed in the main checkout since base `24b981c3`, committed or not, and the owner's sign-off is recorded (`uat-06bc4a08494c`, 11:14:59Z).
+**Limits:** A file-copy merge has no Undo; revert in your repo. Git history does not record `delivery/<ID>` as merged. Ship stays in the API for push-pending retries only, until the 🔴 remote defect is fixed. A risky diff still needs Review diff before Merge.
+**UAT:** pending. [Owner scenarios](<../../../docs/Delivery-UAT.md#merge-into-your-repo--dlv-167>).
+
+### DLV-166
+
+**Outcome:** The owner can run a Local candidate from its Test steps page with one button, without a terminal and without copying `.env` into the worktree.
+**Kind:** feature
+**Source:** owner, 2026-11-22, during BUD-95 UAT: the worktree has no `.env` (by design), so `pnpm dev` there failed with "Your project's URL and Key are required"; "i need to have a button that runs this command for me … it should be dynamic based on where the repo was cloned".
+**Touches:** `scripts/delivery-v2/local-preview.mjs`, `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-routes.mjs`, `scripts/pm/app/LocalPreview.tsx`, `scripts/pm/app/UatWizard.tsx`, `scripts/pm/app/LocalDelivery.tsx`, `tests/delivery-v2/`
+
+- **Acceptance:** `POST /api/delivery/v2/local {action:"preview"}` starts `pnpm dev --port <port>` with the run's recorded `workspace` as its working directory. It passes the main checkout's `.env` values (`<root>/.env`) only through the child's environment and writes no file into the worktree. Paths come from the run record and the server's root, never constants.
+- **Acceptance:** Preview is refused unless the run is `uat-ready`, its worktree is clean at the recorded head and `<root>/.env` exists. A second start for the same run returns the existing preview. Starting another run's preview stops the first, so only one runs at a time. The port is 3000 when free, else the first free port from 3100.
+- **Acceptance:** `{action:"stop-preview"}`, Ship and PM server exit stop the process tree. (Cancel needs no hook: it applies only before `uat-ready`.) The run detail reports `preview` as `{state: starting|ready|stopped|failed, url, port, exit, tail}`. The Test steps page of a Local handover shows **Run app**, then the `localhost:<port>` link and **Stop**, and the output tail when it fails.
+- **Tier:** `CLAUDE_MID`.
+**Implementation:** done (2026-11-22). Env comes from `dotenv.parse` over Next's dev file order (`.env.development.local`, `.env.local`, `.env.development`, `.env`); `NODE_ENV`, `PORT` and `npm_*` are dropped from the inherited environment. Replay coverage: `tests/delivery-v2/local-preview.test.ts` and the `DLV-166` block in `tests/delivery-v2/local-lane.test.ts`. Agent smoke against the real BUD-95 worktree: Ready in 4 s on port 3100, `/api/health` 200, `/login` 200 with no Supabase env error, Stop freed the port, worktree still clean with no `.env`.
+**Limits:** Desktop only, like the rest of Local. If the PM server stops without a normal exit (Ctrl+C included), the dev server may keep running, and the restarted server no longer knows about it. The next Run app then takes the next free port. On port 3100+, sign-in relies on the `localhost` cookie from your usual port 3000 session; cookies are not port-scoped.
+**UAT:** pending. Needs an owner restart of `pnpm pm`. [Owner scenarios](<../../../docs/Delivery-UAT.md#run-app-from-test-steps--dlv-166>).
 
 ### DLV-158
 
@@ -1938,6 +1972,8 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-11-15 — **DLV-160** Name the real cause of every failed Local run → [record](<../_Archive/Shipped/Delivery.md#dlv-160>)
 - ✅ 2026-11-21 — **DLV-164** Let a Local Claude session ask the owner, with recommended answers, in chat → [record](<../_Archive/Shipped/Delivery.md#dlv-164>)
 - ✅ 2026-11-21 — **DLV-165** Park Local sessions on questions, chat with the agent both ways, and let Codex ask → [record](<../_Archive/Shipped/Delivery.md#dlv-165>)
+- ✅ 2026-11-22 — **DLV-166** Run a Local candidate from its Test steps page → [record](<../_Archive/Shipped/Delivery.md#dlv-166>)
+- ✅ 2026-11-22 — **DLV-167** Merge a tested Local candidate's files into the main checkout → [record](<../_Archive/Shipped/Delivery.md#dlv-167>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

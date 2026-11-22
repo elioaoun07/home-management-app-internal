@@ -9,7 +9,7 @@ evidence_cutoff: "commit 8da80ae, 2026-11-10. Source read only. The deployed res
 
 # Transactions — the authenticated read is marked publicly cacheable
 
-[Fable 2 index](<../../_index.md>) · item: [BUD-95](<../../../Budget/Budget — Master Book.md#bud-95>) · [Module matrix](<../_Module Evidence Matrix.md>)
+[Fable 2 index](<../../_index.md>) · item: [BUD-95](<../../../_Archive/Shipped/Budget.md#bud-95>) · [Module matrix](<../_Module Evidence Matrix.md>)
 
 ## Finding
 

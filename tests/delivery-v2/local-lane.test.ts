@@ -19,6 +19,9 @@ import { listStewardRequests } from "../../scripts/delivery-v2/steward-requests.
 import { buildSessionOptions } from "../../scripts/delivery-v2/adapters/claude.mjs";
 import { routeDeliveryV2 } from "../../scripts/delivery-v2/entry.mjs";
 import { runProcess } from "../../scripts/delivery-v2/process.mjs";
+import { createPreviews } from "../../scripts/delivery-v2/local-preview.mjs";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import type { LocalRunView } from "../../scripts/pm/app/LocalDelivery";
 
 const roots: string[] = [];
@@ -959,5 +962,125 @@ describe("DLV-161 Ship, Undo and command recovery / R121 interrupted attempts", 
     const f = await ready(), restarted = createLocalLane({ root: f.root, store: f.store });
     await expect(restarted.cancel(f.id)).rejects.toThrow("session-not-running-in-this-process");
     expect((await restarted.detail(f.id)).phase).toBe("uat-ready");
+  }, 60_000);
+});
+
+describe("DLV-166 Run app from Test steps", () => {
+  async function previewing(red = false) {
+    const f = await built(false, red);
+    // The real checkout ignores .env; the fixture does it without a tracked edit.
+    put(f.root, ".git/info/exclude", ".env\n");
+    put(f.root, ".env", "NEXT_PUBLIC_SUPABASE_URL=https://fixture.invalid\nNEXT_PUBLIC_SUPABASE_ANON_KEY=anon\n");
+    const calls: { args: string[]; options: { cwd: string; env: Record<string, string> } }[] = [];
+    const kill = vi.fn();
+    const previews = createPreviews({ root: f.root, choose: async () => 3100, command: () => ["node", "pnpm.cjs"], kill,
+      spawn: ((_bin: string, args: string[], options: { cwd: string; env: Record<string, string> }) => {
+        calls.push({ args, options });
+        return Object.assign(new EventEmitter(), { pid: 7000 + calls.length, stdout: new PassThrough(), stderr: new PassThrough() });
+      }) as never });
+    return { ...f, lane: createLocalLane({ root: f.root, store: f.store, previews }), calls, kill };
+  }
+
+  it("serves the candidate from its own worktree with the checkout's env and writes no file there", async () => {
+    const f = await previewing();
+    const view = await f.lane.preview(f.id);
+    expect(view.preview).toMatchObject({ state: "starting", url: "http://localhost:3100", port: 3100 });
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0].args).toEqual(["pnpm.cjs", "dev", "--port", "3100"]);
+    expect(f.calls[0].options.cwd).toBe(f.view.workspace);
+    expect(f.calls[0].options.env).toMatchObject({ NEXT_PUBLIC_SUPABASE_URL: "https://fixture.invalid", NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon" });
+    expect(existsSync(join(f.view.workspace, ".env"))).toBe(false);
+    expect(() => assertNoLocalSecrets(f.view.workspace)).not.toThrow();
+    expect(view.clean).toBe(true);
+    await f.lane.preview(f.id);
+    expect(f.calls).toHaveLength(1);
+    const stopped = await f.lane.stopPreview(f.id);
+    expect(stopped.preview?.state).toBe("stopped");
+    expect(f.kill).toHaveBeenCalledWith(7001);
+    const rows = stopped.activity.map((row: { summary: string | null }) => row.summary);
+    expect(rows.filter((summary: string | null) => summary === "Owner started the app")).toHaveLength(1);
+    expect(rows).toContain("Owner stopped the app");
+  }, 60_000);
+
+  it("refuses a failed run and a changed candidate", async () => {
+    const failed = await previewing(true);
+    await expect(failed.lane.preview(failed.id)).rejects.toThrow("preview-needs-a-candidate-ready-for-test");
+    const dirty = await previewing();
+    put(dirty.view.workspace, "stray.txt", "x\n");
+    await expect(dirty.lane.preview(dirty.id)).rejects.toThrow("candidate-changed");
+    expect([...failed.calls, ...dirty.calls]).toHaveLength(0);
+  }, 60_000);
+
+  it("stops the app when the candidate ships", async () => {
+    const f = await previewing();
+    await f.lane.preview(f.id);
+    accept(f.root, f.view.handover!);
+    const shipped = await f.lane.ship(f.id);
+    expect(shipped.phase).toBe("shipped");
+    expect(shipped.preview?.state).toBe("stopped");
+    expect(f.kill).toHaveBeenCalledWith(7001);
+  }, 60_000);
+});
+
+describe("DLV-167 Merge into the main checkout", () => {
+  const book = (root: string) => join(root, PM, "Delivery/Delivery — Master Book.md");
+  it("copies only the session's files, records UAT, ships the PM item and writes nothing to Git", async () => {
+    const f = await built();
+    // Parallel owner work on other files: committed (ALPHA → BETA) and uncommitted.
+    put(f.root, "other.txt", "owner\n"); git(f.root, "add", "other.txt"); git(f.root, "commit", "-m", "owner work");
+    put(f.root, "scratch.txt", "wip\n");
+    writeFileSync(book(f.root), readFileSync(book(f.root), "utf8").replace("- **Acceptance:** changed greeting\n", "- **Acceptance:** changed greeting\n- **UAT:** pending\n"));
+    accept(f.root, f.view.handover!);
+    const before = await f.lane.detail(f.id);
+    expect(before.mergePlan).toMatchObject({ files: [{ status: "M", path: "greeting.txt" }], conflicts: [], branch: "main", expected: "main" });
+    expect(before.canMerge).toBe(true);
+    const head = git(f.root, "rev-parse", "HEAD"), remoteMain = git(f.remote, "rev-parse", "main");
+    const view = await f.lane.merge(f.id);
+    expect(readFileSync(join(f.root, "greeting.txt"), "utf8")).toBe("after\n");
+    expect(existsSync(join(f.root, ".delivery-handover.json"))).toBe(false);
+    expect(readFileSync(join(f.root, "other.txt"), "utf8")).toBe("owner\n");
+    expect(readFileSync(join(f.root, "scratch.txt"), "utf8")).toBe("wip\n");
+    expect(git(f.root, "rev-parse", "HEAD")).toBe(head);
+    expect(git(f.remote, "rev-parse", "main")).toBe(remoteMain);
+    expect(view).toMatchObject({ phase: "shipped", canUndo: false, canMerge: false, applied: { files: ["greeting.txt"], main_head: head, pm_error: null } });
+    const checklist = readFileSync(join(f.root, PM, "Delivery/4 - Checklist.md"), "utf8");
+    expect(checklist).not.toMatch(/- \[ \] \*\*DLV-900\*\*/u);
+    expect(checklist).toContain("DLV-899");
+    const archive = join(f.root, PM, "_Archive/Shipped/Delivery.md");
+    const pm = readFileSync(book(f.root), "utf8") + (existsSync(archive) ? readFileSync(archive, "utf8") : "");
+    expect(pm).toMatch(/DLV-900[\s\S]*merged from Local run/u);
+    expect(pm).toMatch(/\*\*UAT:\*\* passed \d{4}-\d{2}-\d{2} \(owner sign-off, Test steps /u);
+    expect(pm).not.toContain("**UAT:** pending");
+    expect(view.activity.map((row: { summary: string | null }) => row.summary)).toContain("Owner merged 1 file into the main checkout");
+    await expect(f.lane.undo(f.id)).rejects.toThrow("merged-by-file-copy");
+  }, 60_000);
+
+  it("refuses and lists the file when the repo changed it since the clone, committed or not", async () => {
+    const f = await built();
+    accept(f.root, f.view.handover!);
+    put(f.root, "greeting.txt", "owner edit\n");
+    let view = await f.lane.detail(f.id);
+    expect(view.canMerge).toBe(false);
+    expect(view.mergePlan?.conflicts).toEqual([{ path: "greeting.txt", committed: false, uncommitted: true }]);
+    await expect(f.lane.merge(f.id)).rejects.toThrow("changed-in-your-repo: greeting.txt");
+    git(f.root, "add", "greeting.txt"); git(f.root, "commit", "-m", "owner edit");
+    view = await f.lane.detail(f.id);
+    expect(view.mergePlan?.conflicts).toEqual([{ path: "greeting.txt", committed: true, uncommitted: false }]);
+    await expect(f.lane.merge(f.id)).rejects.toThrow("changed-in-your-repo");
+    expect(readFileSync(join(f.root, "greeting.txt"), "utf8")).toBe("owner edit\n");
+    expect(view.phase).toBe("uat-ready");
+  }, 60_000);
+
+  it("needs the owner's sign-off and the main branch", async () => {
+    const f = await built();
+    expect((await f.lane.detail(f.id)).canMerge).toBe(false);
+    await expect(f.lane.merge(f.id)).rejects.toThrow("merge-needs-passed-checks-sign-off-and-review");
+    accept(f.root, f.view.handover!);
+    git(f.root, "checkout", "-b", "side");
+    const view = await f.lane.detail(f.id);
+    expect(view.mergePlan?.branch).toBe("side");
+    expect(view.canMerge).toBe(false);
+    await expect(f.lane.merge(f.id)).rejects.toThrow("checkout-main-first");
+    expect(readFileSync(join(f.root, "greeting.txt"), "utf8")).toBe("before\n");
   }, 60_000);
 });

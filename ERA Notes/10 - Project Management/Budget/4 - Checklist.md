@@ -14,8 +14,6 @@ owner: Elio
 
 ## Now
 
-- [ ] **BUD-95** Send a private cache header on the transactions read — [criteria](<Budget — Master Book.md#bud-95>) _(friction - S)_
-
 ## Next
 
 **Needs you**

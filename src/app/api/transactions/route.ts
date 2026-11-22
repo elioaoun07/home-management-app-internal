@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+const readHeaders = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 
 export async function GET(req: NextRequest) {
   const supabase = await supabaseServer(await cookies());
@@ -13,7 +14,10 @@ export async function GET(req: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: readHeaders },
+    );
   }
 
   try {
@@ -29,16 +33,12 @@ export async function GET(req: NextRequest) {
       limit,
     });
 
-    return NextResponse.json(transactions, {
-      headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-      },
-    });
+    return NextResponse.json(transactions, { headers: readHeaders });
   } catch (error) {
     console.error("Failed to fetch transactions:", error);
     return NextResponse.json(
       { error: "Failed to fetch transactions" },
-      { status: 500 },
+      { status: 500, headers: readHeaders },
     );
   }
 }

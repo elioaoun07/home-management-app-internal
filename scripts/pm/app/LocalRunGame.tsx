@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Armchair, Footprints, Map, Maximize, RotateCw, X } from "lucide-react";
-import { LocalActions, type LocalRunView } from "./LocalDelivery";
+import { LocalActions, type LocalAction, type LocalRunView } from "./LocalDelivery";
 import { DeliveryWorkshop } from "./DeliveryWorkshop";
 import { LocalRunConsole, type Tool } from "./LocalRunConsole";
 import { buildTimeline, sceneAt } from "./localRunScene";
@@ -46,7 +46,7 @@ export function LocalRunGame({
 }: {
   run: LocalRunView;
   busy: boolean;
-  act: (action: "review" | "ship" | "undo" | "cancel") => void;
+  act: (action: LocalAction) => void;
   patch: string | null;
   poll?: LocalPollHealth;
   retry?: () => void;
@@ -182,7 +182,7 @@ export function LocalRunGame({
     return () => document.removeEventListener("keydown", close);
   }, []);
   const action = useCallback(
-    (value: "review" | "ship" | "undo" | "cancel") => {
+    (value: LocalAction) => {
       if (replay || !localBoardActionAllowed(run, busy, value)) return;
       if (value === "review") openTool("changes");
       act(value);

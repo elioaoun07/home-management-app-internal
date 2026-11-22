@@ -9,7 +9,9 @@ const answer = z.object({ action: z.literal("answer"), run_id: runId, question_i
   answers: z.record(z.string().max(2000), z.string().max(4000)).refine(value => Object.keys(value).length >= 1 && Object.keys(value).length <= 4) });
 // DLV-165: an owner message to a running or parked session.
 const message = z.object({ action: z.literal("message"), run_id: runId, text: z.string().min(1).max(4000) });
-const command = z.discriminatedUnion("action", [start, answer, message, z.object({ action: z.enum(["review", "ship", "undo", "cancel"]), run_id: runId })]);
+// DLV-166: preview / stop-preview run the candidate's dev server for owner UAT.
+// DLV-167: merge copies the tested files into the main checkout (no Git write).
+const command = z.discriminatedUnion("action", [start, answer, message, z.object({ action: z.enum(["review", "ship", "undo", "cancel", "preview", "stop-preview", "merge"]), run_id: runId })]);
 export async function routeLocal({ method, path, query = null, body, loopbackPeer }, auth, ctx) {
   if (!path.startsWith("/api/delivery/v2/local")) return null;
   // First Local lane is desktop-only, including reads of paths/diffs. Relay
@@ -41,7 +43,8 @@ export async function routeLocal({ method, path, query = null, body, loopbackPee
     } else value = input.action === "start" ? await ctx.local.start(input)
       : input.action === "answer" ? await ctx.local.answer(input.run_id, input.question_id, input.answers)
         : input.action === "message" ? await ctx.local.message(input.run_id, input.text)
-          : await ctx.local[input.action](input.run_id);
+          : input.action === "stop-preview" ? await ctx.local.stopPreview(input.run_id)
+            : await ctx.local[input.action](input.run_id);
     return { status: value?.ok === false ? 409 : 200, json: { ok: true, ...(typeof value === "string" ? { patch: value } : value) } };
   } catch (error) { return { status: 409, json: { ok: false, error: String(error.message) } }; }
 }

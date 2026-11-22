@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-21
+updated: 2026-11-22
 type: archive
 status: superseded
 owner: Elio
@@ -222,5 +222,22 @@ owner: Elio
 ### BUD-89
 
 - ✅ 2026-11-21 — **BUD-89** Restore the original transaction on Undo — [criteria](<../../Budget/Budget — Master Book.md#bud-89>) (Delete Undo now restores the original via POST /api/recycle-bin/restore (safeFetch, original id, one request on double tap) instead of POSTing a copy. deleteUndo.test.ts: real getBalanceDelta + in-memory server, 6 cases red on old hook, green now; typecheck clean; restore-route/balance/transactions suites pass. Worked example Wallet 100 -> 87.50 -> delete 100 -> Undo 87.50, bin empty. Owner UAT pending.)
+
+### BUD-95
+
+- ✅ 2026-11-22 — **BUD-95** Send a private cache header on the transactions read — [criteria](#bud-95) (merged from Local run local-38c4d389-54ea-4446-a0db-ab3b9d3795c1)
+
+**Outcome:** `GET /api/transactions` is never stored or replayed by a shared cache.
+
+**Kind:** bug
+**Touches:** `src/app/api/transactions/route.ts`
+
+- **Source:** [Fable 2 finding F2-13](<../../Fable 2/02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>) (2026-11-10). Filed 2026-11-10.
+- **Progress 2026-11-21:** route now sends `private, no-store` + `Vary: Cookie` on GET success/401/500; `route.test.ts` added (not yet run by the supervisor). Vault Performance doc line updated. Not shipped: owner to accept.
+- **Implementation:** done
+- **UAT:** passed 2026-11-22 (owner sign-off, Test steps uat-06bc4a08494c)
+- **Acceptance:** The response carries `Cache-Control: private, no-store` and `Vary: Cookie`; a route test asserts neither `public` nor `s-maxage` appears. `grep -rn "s-maxage" src/app/api` returns nothing.
+- **Tier:** CLAUDE_LOW; owner review (money read path). Routing: [Fable 2 model tiers](<../../Fable 2/Model Tiers/_Routing.md>).
+- **Reading guide:** Line 34 today sends `public, s-maxage=60, stale-while-revalidate=300`. Model: `src/app/api/activity-log/route.ts:11` and its test.
 
 ## State log

@@ -49,7 +49,7 @@ Unresolved policy choices live in the [decision register](<../_Decisions.md>); o
 
 🟠 **BUD-93** Stop deriving money dates from server UTC. Filed 2026-11-10 from [Major Bug Sweep T1](<../Research/Major Bug Sweep.md#t1>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-93>).
 
-🟠 **BUD-95** Send a private cache header on the transactions read. Filed 2026-11-10 from [Fable 2 finding F2-13](<../Fable 2/02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>) (2026-11-10). See [acceptance](<#bud-95>).
+🟠 **BUD-95** Send a private cache header on the transactions read. Filed 2026-11-10 from [Fable 2 finding F2-13](<../Fable 2/02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>) (2026-11-10). See [acceptance](<../_Archive/Shipped/Budget.md#bud-95>).
 
 🟡 **BUD-94** Validate money amounts before they reach a balance. Filed 2026-11-10 from [Major Bug Sweep M5](<../Research/Major Bug Sweep.md#m5>) (2026-11-04: evidence, fix, test and UAT). See [acceptance](<#bud-94>).
 
@@ -145,18 +145,6 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** With the clock mocked to `2026-11-04T23:30:00Z` and a client `localDate` of `2026-11-05`, each listed route stores `2026-11-05`. Routes require `date` or accept `localDate`.
 - **Tier:** CLAUDE_MID; owner review (money). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** `localDate` handling in `src/app/api/era/ask/route.ts:114-117`. Load `timezone-handling`.
-
-### BUD-95
-
-**Outcome:** `GET /api/transactions` is never stored or replayed by a shared cache.
-
-**Kind:** bug
-**Touches:** `src/app/api/transactions/route.ts`
-
-- **Source:** [Fable 2 finding F2-13](<../Fable 2/02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>) (2026-11-10). Filed 2026-11-10; not started.
-- **Acceptance:** The response carries `Cache-Control: private, no-store` and `Vary: Cookie`; a route test asserts neither `public` nor `s-maxage` appears. `grep -rn "s-maxage" src/app/api` returns nothing.
-- **Tier:** CLAUDE_LOW; owner review (money read path). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
-- **Reading guide:** Line 34 today sends `public, s-maxage=60, stale-while-revalidate=300`. Model: `src/app/api/activity-log/route.ts:11` and its test.
 
 ### BUD-94
 
@@ -2309,6 +2297,7 @@ All open items include [item execution plans](<../_Conventions.md#9-item-executi
 - ✅ 2026-11-03 — **BUD-87** Create transfers exactly once with optimistic, race-safe balances — [criteria](<Budget — Master Book.md#bud-87>)
 - ✅ 2026-11-03 — **BUD-88** Accept every written change type in balance history — [criteria](<Budget — Master Book.md#bud-88>)
 - ✅ 2026-11-21 — **BUD-89** Restore the original transaction on Undo → [record](<../_Archive/Shipped/Budget.md#bud-89>)
+- ✅ 2026-11-22 — **BUD-95** Send a private cache header on the transactions read → [record](<../_Archive/Shipped/Budget.md#bud-95>)
 
 ## Delivery session log
 

@@ -47,7 +47,7 @@ Whether these are still true is unknown from the repo. Existing R43 (Now, blocke
 
 ## 5. One authenticated money read is marked publicly cacheable
 
-`GET /api/transactions` returns `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`. Details: [Shared-Cache Header on the Transactions Read](<../02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>), item [BUD-95](<../../Budget/Budget — Master Book.md#bud-95>).
+`GET /api/transactions` returns `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`. Details: [Shared-Cache Header on the Transactions Read](<../02 - Standalone Modules/Transactions/Shared-Cache Header on the Transactions Read.md>), item [BUD-95](<../../_Archive/Shipped/Budget.md#bud-95>).
 
 ## Order of work
 

@@ -80,6 +80,28 @@ export interface LocalRunView {
   /** DLV-165: waiting on the owner with no process; not interrupted. */
   parked?: boolean;
   canMessage?: boolean;
+  /** DLV-166: the candidate's dev server, started from Test steps. */
+  preview?: LocalPreviewView | null;
+  /** DLV-167: the session's files against the main checkout since the run's base. */
+  mergePlan?: LocalMergePlan | null;
+  canMerge?: boolean;
+  applied?: { at: string; files: string[]; main_head: string; pm_error: string | null } | null;
+}
+export interface LocalMergePlan {
+  files: { status: string; path: string }[];
+  conflicts: { path: string; committed: boolean; uncommitted: boolean }[];
+  branch: string | null;
+  expected: string;
+  error?: string;
+}
+export type LocalAction = "review" | "merge" | "ship" | "undo" | "cancel";
+export interface LocalPreviewView {
+  state: "starting" | "ready" | "stopped" | "failed";
+  url: string | null;
+  port: number | null;
+  started_at: string;
+  exit: number | null;
+  tail: string;
 }
 
 export function LocalReadinessPanel({ data }: { data: LocalReadiness }) {
@@ -323,11 +345,24 @@ function HostLimits() {
   return <details><summary>Host limits</summary><p>Credential scrub prevents accidents, not deliberate host access.</p></details>;
 }
 
-export function LocalActions({ run, busy, act }: { run: Pick<LocalRunView, "phase" | "head" | "canShip" | "canUndo" | "interrupted" | "handover">; busy: boolean; act: (action: "review" | "ship" | "undo" | "cancel") => void }) {
+export function LocalActions({ run, busy, act }: { run: Pick<LocalRunView, "phase" | "head" | "canShip" | "canUndo" | "canMerge" | "mergePlan" | "applied" | "interrupted" | "handover">; busy: boolean; act: (action: LocalAction) => void }) {
+  // DLV-167: Merge copies the tested files into the main checkout; the owner
+  // commits and pushes. Ship stays hidden: it pushes to `origin`, not the owner's remote.
+  const plan = run.phase === "uat-ready" ? run.mergePlan : null;
+  const offBranch = !!plan && !plan.error && plan.branch !== plan.expected;
   return <div className="gate-actions">
+    {!!plan?.conflicts.length && <div className="merge-note merge-alert" role="alert">
+      <strong>Changed in your repo since this session started</strong>
+      <ul>{plan.conflicts.map((c) => <li key={c.path}><code>{c.path}</code>{c.uncommitted ? " · uncommitted" : ""}</li>)}</ul>
+    </div>}
+    {offBranch && <div className="merge-note merge-alert" role="alert"><strong>Switch your repo to {plan.expected}</strong></div>}
+    {plan?.error && <div className="merge-note merge-alert" role="alert">{plan.error}</div>}
+    {run.applied && <p className="merge-note merge-done">Merged {run.applied.files.length} file{run.applied.files.length === 1 ? "" : "s"} · commit and push in your repo{run.applied.pm_error ? ` · PM: ${run.applied.pm_error}` : ""}</p>}
     <button className="secondary" disabled={busy || !run.head} onClick={() => act("review")}>Review diff</button>
     {run.handover && <a className="secondary" href={`#/delivery/test/${run.handover.handover_id}`}>Test steps</a>}
-    <button className="primary" disabled={busy || !(run.canShip || run.phase === "push-pending")} onClick={() => act("ship")}>{run.phase === "push-pending" ? "Retry push" : "Ship"}</button>
+    {run.phase === "push-pending"
+      ? <button className="primary" disabled={busy} onClick={() => act("ship")}>Retry push</button>
+      : run.phase === "uat-ready" && <button className="primary" disabled={busy || !run.canMerge} onClick={() => act("merge")}>Merge</button>}
     {(run.canUndo || run.phase === "revert-push-pending") && <button className="secondary" disabled={busy} onClick={() => act("undo")}>Undo</button>}
     {["preparing", "building", "checking"].includes(run.phase) && <button className="secondary" disabled={busy} onClick={() => act("cancel")}>Cancel</button>}
   </div>;
@@ -358,7 +393,7 @@ export function LocalRun({ id }: { id: string }) {
     },
   });
   const command = useMutation({
-    mutationFn: async (action: "review" | "ship" | "undo" | "cancel") => {
+    mutationFn: async (action: LocalAction) => {
       const runId = id;
       return {
         ...(await v2Post<{ patch?: string }>(

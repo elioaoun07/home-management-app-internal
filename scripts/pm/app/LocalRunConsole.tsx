@@ -8,7 +8,7 @@ import {
   Shield,
 } from "lucide-react";
 import { Markdown } from "./components";
-import type { LocalRunView } from "./LocalDelivery";
+import type { LocalAction, LocalRunView } from "./LocalDelivery";
 import { localRunActivity } from "./localRunActivityModel";
 import type { LocalScene, LocalTimeline } from "./localRunScene";
 import { LocalRunActivityPanel } from "./LocalRunActivityPanel";
@@ -42,7 +42,7 @@ export const LocalRunConsole = memo(
     setTool: (value: Tool) => void;
     panel: RefObject<HTMLElement | null>;
     busy: boolean;
-    act: (action: "review" | "ship" | "undo" | "cancel") => void;
+    act: (action: LocalAction) => void;
     fileFilter: string | null;
     selectedAttentionId?: string;
     setFileFilter: (value: string | null) => void;

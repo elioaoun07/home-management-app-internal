@@ -1,6 +1,6 @@
 // DLV-150–153. Local worktree supervision over the existing run/job/activity store.
 import { randomUUID, createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { runProcess } from "./process.mjs";
 import { decisiveLines } from "./failure-lines.mjs";
@@ -14,8 +14,9 @@ import { parseWorkItems } from "./work-ref.mjs";
 import { idSection } from "../pm/shared/work-id.mjs";
 import { bindDirect, freezeHandover, viewOne } from "./uat.mjs";
 import { archiveItem, insertDatedStamp, itemBody, removeLine, shippedStamp } from "../pm/archive.mjs";
-import { tickById, buildIndexBlock, refreshIndex } from "../pm/ship.mjs";
+import { tickById, buildIndexBlock, refreshIndex, ship as shipPm } from "../pm/ship.mjs";
 import { normalizeAnswers, normalizeMessage, normalizeQuestion, projectQuestions, readLedger, resumePrompt, writeLedger } from "./local-questions.mjs";
+import { createPreviews } from "./local-preview.mjs";
 import { fileURLToPath } from "node:url";
 
 const ASK_SERVER = fileURLToPath(new URL("./local-ask-mcp.mjs", import.meta.url));
@@ -39,13 +40,15 @@ const HOOK_STAGES = new Map([
  * dependencies?:typeof installedDependencies, checks?:typeof hostChecks,
  * prepareDependencies?:((workspace:string)=>Promise<{status:number|null}>)|null,
  * baseBranch?:string, remote?:string, hasStore?:()=>boolean, catalog?:()=>object|null,
- * limits?:{hookMs?:number, pushMs?:number}}} options */
+ * limits?:{hookMs?:number, pushMs?:number}, previews?:ReturnType<typeof createPreviews>|null}} options */
 export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession,
   authenticate = localWorkerSubscription, dependencies = installedDependencies, checks = hostChecks,
   prepareDependencies = null, baseBranch = "main", remote = "origin", hasStore = () => true, limits = {},
-  catalog = () => { const loaded = loadExecutionPolicy({ root }); return loaded.ok ? loaded.policy.executors.catalog : null; } }) {
+  catalog = () => { const loaded = loadExecutionPolicy({ root }); return loaded.ok ? loaded.policy.executors.catalog : null; },
+  previews = null }) {
   const s = () => typeof store === "function" ? store() : store;
   const tasks = new Map();
+  const apps = previews || createPreviews({ root });
   const supervisor = { pid: process.pid, instance: randomUUID() };
   const env = () => localEnvironment();
   const { hookMs = 25 * 60_000, pushMs = 5 * 60_000 } = limits;
@@ -283,11 +286,59 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const task = tasks.get(id), parked = !!d.parked && !task;
     const chat = chatOf(id, d);
     const running = s().getRun(id)?.lifecycle !== "CLOSED" && ["preparing", "building"].includes(d.phase);
+    const passed = !!d.checks?.length && d.checks.every(c => c.exit === 0 && !c.error);
+    let mergePlan = null;
+    if (d.phase === "uat-ready" && current) {
+      try { mergePlan = await planMerge(d); } catch (error) { mergePlan = { files: [], conflicts: [], branch: null, expected: baseBranch, error: String(error.message) }; }
+    }
     return { ...d, run_id: id, current_head: head, clean, risk: changes.risk, patch: changes.patch, activity: s().listActivity(id), usage: observed?.usage || null,
-      handover, questions: chat.questions, messages: chat.messages, parked,
+      handover, questions: chat.questions, messages: chat.messages, parked, preview: apps.view(id),
       canMessage: running && (!!task?.accepting || parked),
       canShip: current && reviewed && signed && ["uat-ready", "merging"].includes(d.phase) && d.checks?.every(c => c.exit === 0 && !c.error),
-      canUndo: d.phase === "shipped", interrupted: ["preparing", "building", "checking"].includes(d.phase) && !task && !parked };
+      mergePlan, canMerge: current && reviewed && signed && passed && !!mergePlan && !mergePlan.error && mergePlan.branch === baseBranch
+        && mergePlan.files.length > 0 && mergePlan.conflicts.length === 0,
+      // A file-copy merge (DLV-167) has no merge commit to revert.
+      canUndo: d.phase === "shipped" && !!d.merge, interrupted: ["preparing", "building", "checking"].includes(d.phase) && !task && !parked };
+  }
+
+  // DLV-167. The run started from `main` at d.base (ALPHA); the owner's checkout
+  // may since have moved (BETA). Only the session's own files matter.
+  const HANDOVER_FILE = ".delivery-handover.json";
+  const inside = (base, path) => { const rel = relative(base, resolve(base, path)); return !!rel && !isAbsolute(rel) && !rel.startsWith(".."); };
+  async function planMerge(d) {
+    const parts = (await git(d.workspace, "diff", "--no-renames", "--name-status", "-z", d.base, d.head)).split("\0").filter(Boolean);
+    const files = [];
+    for (let i = 0; i + 1 < parts.length; i += 2) {
+      const path = parts[i + 1];
+      if (path === HANDOVER_FILE) continue;
+      if (!inside(root, path)) throw new Error(`unsafe-path ${path}`);
+      files.push({ status: parts[i][0], path });
+    }
+    const branch = await git(root, "symbolic-ref", "--quiet", "--short", "HEAD").catch(() => null);
+    if (!files.length) return { files, conflicts: [], branch, expected: baseBranch };
+    const paths = files.map(file => file.path);
+    const committed = new Set((await git(root, "diff", "--no-renames", "--name-only", "-z", d.base, "HEAD", "--", ...paths)).split("\0").filter(Boolean));
+    const uncommitted = new Set((await git(root, "status", "--porcelain", "-z", "--no-renames", "--untracked-files=all", "--", ...paths))
+      .split("\0").filter(Boolean).map(entry => entry.slice(3)));
+    const conflicts = paths.filter(path => committed.has(path) || uncommitted.has(path))
+      .map(path => ({ path, committed: committed.has(path), uncommitted: uncommitted.has(path) }));
+    return { files, conflicts, branch, expected: baseBranch };
+  }
+
+  /** Records the owner's sign-off on the item's `**UAT:** pending` line, inside its own section only. */
+  function recordUatPassed(bookAbs, workId, handoverId) {
+    if (!existsSync(bookAbs)) return;
+    const raw = readFileSync(bookAbs, "utf8");
+    const section = idSection(raw, workId);
+    if (!section) return;
+    const lines = raw.split("\n");
+    for (let index = section.line + 1; index < lines.length && !/^#{1,3}\s/u.test(lines[index]); index++) {
+      const match = /^(\s*(?:-\s*)?)\*\*UAT:\*\*\s*pending\b[^\r]*(\r?)$/iu.exec(lines[index]);
+      if (!match) continue;
+      lines[index] = `${match[1]}**UAT:** passed ${at().slice(0, 10)} (owner sign-off, Test steps ${handoverId})${match[2]}`;
+      writeFileSync(bookAbs, lines.join("\n"));
+      return;
+    }
   }
 
   /** The private home for the native CLI: subscription credential, config, hooks. Idempotent for resumes. */
@@ -525,6 +576,56 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return view.patch;
   }
 
+  /** DLV-166: serve the candidate for owner UAT from its own worktree. Not
+   * locked: it never touches Git or the main checkout, and Ship may take minutes. */
+  async function preview(id) {
+    const d = dataOf(id);
+    if (s().getRun(id)?.lifecycle === "CLOSED" || d.phase !== "uat-ready") throw new Error("preview-needs-a-candidate-ready-for-test");
+    const view = await detail(id);
+    if (!view.clean || view.current_head !== d.head) throw new Error("candidate-changed");
+    const was = apps.view(id)?.state;
+    await apps.start(id, { workspace: d.workspace });
+    if (was !== "starting" && was !== "ready") event(id, "Owner started the app");
+    return detail(id);
+  }
+
+  async function stopPreview(id) {
+    dataOf(id);
+    const was = apps.view(id)?.state;
+    apps.stop(id);
+    if (was === "starting" || was === "ready") event(id, "Owner stopped the app");
+    return detail(id);
+  }
+
+  /** DLV-167, phase 0: copy the tested files into the main checkout. No Git write;
+   * the owner commits and pushes. Refused if any of those files moved there. */
+  async function merge(id) {
+    return locked("merge", id, async () => {
+      const view = await detail(id, { inspect: true });
+      const plan = view.mergePlan;
+      if (plan?.conflicts?.length) throw new Error(`changed-in-your-repo: ${plan.conflicts.map(c => c.path).join(", ")}`);
+      if (plan && plan.branch !== baseBranch) throw new Error(`checkout-${baseBranch}-first`);
+      if (!view.canMerge) throw new Error(plan?.error || "merge-needs-passed-checks-sign-off-and-review");
+      const d = dataOf(id), pmDir = join(root, PM);
+      const dry = shipPm({ pmDir, repoRoot: root, ids: [d.work.id], dryRun: true });
+      if (dry.aborted) throw new Error(dry.aborted);
+      const written = [];
+      for (const file of plan.files) {
+        const target = resolve(root, file.path);
+        if (file.status === "D") { if (existsSync(target)) unlinkSync(target); }
+        else { mkdirSync(dirname(target), { recursive: true }); copyFileSync(resolve(d.workspace, file.path), target); }
+        written.push(file.path);
+      }
+      recordUatPassed(join(pmDir, d.work.book), d.work.id, d.handover_id);
+      const pm = shipPm({ pmDir, repoRoot: root, ids: [d.work.id], note: `merged from Local run ${id}` });
+      const pmError = pm.aborted || pm.errors.join("; ") || null;
+      save(id, { ...dataOf(id), phase: "shipped", applied: { at: at(), files: written, main_head: await git(root, "rev-parse", "HEAD"), pm_error: pmError } }, "CLOSED", "shipped");
+      event(id, `Owner merged ${written.length} file${written.length === 1 ? "" : "s"} into the main checkout`);
+      apps.stop(id);
+      return detail(id);
+    });
+  }
+
   async function operationHead(ref) {
     const out = await run("git", ["--no-optional-locks", "rev-parse", "--verify", "--quiet", ref], { cwd: root, env: env(), timeout: 30_000 });
     if (out.status === 1 && !out.error) return null;
@@ -666,6 +767,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       if (await git(root, "rev-parse", "HEAD") !== d.merge) throw new Error("ship-head-changed");
       await gitSlow(root, pushMs, undefined, "push", remote, `HEAD:refs/heads/${baseBranch}`);
       save(id, { ...d, phase: "shipped" }, "CLOSED", "shipped"); event(id, "Owner shipped merge");
+      apps.stop(id);
       return detail(id);
     });
   }
@@ -675,6 +777,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       let d = dataOf(id);
       if (d.phase === "reverted") return detail(id);
       if (!["shipped", "revert-push-pending"].includes(d.phase)) throw new Error("nothing-to-undo");
+      if (d.phase === "shipped" && !d.merge) throw new Error("merged-by-file-copy; undo it in your repo");
       if (d.phase === "shipped" && (await operationHead("REVERT_HEAD") || d.undo_error === "revert-abort-failed")) {
         if (!d.undo_base || !await abortUndo(id, d, "undo-interrupted")) throw new Error("undo-interrupted; inspect main");
         d = dataOf(id);
@@ -724,7 +827,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       return { ok: true };
     });
   }
-  return { readiness, start, list, detail, review, ship, undo, cancel, answer, message,
+  return { readiness, start, list, detail, review, preview, stopPreview, merge, ship, undo, cancel, answer, message,
     isWorking: () => tasks.size > 0,
     wait: id => tasks.get(id)?.promise || Promise.resolve(),
   };

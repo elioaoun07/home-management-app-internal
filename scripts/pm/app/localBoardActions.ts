@@ -1,7 +1,6 @@
-import type { LocalRunView } from "./LocalDelivery";
+import type { LocalAction, LocalRunView } from "./LocalDelivery";
 import type { AttentionItem } from "./localRunAttention";
 
-type LocalAction = "review" | "ship" | "undo" | "cancel";
 /** Shares LocalActions admission, including recovery of interrupted attempts. */
 export function localBoardActionAllowed(
   run: LocalRunView,
@@ -10,7 +9,9 @@ export function localBoardActionAllowed(
 ) {
   if (busy) return false;
   if (action === "review") return !!run.head;
-  if (action === "ship") return run.canShip || run.phase === "push-pending";
+  // DLV-167: Merge replaces Ship; only an existing push-pending run retries a push.
+  if (action === "merge") return run.phase === "uat-ready" && !!run.canMerge;
+  if (action === "ship") return run.phase === "push-pending";
   if (action === "undo")
     return run.canUndo || run.phase === "revert-push-pending";
   return ["preparing", "building", "checking"].includes(run.phase);

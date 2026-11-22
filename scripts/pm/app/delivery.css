@@ -807,6 +807,26 @@
   margin-top: 20px;
   flex-wrap: wrap;
 }
+/* DLV-167: Merge notes take their own row above the buttons. */
+.gate-actions > .merge-note,
+.run-game-commandbar .gate-actions > .merge-note {
+  flex: 1 0 100%;
+  margin: 0;
+  white-space: normal;
+}
+.merge-alert {
+  padding: 10px 12px;
+  border: 1px solid var(--danger, #fb7185);
+  border-radius: 10px;
+  color: var(--danger, #fb7185);
+}
+.merge-alert ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.merge-done {
+  color: var(--ink-muted);
+}
 .gate-panel textarea,
 .gate-panel input,
 .gate-panel select {

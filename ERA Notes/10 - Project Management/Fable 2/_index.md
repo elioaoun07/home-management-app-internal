@@ -41,7 +41,7 @@ Labels `F2-n` are local to this folder. Every finding has one disposition.
 | F2-10 | Fifteen bug-sweep IDs existed only as text in a research file | Measured | Filed: BUD-89 to 94, HUB-118 to 122, NOTIF-22, NOTIF-23, R83, KIT-28 |
 | F2-11 | `docs/era-research/` (70 files) is linked from nowhere in the vault and has no dispositions | Measured | [R85](<../PM Tooling/PM Tooling — Master Book.md#r85>) |
 | F2-12 | Hard Rule 26's deny list names `mcp__claude_ai_Supabase__*`; cloud sessions expose `mcp__Supabase__*` | Read, seen | [R84](<../PM Tooling/PM Tooling — Master Book.md#r84>) |
-| F2-13 | `GET /api/transactions` sends `public, s-maxage=60` on an authenticated response | Read | [BUD-95](<../Budget/Budget — Master Book.md#bud-95>) |
+| F2-13 | `GET /api/transactions` sends `public, s-maxage=60` on an authenticated response | Read | [BUD-95](<../_Archive/Shipped/Budget.md#bud-95>) |
 | F2-14 | 43 service-role routes each implement their own authorization; nothing enumerates them | Measured, sampled | [R90](<../PM Tooling/PM Tooling — Master Book.md#r90>) |
 | F2-15 | The RLS snapshot is 97 days old; it shows RLS disabled on `guest_drinks` and `item_prerequisites` | Measured | Existing R43; owner refresh |
 | F2-16 | 58% of test files cover tooling; 23 of 35 feature directories have none | Measured | Existing BUD-74; R90 |
