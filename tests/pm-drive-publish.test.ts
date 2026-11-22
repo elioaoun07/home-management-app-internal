@@ -18,6 +18,7 @@ import {
   readDeliveryFromStore,
   resolveDriveRoot,
   selectDocuments,
+  selectVault,
 } from "../scripts/pm/drive-publish.mjs";
 import { bindRun, freezeHandover, listUat, recordResult, submitFeedback } from "../scripts/delivery-v2/uat.mjs";
 
@@ -393,5 +394,107 @@ describe("owner testing (R78)", () => {
     expect(status.counts).toMatchObject({ total: 150, ready: 1, draft: 149 });
     expect(status.handovers).toHaveLength(120);
     expect(status.handovers[0].status).toBe("ready");
+  });
+});
+
+describe("ERA Notes vault mirror", () => {
+  let vault: string;
+  const vaultBuild = (publisher: Loose = {}) => build({ publisher: { vaultDir: vault, ...publisher } });
+  beforeEach(() => {
+    vault = join(base, "ERA Notes");
+    put(join(vault, "00 - Home", "Home.md"), "# home");
+    put(join(vault, "01 - Architecture", "Feature Map", "_index.md"), "# map");
+    put(join(vault, "Model-Registry.md"), "# models");
+    put(join(vault, "_Archive", "old.md"), "history");
+    put(join(vault, ".obsidian", "workspace.json"), "{}");
+  });
+
+  it("selects every file in the vault with its folder tree, leaving dot-folders local at any depth", () => {
+    const dests = selectVault({ vaultDir: vault }).map((d) => d.dest);
+    expect(dests).toContain("00 - Home/Home.md");
+    expect(dests).toContain("01 - Architecture/Feature Map/_index.md");
+    expect(dests).toContain("10 - Project Management/_Archive/old.md");
+    expect(dests).toContain("10 - Project Management/_dashboard.html");
+    expect(dests).toContain("_Archive/old.md");
+    expect(dests.filter((d) => d.split("/").some((part) => part.startsWith(".")))).toEqual([]);
+    expect(dests).toEqual([...dests].sort());
+  });
+
+  it("mirrors the vault into its own folder beside the PM documents, which stay as they were", async () => {
+    const { publisher } = vaultBuild();
+    const first = await publisher.publishNow({ full: true });
+    expect(first.ok).toBe(true);
+    const files = tree(drive);
+    expect(files).toEqual(expect.arrayContaining([
+      "04 - ERA Notes/00 - Home/Home.md",
+      "04 - ERA Notes/01 - Architecture/Feature Map/_index.md",
+      "04 - ERA Notes/10 - Project Management/Delivery/scratch notes.md",
+      "04 - ERA Notes/Model-Registry.md",
+      "01 - PM Documentation/PM/_index.md",
+    ]));
+    expect(files.filter((p) => p.includes("/.obsidian/") || p.includes("/.pm/") || p.endsWith(".tmp"))).toEqual([]);
+    expect(first.wrote).toContain("ERA Notes/00 - Home/Home.md");
+    expect(first.wrote.filter((p: string) => p.startsWith("PM/") || p.startsWith("Docs/"))).toHaveLength(7);
+    expect(readFileSync(join(drive, FOLDERS.vault, "01 - Architecture", "Feature Map", "_index.md"), "utf8")).toBe("# map");
+    expect(readFileSync(join(drive, "README.md"), "utf8")).toContain("04 - ERA Notes");
+    expect(JSON.parse(readFileSync(join(drive, FOLDERS.status, "status.json"), "utf8")).publish.vaultFiles).toBe(selectVault({ vaultDir: vault }).length);
+    expect((await publisher.publishNow({})).wrote).toEqual([]);
+  });
+
+  it("restarts without reading the vault back from Drive, yet recreates a file deleted there", async () => {
+    await vaultBuild().publisher.publishNow({ full: true });
+    rmSync(join(drive, FOLDERS.vault, "00 - Home", "Home.md"));
+    const reads: string[] = [];
+    const fsp = { ...nodeFsp, readFile: async (path: Loose, ...rest: Loose[]) => (reads.push(String(path)), (nodeFsp.readFile as Loose)(path, ...rest)) };
+    const next = await vaultBuild({ fsp }).publisher.publishNow({ full: true });
+    expect(next.wrote).toEqual(["ERA Notes/00 - Home/Home.md"]);
+    expect(reads.filter((p) => p.includes(FOLDERS.vault) && !p.endsWith("Home.md"))).toEqual([]);
+  });
+
+  it("prunes a deleted note and the folder it emptied", async () => {
+    const { publisher } = vaultBuild();
+    await publisher.publishNow({ full: true });
+    rmSync(join(vault, "00 - Home"), { recursive: true });
+    const next = await publisher.publishNow({ docs: true, status: false });
+    expect(next.pruned).toEqual(["ERA Notes/00 - Home/Home.md"]);
+    expect(existsSync(join(drive, FOLDERS.vault, "00 - Home"))).toBe(false);
+    expect(existsSync(join(drive, FOLDERS.vault, "01 - Architecture", "Feature Map", "_index.md"))).toBe(true);
+  });
+
+  it("keeps a Drive-side edit of a note aside before overwriting it with the next local change", async () => {
+    const { publisher } = vaultBuild();
+    await publisher.publishNow({ full: true });
+    const published = join(drive, FOLDERS.vault, "Model-Registry.md");
+    writeFileSync(published, "edited in Drive", "utf8");
+    put(join(vault, "Model-Registry.md"), "# models v2");
+    const next = await publisher.publishNow({ docs: true, status: false });
+    expect(next.driveEdits).toHaveLength(1);
+    expect(next.driveEdits[0].path).toBe("ERA Notes/Model-Registry.md");
+    expect(readFileSync(join(drive, FOLDERS.proposals, ...next.driveEdits[0].keptAs.split("/")), "utf8")).toBe("edited in Drive");
+    expect(readFileSync(published, "utf8")).toBe("# models v2");
+  });
+
+  it("leaves out a note carrying a credential and reports it by vault path, never the value", async () => {
+    const key = "ghp_" + "b".repeat(36);
+    put(join(vault, "08 - Sessions", "setup.md"), "token " + key);
+    const result = await vaultBuild().publisher.publishNow({ full: true });
+    expect(result.skipped).toEqual([{ path: "ERA Notes/08 - Sessions/setup.md", reason: "secret:shape:github-token" }]);
+    expect(existsSync(join(drive, FOLDERS.vault, "08 - Sessions", "setup.md"))).toBe(false);
+    expect(readFileSync(join(drive, FOLDERS.status, "status.md"), "utf8")).not.toContain(key);
+  });
+
+  it("lets a long first copy finish while it keeps making progress", async () => {
+    const fsp = { ...nodeFsp, writeFile: async (...args: Loose[]) => (await new Promise((r) => setTimeout(r, 10)), (nodeFsp.writeFile as Loose)(...args)) };
+    const result = await vaultBuild({ fsp, timeoutMs: 40, retryMs: [3_600_000] }).publisher.publishNow({ full: true });
+    expect(result.ok).toBe(true);
+    expect(result.wrote.length).toBeGreaterThan(10);
+  });
+
+  it("is watched by the PM server, which ignores dot-folder churn", () => {
+    const server = readFileSync(join(__dirname, "..", "scripts", "pm-server.mjs"), "utf8");
+    expect(server).toContain('vaultDir: join(ROOT, "ERA Notes")');
+    expect(server).toContain('watch(join(ROOT, "ERA Notes"), { recursive: true }');
+    const cli = readFileSync(join(__dirname, "..", "scripts", "pm", "drive-publish-cli.mjs"), "utf8");
+    expect(cli).toContain('vaultDir: join(ROOT, "ERA Notes")');
   });
 });

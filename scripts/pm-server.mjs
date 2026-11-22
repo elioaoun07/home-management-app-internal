@@ -130,6 +130,7 @@ const drive = DRIVE_ROOT
       root: ROOT,
       pmDir: PM_DIR,
       docsDir: join(ROOT, "docs"),
+      vaultDir: join(ROOT, "ERA Notes"),
       driveRoot: DRIVE_ROOT,
       readDelivery: () =>
         deliveryV2Ctx.hasStore()
@@ -806,6 +807,16 @@ function listen(port, attemptsLeft) {
         watch(join(ROOT, "docs"), () => drive.schedule("pm"));
       } catch {
         // docs/ changes are picked up by the next PM change or restart
+      }
+      try {
+        // The whole vault mirrors to "04 - ERA Notes". Dot-folders (.obsidian editor state) are not
+        // published, so their constant churn must not trigger passes.
+        watch(join(ROOT, "ERA Notes"), { recursive: true }, (_event, filename) => {
+          if (filename && /(?:^|[\\/])\./u.test(String(filename))) return;
+          drive.schedule("pm");
+        });
+      } catch {
+        // vault changes are picked up by the next PM change or restart
       }
     }
     if (bridge) bridge.start();

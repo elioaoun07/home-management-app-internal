@@ -2030,6 +2030,19 @@ At a 1920 × 1080 viewport and DPR 2, the Radeon 880M recorded 16.7 ms median an
 }
 ```
 
+### R141
+
+**Outcome:** The whole ERA Notes vault, not only the PM subset, reaches the one-way Drive mirror in its own folder with the vault's folder tree.
+**Kind:** feature
+**Execution:** local
+**Touches:** `scripts/pm/drive-publish.mjs`, `scripts/pm/drive-publish-cli.mjs`, `scripts/pm-server.mjs`, `tests/pm-drive-publish.test.ts`
+
+- **Acceptance:** `04 - ERA Notes` in the Drive folder mirrors every vault file at the same relative path (`00 - Home` … `10 - Project Management`, `_Archive`, `Templates`, root notes); names starting with `.` (`.obsidian`, `.pm`) stay local. Same rules as `01 - PM Documentation`: content-hash writes only, credential-shaped files refused and reported by path, Drive-side edits kept under `03 - Steward Proposals/Drive edits/` before overwrite, deletions and emptied folders pruned. `01`–`03` are unchanged so Dot's paths keep working. The running PM server publishes vault edits within seconds and ignores `.obsidian` churn; a restart checks the vault by Drive metadata, not by downloading it. A pass is abandoned after 30 s without progress, so a long first copy completes.
+- **Not claimed:** retiring the duplicate PM subset in `01 - PM Documentation/PM`; a vault mirror on non-Windows hosts without `PM_DRIVE_DIR`.
+- **Implementation:** done
+- **UAT:** pending
+- **Verification (2026-11-22):** `tests/pm-drive-publish.test.ts` 30/30 (+8: vault selection without dot-folders, mirror beside unchanged PM docs with README and status count, restart without reading the vault back while recreating a Drive-deleted file, prune of a note and its emptied folder, Drive edit kept aside, credential refusal by vault path, long copy completing under the idle timeout, server and CLI wiring). `pnpm pm:drive --dry-run` against the real Drive folder: 1018 vault files to write, 61 PM documents unchanged, 0 skipped, nothing from `.obsidian`/`.pm`. Not run: a real publish to Drive (owner restarts `pnpm pm`).
+
 ## Backlog reconciliation
 
 - Existing aliases: open R7 → R51 (historical R7 remains reserved); open CI R49 → HUB-37 (historical R49 remains archive automation).
@@ -2154,6 +2167,7 @@ At a 1920 × 1080 viewport and DPR 2, the Radeon 880M recorded 16.7 ms median an
 - ✅ 2026-11-21 — **R138** Restore full-resolution Walk and rebuild the Trips room’s materials and instruments → [record](<../_Archive/Shipped/PM Tooling.md#r138>)
 - ✅ 2026-11-21 — **R140** Choose a campaign item in the orbital Library and enter its local delivery room → [record](<../_Archive/Shipped/PM Tooling.md#r140>)
 - ✅ 2026-11-21 — **R139** Keep Walk sharp during movement and show ERA’s rotation and recorded failure in the chamber → [record](<../_Archive/Shipped/PM Tooling.md#r139>)
+- ✅ 2026-11-22 — **R141** Mirror the whole ERA Notes vault to the Drive folder → [record](<../_Archive/Shipped/PM Tooling.md#r141>)
 
 ## Delivery session log
 

@@ -5,6 +5,8 @@
 //   01 - PM Documentation   selected PM + delivery documents (allowlist, secret-scanned)
 //   02 - Delivery Status    status.json + status.md, rewritten only when the state changes
 //   03 - Steward Proposals  Dot's folder. Created if missing, never written to, never read back.
+//   04 - ERA Notes          the whole ERA Notes vault, same folder tree (dot-folders such as
+//                           .obsidian and .pm stay local), secret-scanned like the documents
 //
 // Local PM stays authoritative: nothing here reads the Drive folder into the
 // repository. A Drive-side edit to a published file is overwritten on the next
@@ -16,7 +18,8 @@
 //
 //   - Drive unavailable (folder missing, I/O error, hang): the pass fails closed,
 //     keeps local state, and retries with backoff. Callers never see an exception.
-//   - One pass at a time, bounded by `timeoutMs`; a hung Drive call cannot pile up threads.
+//   - One pass at a time; a pass that makes no progress for `timeoutMs` is abandoned, so a
+//     hung Drive call cannot pile up threads while a long first copy still completes.
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -31,7 +34,10 @@ export const FOLDERS = Object.freeze({
   docs: "01 - PM Documentation",
   status: "02 - Delivery Status",
   proposals: "03 - Steward Proposals",
+  vault: "04 - ERA Notes",
 });
+/** How vault paths are reported (wrote / pruned / skipped / Drive edits); never a Drive path. */
+export const VAULT_LABEL = "ERA Notes/";
 export const DRIVE_EDITS_DIR = "Drive edits";
 export const STATUS_SCHEMA = "era-pm-drive/status@1";
 
@@ -39,6 +45,8 @@ export const STATUS_SCHEMA = "era-pm-drive/status@1";
 export const STORE_READS = Object.freeze(["listRuns", "getContract", "listJobs", "listPlans", "listQuestions", "latestResult", "listApplications"]);
 
 const MAX_DOC_BYTES = 2_000_000;
+// The vault carries plan images and the generated _dashboard.html (~11 MB).
+const MAX_VAULT_BYTES = 25_000_000;
 const HEARTBEAT_MS = 5 * 60_000;
 const RUNS_LISTED = 20;
 const PM_ROOT_FILES = new Set(["_index.md", "_Conventions.md", "_Decisions.md", "0 - Inbox.md"]);
@@ -80,7 +88,29 @@ export function selectDocuments({ pmDir, docsDir = null }) {
       if (file.isFile() && DOCS_FILE.test(file.name)) out.push({ abs: join(docsDir, file.name), dest: "Docs/" + file.name });
     }
   }
-  return out.sort((a, b) => (a.dest < b.dest ? -1 : a.dest > b.dest ? 1 : 0)); // code-unit order: same on every machine
+  return out.sort(byDest);
+}
+
+const byDest = (a, b) => (a.dest < b.dest ? -1 : a.dest > b.dest ? 1 : 0); // code-unit order: same on every machine
+
+/**
+ * Every file in the ERA Notes vault, keeping its folder tree. Names starting with "." (.obsidian
+ * editor state, the PM .pm machine state) stay local at any depth.
+ *
+ * @param {{vaultDir:string}} input
+ * @returns {{abs:string, dest:string}[]} dest is relative to the "04 - ERA Notes" folder, forward slashes
+ */
+export function selectVault({ vaultDir }) {
+  const out = [];
+  const walk = (dir, prefix) => {
+    for (const entry of readDirSafe(dir)) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.isDirectory()) walk(join(dir, entry.name), prefix + entry.name + "/");
+      else if (entry.isFile()) out.push({ abs: join(dir, entry.name), dest: prefix + entry.name });
+    }
+  };
+  walk(vaultDir, "");
+  return out.sort(byDest);
 }
 
 /**
@@ -89,15 +119,17 @@ export function selectDocuments({ pmDir, docsDir = null }) {
  *
  * @param {{abs:string, dest:string}[]} selection
  * @param {Record<string, string|undefined>} [env]
+ * @param {{maxBytes?:number, label?:string}} [options] label prefixes the reported path
  * @returns {{files:{dest:string, buffer:Buffer, hash:string}[], skipped:{path:string, reason:string}[]}}
  */
-export function loadDocuments(selection, env = process.env) {
+export function loadDocuments(selection, env = process.env, { maxBytes = MAX_DOC_BYTES, label = "" } = {}) {
   const files = [];
   const skipped = [];
-  for (const { abs, dest } of selection) {
+  for (const { abs, dest: rel } of selection) {
+    const dest = label + rel;
     try {
       const buffer = readFileSync(abs);
-      if (buffer.length > MAX_DOC_BYTES) {
+      if (buffer.length > maxBytes) {
         skipped.push({ path: dest, reason: "too-large" });
         continue;
       }
@@ -106,7 +138,7 @@ export function loadDocuments(selection, env = process.env) {
         skipped.push({ path: dest, reason: "secret:" + hits.join(",") });
         continue;
       }
-      files.push({ dest, buffer, hash: sha(buffer) });
+      files.push({ dest: rel, buffer, hash: sha(buffer) });
     } catch (error) {
       skipped.push({ path: dest, reason: "unreadable:" + String(error?.code || error?.message || error) });
     }
@@ -366,7 +398,7 @@ export function renderStatusMarkdown(status, changedAt) {
     for (const c of status.campaigns.list) lines.push(`| ${cell(c.campaign)} | ${c.open} | ${c.done} | ${c.blockers} | ${c.painBlockers} |`);
   }
   const pub = status.publish;
-  lines.push("", "## Publisher", "", `Documents ${pub.documents} · skipped ${pub.skipped.length}${pub.skipped.length ? " (" + pub.skipped.map((s) => s.path + " " + s.reason).join("; ") + ")" : ""} · Drive edits kept ${pub.driveEdits.length}`, "");
+  lines.push("", "## Publisher", "", `Documents ${pub.documents}${pub.vaultFiles != null ? " · ERA Notes files " + pub.vaultFiles : ""} · skipped ${pub.skipped.length}${pub.skipped.length ? " (" + pub.skipped.map((s) => s.path + " " + s.reason).join("; ") + ")" : ""} · Drive edits kept ${pub.driveEdits.length}`, "");
   return lines.join("\n");
 }
 
@@ -382,16 +414,26 @@ const ROOT_README = [
   "- 01 - PM Documentation: read-only copies. A Drive edit is overwritten on the next publish; the edited copy is kept in 03 - Steward Proposals/Drive edits.",
   "- 02 - Delivery Status: status.json and status.md. Stale if Updated is older than 10 minutes.",
   "- 03 - Steward Proposals: write recommendations here. Nothing in this folder is read back automatically.",
+  "- 04 - ERA Notes: read-only copy of the whole ERA Notes vault, same folders. Same overwrite rule as 01. Anything under an _Archive folder is history, not current state.",
   "",
 ].join("\n");
 
-const withTimeout = (promise, ms, label) => {
+/**
+ * Race `start(progress)` against a watchdog that fires after `ms` without a `progress()` call.
+ * A hung Drive call stops progress; a long first copy of the vault keeps calling it.
+ */
+const withIdleTimeout = (start, ms, label) => {
   let timer;
-  const guard = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(label + " timed out after " + ms + " ms")), ms);
+  let fail;
+  const guard = new Promise((_, reject) => (fail = reject));
+  const progress = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fail(new Error(label + " timed out after " + ms + " ms without progress")), ms);
     timer.unref?.();
-  });
-  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+  };
+  progress();
+  const work = start(progress);
+  return { work, settled: Promise.race([work, guard]).finally(() => clearTimeout(timer)) };
 };
 
 /**
@@ -404,7 +446,7 @@ const withTimeout = (promise, ms, label) => {
  */
 export function createDrivePublisher(options) {
   const {
-    pmDir, docsDir = null, driveRoot, readDelivery, readRollups = () => null, readUat = () => null,
+    pmDir, docsDir = null, vaultDir = null, driveRoot, readDelivery, readRollups = () => null, readUat = () => null,
     fsp = nodeFsp, now = () => new Date().toISOString(), statePath = null,
     timeoutMs = 30_000, debounceMs = 1_500, retryMs = [30_000, 60_000, 120_000, 300_000], log = () => {}, env = process.env,
   } = options;
@@ -419,7 +461,7 @@ export function createDrivePublisher(options) {
   const wanted = { docs: false, status: false, full: false };
 
   function loadState() {
-    const blank = { files: {}, statusHash: null, statusChangedAt: null, statusWrittenAt: null, lastDelivery: null, lastSuccessAt: null, lastError: null };
+    const blank = { files: {}, vaultFiles: {}, statusHash: null, statusChangedAt: null, statusWrittenAt: null, lastDelivery: null, lastSuccessAt: null, lastError: null };
     try {
       return statePath && existsSync(statePath) ? { ...blank, ...JSON.parse(readFileSync(statePath, "utf8")) } : blank;
     } catch {
@@ -457,56 +499,101 @@ export function createDrivePublisher(options) {
     }
   }
 
-  async function pass({ docs, status, full, dryRun }) {
+  async function pass({ docs, status, full, dryRun }, progress) {
     const result = { ok: true, wrote: [], unchanged: 0, pruned: [], skipped: [], driveEdits: [], statusWritten: false, dryRun: Boolean(dryRun) };
     const rootStat = await fsp.stat(driveRoot).catch(() => null);
     if (!rootStat || !rootStat.isDirectory()) throw new Error("drive-unavailable: " + driveRoot);
     const write = async (path, data) => {
       if (!dryRun) await writeAtomic(path, data);
+      progress();
     };
     if (!dryRun) {
-      for (const folder of Object.values(FOLDERS)) await fsp.mkdir(abs(folder), { recursive: true });
-      if ((await readOrNull(abs("README.md"))) === null) await writeAtomic(abs("README.md"), ROOT_README);
+      for (const [name, folder] of Object.entries(FOLDERS)) if (name !== "vault" || vaultDir) await fsp.mkdir(abs(folder), { recursive: true });
+      if (String((await readOrNull(abs("README.md"))) ?? "") !== ROOT_README) await writeAtomic(abs("README.md"), ROOT_README);
     }
 
     let documents = state.documents ?? 0;
+    let vaultCount = state.vaultCount ?? 0;
     let skipped = state.skipped ?? [];
     let driveEdits = state.driveEdits ?? [];
-    if (docs || full) {
-      const { files, skipped: refused } = loadDocuments(selectDocuments({ pmDir, docsDir }), env);
-      skipped = refused;
-      documents = files.length;
+
+    // One mirror group: write what changed, keep a Drive-side edit aside before overwriting it,
+    // prune what left the selection. `known` maps dest -> {hash} for what we last published there.
+    async function mirror({ folder, files, known, label, cheapFull }) {
       const keep = new Set(files.map((f) => f.dest));
       for (const file of files) {
-        const target = abs(FOLDERS.docs, ...file.dest.split("/"));
-        const known = state.files[file.dest];
-        if (known && known.hash === file.hash && !full) {
-          result.unchanged += 1;
-          continue;
+        const target = abs(folder, ...file.dest.split("/"));
+        const last = known[file.dest];
+        if (last && last.hash === file.hash) {
+          if (!full) {
+            result.unchanged += 1;
+            continue;
+          }
+          // Full pass over the vault: presence + size from Drive metadata, so a restart never
+          // downloads 1000+ files back from the cloud just to compare them.
+          if (cheapFull) {
+            const stat = await fsp.stat(target).catch(() => null);
+            progress();
+            if (stat && stat.size === file.buffer.length) {
+              result.unchanged += 1;
+              continue;
+            }
+          }
         }
         const existing = await readOrNull(target);
+        progress();
         if (existing && sha(existing) === file.hash) {
           result.unchanged += 1;
-          if (!dryRun) state.files[file.dest] = { hash: file.hash };
+          if (!dryRun) known[file.dest] = { hash: file.hash };
           continue;
         }
         // Something other than our last publish sits at the destination: keep it, then overwrite.
-        if (existing && (!known || sha(existing) !== known.hash)) {
-          const keptAs = `${DRIVE_EDITS_DIR}/${now().replace(/[:.]/gu, "-")} ${file.dest.replace(/\//gu, " - ")}`;
+        if (existing && (!last || sha(existing) !== last.hash)) {
+          const keptAs = `${DRIVE_EDITS_DIR}/${now().replace(/[:.]/gu, "-")} ${(label + file.dest).replace(/\//gu, " - ")}`;
           await write(abs(FOLDERS.proposals, ...keptAs.split("/")), existing);
-          result.driveEdits.push({ path: file.dest, keptAs });
+          result.driveEdits.push({ path: label + file.dest, keptAs });
         }
         await write(target, file.buffer);
-        result.wrote.push(file.dest);
-        if (!dryRun) state.files[file.dest] = { hash: file.hash };
+        result.wrote.push(label + file.dest);
+        if (!dryRun) known[file.dest] = { hash: file.hash };
       }
-      for (const dest of Object.keys(state.files)) {
+      for (const dest of Object.keys(known)) {
         if (keep.has(dest)) continue;
-        if (!dryRun) await fsp.unlink(abs(FOLDERS.docs, ...dest.split("/"))).catch((error) => {
-          if (error?.code !== "ENOENT") throw error;
-        });
-        result.pruned.push(dest);
-        if (!dryRun) delete state.files[dest];
+        if (!dryRun) {
+          await fsp.unlink(abs(folder, ...dest.split("/"))).catch((error) => {
+            if (error?.code !== "ENOENT") throw error;
+          });
+          await removeEmptyParents(folder, dest);
+          progress();
+          delete known[dest];
+        }
+        result.pruned.push(label + dest);
+      }
+    }
+    // A renamed or emptied vault folder must not linger in Drive. rmdir refuses a non-empty folder.
+    async function removeEmptyParents(folder, dest) {
+      const parts = dest.split("/").slice(0, -1);
+      while (parts.length) {
+        try {
+          await fsp.rmdir(abs(folder, ...parts));
+        } catch {
+          return;
+        }
+        parts.pop();
+      }
+    }
+
+    if (docs || full) {
+      const loaded = loadDocuments(selectDocuments({ pmDir, docsDir }), env);
+      documents = loaded.files.length;
+      await mirror({ folder: FOLDERS.docs, files: loaded.files, known: state.files, label: "", cheapFull: false });
+      skipped = loaded.skipped;
+      if (vaultDir) {
+        state.vaultFiles ??= {};
+        const vault = loadDocuments(selectVault({ vaultDir }), env, { maxBytes: MAX_VAULT_BYTES, label: VAULT_LABEL });
+        vaultCount = vault.files.length;
+        await mirror({ folder: FOLDERS.vault, files: vault.files, known: state.vaultFiles, label: VAULT_LABEL, cheapFull: true });
+        skipped = [...skipped, ...vault.skipped];
       }
       driveEdits = [...result.driveEdits, ...driveEdits].slice(0, 20);
       result.skipped = skipped;
@@ -556,7 +643,7 @@ export function createDrivePublisher(options) {
         }
       }
       const at = now();
-      const next = buildStatus({ delivery, rollups, publish: { documents, skipped, driveEdits }, now: at, uat });
+      const next = buildStatus({ delivery, rollups, publish: { documents, ...(vaultDir ? { vaultFiles: vaultCount } : {}), skipped, driveEdits }, now: at, uat });
       const hash = sha(JSON.stringify({ ...next, generatedAt: undefined })); // the clock alone is not a change
       const changed = hash !== state.statusHash;
       const beat = !state.statusWrittenAt || Date.parse(at) - Date.parse(state.statusWrittenAt) >= HEARTBEAT_MS;
@@ -571,7 +658,7 @@ export function createDrivePublisher(options) {
       }
     }
     if (!dryRun) {
-      Object.assign(state, { documents, skipped, driveEdits, lastSuccessAt: now(), lastError: null });
+      Object.assign(state, { documents, vaultCount, skipped, driveEdits, lastSuccessAt: now(), lastError: null });
       saveState();
     }
     return result;
@@ -584,10 +671,10 @@ export function createDrivePublisher(options) {
       rerun = { docs: docs || rerun?.docs, status: status || rerun?.status, full: full || rerun?.full };
       return { ok: false, busy: true };
     }
-    const work = pass({ docs, status, full, dryRun });
+    const { work, settled } = withIdleTimeout((progress) => pass({ docs, status, full, dryRun }, progress), timeoutMs, "drive pass");
     inFlight = work.catch(() => {});
     try {
-      const result = await withTimeout(work, timeoutMs, "drive pass");
+      const result = await settled;
       failures = 0;
       if (result.wrote.length || result.pruned.length || result.statusWritten) log(`[pm-drive] ${dryRun ? "would write" : "wrote"} ${result.wrote.length} doc(s), pruned ${result.pruned.length}${result.statusWritten ? ", status" : ""}`);
       return result;

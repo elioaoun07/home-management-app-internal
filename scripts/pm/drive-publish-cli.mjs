@@ -1,5 +1,5 @@
 // scripts/pm/drive-publish-cli.mjs
-//   pnpm pm:drive             full publish (documents + status) to the Drive folder
+//   pnpm pm:drive             full publish (documents + ERA Notes vault + status) to the Drive folder
 //   pnpm pm:drive --dry-run   show what would change; writes nothing
 //   pnpm pm:drive --root=D:\path\to\folder   override the destination (PM_DRIVE_DIR also works)
 //
@@ -45,6 +45,7 @@ const publisher = createDrivePublisher({
   root: ROOT,
   pmDir: PM_DIR,
   docsDir: join(ROOT, "docs"),
+  vaultDir: join(ROOT, "ERA Notes"),
   driveRoot,
   readDelivery,
   readRollups: () => createRollupsSnapshotBuilder({ PM_DIR }).buildRollupsSnapshot(),

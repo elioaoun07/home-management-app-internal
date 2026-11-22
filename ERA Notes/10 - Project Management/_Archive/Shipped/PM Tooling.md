@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-21
+updated: 2026-11-22
 type: archive
 status: superseded
 owner: Elio
@@ -717,6 +717,10 @@ The local Chrome fixture covered live preparation, Build, Bench, Verify, settled
 ### R139
 
 - ✅ 2026-11-21 — **R139** Keep Walk sharp during movement and show ERA’s rotation and recorded failure in the chamber — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r139>) (Radeon 880M held 2516x1089 at 16.7 ms median across two walks. SwiftShader Native detail preserved every pixel in the 10,488-pixel sign comparison. Healthy rotation, recorded Seal fracture, intermittent arc and replay recovery passed in Chrome. 1058 PM UI tests passed. Owner display review pending.)
+
+### R141
+
+- ✅ 2026-11-22 — **R141** Mirror the whole ERA Notes vault to the Drive folder — [criteria](<../../PM Tooling/PM Tooling — Master Book.md#r141>) (tests/pm-drive-publish.test.ts 30/30 (+8 vault cases); pnpm pm:drive --dry-run on the real Drive folder: 1018 vault files to write, 61 PM docs unchanged, 0 skipped. Real publish pending owner restart of pnpm pm.)
 
 ## State log
 
