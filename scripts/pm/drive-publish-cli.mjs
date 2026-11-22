@@ -12,6 +12,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { openStore } from "../delivery-v2/store.mjs";
+import { listStewardRequests, stewardStaleMs } from "../delivery-v2/steward-requests.mjs";
+import { listUat, readImportStatus } from "../delivery-v2/uat.mjs";
 import { createRollupsSnapshotBuilder } from "./bridge.mjs";
 import { createDrivePublisher, readDeliveryFromStore, resolveDriveRoot } from "./drive-publish.mjs";
 
@@ -33,7 +35,7 @@ function readDelivery() {
   let store;
   try {
     store = openStore({ path: STORE_PATH, readOnly: true });
-    return readDeliveryFromStore(store);
+    return readDeliveryFromStore(store, { requests: listStewardRequests(store, stewardStaleMs(process.env.PM_STEWARD_STALE_MS)) });
   } catch (error) {
     return { available: false, reason: String(error?.message || error).slice(0, 200), runs: [], requests: [] };
   } finally {
@@ -48,6 +50,7 @@ const publisher = createDrivePublisher({
   vaultDir: join(ROOT, "ERA Notes"),
   driveRoot,
   readDelivery,
+  readUat: () => listUat({ root: ROOT, importStatus: readImportStatus({ root: ROOT }) }).handovers,
   readRollups: () => createRollupsSnapshotBuilder({ PM_DIR }).buildRollupsSnapshot(),
   statePath: join(ROOT, ".pm", "drive-publish.json"),
   log: console.log,
@@ -60,4 +63,7 @@ if (!result.ok) {
   process.exit(1);
 }
 const { status, ...summary } = result;
-console.log(JSON.stringify({ driveRoot, ...summary, deliveryAvailable: status?.delivery?.available ?? null, runs: status?.delivery?.runs?.length ?? null }, null, 2));
+const delivery = status?.delivery;
+console.log(JSON.stringify({ driveRoot, ...summary, deliveryAvailable: delivery?.available ?? null,
+  deliveryStale: delivery ? Boolean(delivery.stale) : null, staleSince: delivery?.staleSince ?? null,
+  runs: delivery?.runs?.length ?? null }, null, 2));

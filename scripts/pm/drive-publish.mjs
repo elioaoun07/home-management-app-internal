@@ -7,6 +7,7 @@
 //   03 - Steward Proposals  Dot's folder. Created if missing, never written to, never read back.
 //   04 - ERA Notes          the whole ERA Notes vault, same folder tree (dot-folders such as
 //                           .obsidian and .pm stay local), secret-scanned like the documents
+//   05 - Session Review     temporary Local run evidence from its recorded checks and Git revisions
 //
 // Local PM stays authoritative: nothing here reads the Drive folder into the
 // repository. A Drive-side edit to a published file is overwritten on the next
@@ -21,13 +22,15 @@
 //   - One pass at a time; a pass that makes no progress for `timeoutMs` is abandoned, so a
 //     hung Drive call cannot pile up threads while a long first copy still completes.
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { promises as nodeFsp } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { attentionItems } from "./relay-shared.mjs";
 import { findSecrets } from "./relay.mjs";
+import { bindLocalUat, localDriveStatus, localHandoverRun } from "./drive-local-status.mjs";
+import { createSessionReviewSync, REVIEW_FOLDER } from "./drive-session-review.mjs";
 
 export const DEFAULT_DRIVE_ROOT = "G:\\My Drive\\ERA PM Command Center";
 export const FOLDERS = Object.freeze({
@@ -35,6 +38,7 @@ export const FOLDERS = Object.freeze({
   status: "02 - Delivery Status",
   proposals: "03 - Steward Proposals",
   vault: "04 - ERA Notes",
+  review: REVIEW_FOLDER,
 });
 /** How vault paths are reported (wrote / pruned / skipped / Drive edits); never a Drive path. */
 export const VAULT_LABEL = "ERA Notes/";
@@ -161,13 +165,14 @@ const countBy = (rows, key) => rows.reduce((acc, row) => ((acc[String(row[key])]
 
 /**
  * @param {Record<string, Function>} store  only STORE_READS are called
- * @param {{requests?:any[], limit?:number}} [options]
+ * @param {{requests?:any[], limit?:number, localSummaries?:(rows:any[])=>any[]}} [options]
  */
-export function readDeliveryFromStore(store, { requests = [], limit = RUNS_LISTED } = {}) {
+export function readDeliveryFromStore(store, { requests = [], limit = RUNS_LISTED, localSummaries } = {}) {
   try {
     const rows = store.listRuns();
     const chosen = [...rows.filter((row) => row.lifecycle !== "CLOSED"), ...rows.filter((row) => row.lifecycle === "CLOSED").slice(0, limit)];
-    const runs = chosen.map((run) => runStatus(store, run));
+    const summaries = new Map((localSummaries?.(chosen) || []).map(row => [row.run_id, row]));
+    const runs = chosen.map((run) => runStatus(store, run, summaries.get(run.run_id)));
     return { available: true, runs, requests: requests.map(requestStatus) };
   } catch (error) {
     return { available: false, reason: String(error?.message || error).slice(0, 200), runs: [], requests: [] };
@@ -186,9 +191,12 @@ function requestStatus(request) {
   };
 }
 
-function runStatus(store, run) {
+function runStatus(store, run, live) {
   const run_id = String(run.run_id);
   const jobs = store.listJobs(run_id);
+  const jobCounts = { total: jobs.length, byStatus: countBy(jobs, "status") };
+  const record = parse(run.base_manifest_json);
+  if (record?.lane === "local") return localDriveStatus({ run, record, live, jobs: jobCounts, reviewFolder: FOLDERS.review });
   const plans = store.listPlans(run_id);
   const questions = store.listQuestions(run_id);
   const resultRow = store.latestResult(run_id);
@@ -200,7 +208,7 @@ function runStatus(store, run) {
   const plan = plans.length ? plans[plans.length - 1] : null;
   const criteria = (result?.criterion_states || []).map((entry) => ({ criterion_id: String(entry.criterion_id), state: String(entry.state) }));
   const unknownJobs = jobs.filter((job) => job.status === "unknown");
-  const openQuestions = questions.filter((q) => q.status === "open" && q.blocking);
+  const openQuestions = closed ? [] : questions.filter((q) => q.status === "open" && q.blocking);
 
   const blockers = [];
   for (const q of openQuestions) blockers.push({ kind: "question", ref: String(q.question_id) });
@@ -222,10 +230,10 @@ function runStatus(store, run) {
         ok: true,
         run: { lifecycle: String(run.lifecycle) },
         plans: plans.map((p) => ({ plan_id: p.plan_id, revision: p.revision, status: p.status })),
-        questions: questions.map((q) => ({ question_id: q.question_id, status: q.status, blocking: Boolean(q.blocking) })),
+        questions: openQuestions,
         jobs: jobs.map((job) => ({ job_id: job.job_id, status: job.status })),
-        result: resultRow ? { result_id: String(resultRow.result_id), result_version: Number(resultRow.result_version) } : null,
-        applications: applications.map((a) => ({ application_id: a.application_id, state: a.state })),
+        result: resultRow && ownerAction.kind === "apply" ? { result_id: String(resultRow.result_id), result_version: Number(resultRow.result_version) } : null,
+        applications: application?.state === "applied" ? [] : applications.map((a) => ({ application_id: a.application_id, state: a.state })),
         ownerAction,
       },
     },
@@ -237,7 +245,7 @@ function runStatus(store, run) {
     title: String(contract?.outcome || run_id),
     phase: closed ? "CLOSED/" + String(run.closed_outcome || "?") : String(run.lifecycle) + (run.waiting_reason ? " (" + run.waiting_reason + ")" : ""),
     progress: {
-      jobs: { total: jobs.length, byStatus: countBy(jobs, "status") },
+      jobs: jobCounts,
       plan: plan ? { revision: Number(plan.revision), status: String(plan.status) } : null,
       criteria: { total: criteria.length, byState: countBy(criteria, "state") },
       application: application ? { application_id: String(application.application_id), state: String(application.state) } : null,
@@ -294,7 +302,8 @@ export function buildUatStatus(views) {
       work_id: view.subject.work_id,
       campaign: view.subject.campaign,
       title: oneLine(view.subject.title || view.summary),
-      run_id: view.subject.run_id,
+      run_id: localHandoverRun(view),
+      source_revision: view.binding?.kind === "source" ? view.binding.source_revision : null,
       status: view.status,
       acceptance: view.acceptance.state,
       shipped: view.acceptance.shipped,
@@ -317,7 +326,7 @@ export function renderHandoverMarkdown(view) {
     "",
     `${view.subject.campaign ? view.subject.campaign + " · " : ""}${view.subject.work_id || "no item"} · handover ${view.handover_id} r${view.revision} · ${view.status} · ${view.acceptance.state}`,
     "",
-    `Run ${view.subject.run_id || "none"} · ${view.binding ? (view.binding.kind === "candidate" ? "candidate " + view.binding.candidate_id : "source " + view.binding.source_revision) : "unbound"} · environment ${view.environment.target}${view.environment.build ? " " + view.environment.build : ""}`,
+    `Run ${localHandoverRun(view) || "none"} · ${view.binding ? (view.binding.kind === "candidate" ? "candidate " + view.binding.candidate_id : "source " + view.binding.source_revision) : "unbound"} · environment ${view.environment.target}${view.environment.build ? " " + view.environment.build : ""}`,
     "",
   ];
   if (view.setup) lines.push("## Setup", "", view.setup, "");
@@ -375,11 +384,14 @@ export function renderStatusMarkdown(status, changedAt) {
     const progress = [
       `jobs ${p.jobs.total}`,
       p.plan ? `plan r${p.plan.revision} ${p.plan.status}` : null,
-      p.criteria.total ? "checks " + Object.entries(p.criteria.byState).map(([k, v]) => `${v} ${k}`).join(", ") : null,
+      p.criteria.total ? "criteria " + Object.entries(p.criteria.byState).map(([k, v]) => `${v} ${k}`).join(", ") : null,
+      run.lane === "local" ? (run.evidence?.checks?.map(c => c.name + " " + c.state).join(", ") || "no recorded checks") : null,
+      run.evidence?.uat ? `UAT ${run.evidence.uat.state} ${run.evidence.uat.passed}/${run.evidence.uat.required}` : null,
+      run.evidence?.pushed_commit ? "push " + run.evidence.pushed_commit.slice(0, 12) : null,
       p.application ? `apply ${p.application.state}` : null,
     ].filter(Boolean).join(" · ");
     const blockers = run.blockers.map((b) => `${b.kind}:${b.ref}`).join(", ") || "none";
-    lines.push(`| ${run.run_id} · ${cell(run.title).slice(0, 80)} | ${cell(run.phase)} | ${cell(progress)} | ${cell(blockers)} | ${run.updated_at} |`);
+    lines.push(`| ${run.run_id} · ${run.lane === "local" ? cell(run.work_id) + " · " : ""}${cell(run.title).slice(0, 80)} | ${cell(run.phase)} | ${cell(progress)} | ${cell(blockers)} | ${run.updated_at} |`);
   }
   const u = status.uat;
   if (u) {
@@ -415,6 +427,7 @@ const ROOT_README = [
   "- 02 - Delivery Status: status.json and status.md. Stale if Updated is older than 10 minutes.",
   "- 03 - Steward Proposals: write recommendations here. Nothing in this folder is read back automatically.",
   "- 04 - ERA Notes: read-only copy of the whole ERA Notes vault, same folders. Same overwrite rule as 01. Anything under an _Archive folder is history, not current state.",
+  "- 05 - Session Review: temporary Local session reports with recorded checks, sealed changes and matching owner UAT. Check the run and candidate against 02 before using a report.",
   "",
 ].join("\n");
 
@@ -451,6 +464,7 @@ export function createDrivePublisher(options) {
     timeoutMs = 30_000, debounceMs = 1_500, retryMs = [30_000, 60_000, 120_000, 300_000], log = () => {}, env = process.env,
   } = options;
 
+  const syncSessionReviews = createSessionReviewSync({ root: options.root, driveRoot, fsp, env });
   let state = loadState();
   let inFlight = null;
   let rerun = null;
@@ -489,12 +503,12 @@ export function createDrivePublisher(options) {
   }
   async function writeAtomic(path, data) {
     await fsp.mkdir(dirname(path), { recursive: true });
-    const temp = join(dirname(path), "~pm-" + basename(path) + ".tmp");
+    const temp = join(dirname(path), "~pm-" + randomUUID() + ".tmp");
     try {
-      await fsp.writeFile(temp, data);
+      await fsp.writeFile(temp, data, { flag: "wx" });
       await fsp.rename(temp, path);
     } catch (error) {
-      await fsp.unlink(temp).catch(() => {});
+      if (error.code !== "EEXIST") await fsp.unlink(temp).catch(() => {});
       throw error;
     }
   }
@@ -503,13 +517,18 @@ export function createDrivePublisher(options) {
     const result = { ok: true, wrote: [], unchanged: 0, pruned: [], skipped: [], driveEdits: [], statusWritten: false, dryRun: Boolean(dryRun) };
     const rootStat = await fsp.stat(driveRoot).catch(() => null);
     if (!rootStat || !rootStat.isDirectory()) throw new Error("drive-unavailable: " + driveRoot);
+    progress();
     const write = async (path, data) => {
       if (!dryRun) await writeAtomic(path, data);
       progress();
     };
     if (!dryRun) {
-      for (const [name, folder] of Object.entries(FOLDERS)) if (name !== "vault" || vaultDir) await fsp.mkdir(abs(folder), { recursive: true });
-      if (String((await readOrNull(abs("README.md"))) ?? "") !== ROOT_README) await writeAtomic(abs("README.md"), ROOT_README);
+      for (const [name, folder] of Object.entries(FOLDERS)) {
+        if (name === "vault" && !vaultDir) continue;
+        await fsp.mkdir(abs(folder), { recursive: true });
+        progress();
+      }
+      if (String((await readOrNull(abs("README.md"))) ?? "") !== ROOT_README) await write(abs("README.md"), ROOT_README);
     }
 
     let documents = state.documents ?? 0;
@@ -601,9 +620,7 @@ export function createDrivePublisher(options) {
 
     if (status || docs || full) {
       let delivery = readDelivery();
-      if (delivery.available) {
-        if (!dryRun) state.lastDelivery = { at: now(), delivery };
-      } else if (state.lastDelivery) {
+      if (!delivery.available && state.lastDelivery) {
         delivery = { ...state.lastDelivery.delivery, stale: true, staleSince: state.lastDelivery.at, staleReason: delivery.reason };
       }
       let rollups = null;
@@ -642,6 +659,9 @@ export function createDrivePublisher(options) {
           if (!dryRun) state.uatFiles[view.handover_id] = hash;
         }
       }
+      delivery = bindLocalUat(delivery, uatViews);
+      await syncSessionReviews({ delivery, dryRun, write, result, progress });
+      if (!dryRun && delivery.available && !delivery.stale) state.lastDelivery = { at: now(), delivery };
       const at = now();
       const next = buildStatus({ delivery, rollups, publish: { documents, ...(vaultDir ? { vaultFiles: vaultCount } : {}), skipped, driveEdits }, now: at, uat });
       const hash = sha(JSON.stringify({ ...next, generatedAt: undefined })); // the clock alone is not a change

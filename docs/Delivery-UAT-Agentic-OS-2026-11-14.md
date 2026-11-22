@@ -256,6 +256,8 @@ These instructions supersede navigation names in older handovers: **Plan** opens
 
 **Reset:** Let the fixture restore its own mirrored document. **Limits:** Missing publication makes steps 1–3 Blocked; step 4 needs a disposable mirror and never edits the owner's live acceptance record.
 
+**Local supervisor pilot · 22 November 2026 · owner witness pending.** Follow the [Steward prompts](ERA-Steward-Runbook.md#supervise-one-owner-launched-local-delivery) for one item you want to deliver. Compare the run ID in the first unprompted phone message with the one you started in PM. Record what changed, its evidence time and the actual notification time. At UAT, compare the packet's candidate head, host checks and handover with the Local session. After closure or shipment and a fresh sync, verify that its generated packet has gone and the durable UAT record is readable. Record any missed alert, mismatch or stale observation here.
+
 ## R77 — Feedback becomes one work item
 
 **Acceptance:** R77

@@ -1,5 +1,7 @@
 # ERA Steward — Dot usage catalog
 
+**Current Local pilot, 22 November 2026.** Use the owner-launch prompts, freshness check, background-notification trial and candidate review in the [Steward runbook](ERA-Steward-Runbook.md#supervise-one-owner-launched-local-delivery). The October catalog below records broader options. Its example schedules and wake-up intervals are historical proposals and confer no authority for this pilot.
+
 **Evidence cutoff:** 2026-10-28. Dot capabilities come from OpenAI's Dots docs (read 2026-10-28). PM facts come from this repo and the Drive status published 2026-10-27 21:55 UTC.
 
 **Goal:** Dot works as the project manager and scrum master of PM Command Center, and you work as the CEO. Dot prioritizes, monitors, chases and reports. You set direction, keep taste and preferences, and own the irreversible calls.

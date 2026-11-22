@@ -915,6 +915,8 @@ At a 1920 × 1080 viewport and DPR 2, the Radeon 880M recorded 16.7 ms median an
 
 **UAT instructions:** [Test steps](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r78--uat-in-the-drive-mirror>)
 
+**22 November 2026 · Local supervision.** The Drive publisher identifies the Local work item and session, exposes its recorded host checks, and links a temporary review with the candidate diff and revision-matched UAT. The owner starts the session and retains acceptance and publication. The first real background Dot notification and post-closure Drive cleanup are pending owner observations in the [R78 UAT](<../../../docs/Delivery-UAT-Agentic-OS-2026-11-14.md#r78--uat-in-the-drive-mirror>). [Setup and prompts](<../../../docs/ERA-Steward-Runbook.md#supervise-one-owner-launched-local-delivery>)
+
 **Outcome:** UAT status and handover documents reach the one-way Drive mirror, and the Delivery tab shows each finished delivery's acceptance state apart from engineering Done.
 **Kind:** feature
 **Execution:** delivery

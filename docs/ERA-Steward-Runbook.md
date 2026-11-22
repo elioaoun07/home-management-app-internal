@@ -1,4 +1,58 @@
-# ERA Steward runbook — "Run delivery for item <ID>"
+# ERA Steward runbook
+
+## Supervise one owner-launched Local delivery
+
+**Current procedure, 22 November 2026.** Ask ERA Steward to recommend one item, watch the Local session you start, review the candidate evidence and prepare your UAT. You keep Start, answers to the delivery agent, testing, acceptance and publication in PM Command Center. BUD-95 is the completed reference run.
+
+### Before the first pilot
+
+1. **Laptop.** Review and commit the supervisor tooling on `main` before launching a Local delivery. Start checks for a clean `main` checkout. At a break between sessions, restart the existing PM Command Center once to load the updated Drive publisher. Keep the laptop awake, PM running and Drive syncing while you are away. Local controls require the paired laptop browser on loopback. From away, you can operate that browser through your own remote desktop if available. The phone can receive Steward's reports. [Laptop controls](<../ERA Notes/06 - Setup & Onboarding/PM Relay Setup.md#using-the-windows-shortcut>) · [Local owner workflow](Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168)
+2. **Dot.** In your existing private chat with ERA Steward, give it read access to the Drive folder **ERA PM Command Center** and enable notifications for that chat on the phone you will carry. Drive is sufficient for this pilot. A separate coding task, computer connection and the old R44 tunnel are unnecessary. [Google Drive setup](https://help.openai.com/en/articles/10929079-google-drive-app-and-setup-in-chatgpt) · [Dot controls](https://learn.chatgpt.com/docs/dots/controls) · [Dot messaging](https://learn.chatgpt.com/docs/dots/channels)
+3. **Read check.** Ask Steward to open `02 - Delivery Status/status.json` in Drive and quote its `generatedAt`, the newest Local row's run ID and status, or that no Local row is listed. Compare the timestamp with the laptop copy. A snapshot older than ten minutes or marked stale/unavailable warrants one “status unconfirmed” message with the last good time. An empty folder or a search snippet cannot establish that a run ended. Read the current campaign checklist and the recommended item's Master Book criteria from `01 - PM Documentation/PM/`.
+
+### Paste before choosing an item
+
+> ERA Steward, use the ERA PM Command Center folder in Google Drive as my read-only delivery supervisor. Check the actual status file now and give me its publication time. Recommend one ready item for the best household or business outcome. Give its ID, who benefits, the cost of waiting, the evidence for urgency, any dependency or existing session/candidate, and why it beats your runner-up. Prefer a reviewable small item when the outcomes are close. Cite the checklist and acceptance criteria. I will choose and launch it. Keep this exchange in our private chat. Use Drive directly for status and keep coding, shell and PM actions with me and the delivery runner.
+
+On 22 November the current sprint index showed its four named items already closed. **HUB-93** was a small Now blocker with a short observable test: asking ERA to add a contact should open a prefilled form. **HUB-119** was the higher-consequence alternative for households relying on offline capture: an old queued write or a sign-in interruption could otherwise lose the operation. Recheck the dated recommendation against today's queue, existing candidates, prerequisites and your priorities. [Current PM index](<../ERA Notes/10 - Project Management/_index.md>) · [HUB-93 criteria](<../ERA Notes/10 - Project Management/Hub & ERA/Hub & ERA — Master Book.md#hub-93>) · [HUB-119 criteria](<../ERA Notes/10 - Project Management/Hub & ERA/Hub & ERA — Master Book.md#hub-119>)
+
+### Paste after you press Start
+
+In PM, open the chosen item, select **Local**, press **Start** once and copy the `local-…` ID from the session. Replace both placeholders.
+
+> Supervise **<ITEM-ID>**, Local run **<local-run-id>**, until I ship, close it or ask you to stop. Read the exact run from Drive now and repeat its ID, phase and evidence time. Follow only this run. Confirm how you will follow up here while I am away and whether you can check Drive in the background. Interrupt me once for each new blocker, owner question or decision, when the candidate is ready for my tests, and on final closure. A useful alert gives the recorded reason, its time and the one action I need to take. If status goes stale or the run cannot be matched, say “status unconfirmed” once with the last reliable fact. On recovery, read the same ID again.
+>
+> When the candidate is ready, read its review document and matching UAT handover. Compare the changed behavior and automated checks with every acceptance criterion. Cite concrete findings, failed or missing evidence, likely regressions and what still needs hands-on testing. Give me a verdict and a short UAT checklist with steps and expected results. If the candidate revision changes, repeat the review against the new head. You may read and advise. I answer questions, authorize fixes, test, sign off and publish. Stop following this session when it closes.
+
+**Prove the notification once.** After Steward acknowledges the exact run, leave the chat. At the next genuine blocker, owner question or UAT-ready transition, look for a private notification while the chat is idle. Compare its run ID, transition and evidence timestamp with PM. Record the receipt time to judge whether the delay works for you. Dot supports ongoing responsibilities and wake-ups, but delivery timing depends on the product, permissions and Drive freshness. The documented event triggers cover Gmail, Slack and GitHub. A fixed recurring ChatGPT task can run at most once per hour. There is no standing schedule in this procedure. If the background read or phone notification cannot be demonstrated, ask **“Check my run now”** when needed and use PM directly for timely decisions. [Personalize your Dot](https://learn.chatgpt.com/training/walkthroughs/personalize-your-dot) · [Tasks and memory](https://learn.chatgpt.com/docs/dots/tasks-and-memory) · [Scheduled tasks](https://help.openai.com/en/articles/10291617-scheduled-tasks-in-chatgpt)
+
+### What a pre-UAT review must contain
+
+| Read | What Steward should give you |
+| --- | --- |
+| The exact Local row in `02 - Delivery Status/status.json` | Item, run ID, phase, evidence time, and any owner action for this run. A new heartbeat alone establishes mirror freshness. |
+| The row's `evidence.review_document` in `05 - Session Review/<local-run-id>.md` | Candidate base and head, relevant changed files and lines visible in the packet, what changed for the user, and a concrete failure mode to test. Call out missing, omitted or truncated evidence. Report a suspected defect with its trigger, likely effect and the evidence that supports it. |
+| Recorded host checks and matching UAT handover | For each acceptance criterion, identify the relevant check and what it establishes at this head. Test exit codes can support automated verification. Unobserved behavior remains for manual UAT. Match the handover ID and source revision. A previous attempt for the same item may have a different head. |
+| Steps for the owner | Give a **ready for UAT**, **changes needed**, or **insufficient evidence** verdict. Include setup, a normal action, a regression or failure case, expected observations and cleanup in a test environment where needed. Send the summary here. The owner records the actual result in PM and chooses whether to accept and publish. |
+
+For HUB-93, an owner might enter “Add Pilot Contact as a contact,” verify that the form contains that name, cancel and confirm no contact was created. Repeat in a test household, complete the details, save once and verify one matching contact with those details. For a confirmed defect, request changes in PM and repeat the affected checks on the next candidate. [HUB-93 owner report](<../ERA Notes/10 - Project Management/Hub & ERA/Hub & ERA — Master Book.md#hub-93>)
+
+`05 - Session Review` holds temporary review evidence for active Local sessions and sessions awaiting review or action. After closure or shipment, the publisher retires the generated packet. With no eligible sessions it should contain no generated files. A fresh status row or PM receipt establishes the outcome. A missing packet alone cannot prove a ship.
+
+BUD-95 illustrates why the records matter. Its Local workspace was discarded, its owner accepted all three UAT scenarios on candidate `faa3630a`, and the Budget Shipped Log separately records BUD-95 on 22 November. Report each fact using its own receipt. [BUD-95 sign-off evidence](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-167>) · [Budget Shipped Log](<../ERA Notes/10 - Project Management/Budget/Budget — Master Book.md#shipped-log>)
+
+### What the previous pilot taught us
+
+| Observed pain | How this pilot tests the fix |
+| --- | --- |
+| R44 involved 25 local Codex dispatch attempts, 24 accepted. These included legitimate repairs and repeated status nudges. The supervision cost was unmeasured. | Steward reads Drive for every status update and returns the same run ID. Check Dot Activity after the pilot for unexpected coding delegations. [R44 assessment](ERA-Steward-Signoff-Plan-2026-10-24.md#the-cost-issue-precisely) |
+| The planning update arrived 3m30s after PM reached review. The final-result update arrived 4m28s late. Cancelled attempts and stale coordinator timestamps obscured which run was active. | Match the exact ID, use the snapshot's age and test an unprompted notification once. [R44 acceptance](R44-Delivery-Acceptance-2026-10-24.md#remaining-acceptance-and-reporting-limits) |
+| Five new R44 test cases failed at their first execution after Apply. The local test repair then differed from the frozen candidate. | Check the actual head, changed tests, host check results and coverage gaps before recommending UAT. Keep any later revision visible as another review. [R44 verification gap](ERA-Steward-Signoff-Plan-2026-10-24.md#what-r44-establishes) |
+| Earlier Confined setup needed troubleshooting for Docker, dependencies, readiness expiry and owner authorizations. BUD-95 demonstrated the owner's Local workflow and recorded three accepted UAT scenarios. | Launch from the Local lane that worked for BUD-95. Steward reports the blocker and leaves repair and publication to the owner. [Earlier setup](ERA-Steward-Setup-Summary.md) · [BUD-95 handoff](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-167>) |
+
+## Historical Confined procedure — October 2026
+
+The sections below preserve the earlier owner-authorized Steward launch and restricted MCP pilot. Use the supervisor prompts above for the BUD-95-style Local workflow.
 
 **Owner direction (2026-10-20):** readiness and setup are checked and fixed on the PM Command Center side. ERA Steward does one thing: press Start for the item it is given and report the result. Background: [ERA Steward setup summary](ERA-Steward-Setup-Summary.md). Tracked as [DLV-139](<../ERA Notes/10 - Project Management/Delivery/Delivery — Master Book.md#dlv-139>).
 

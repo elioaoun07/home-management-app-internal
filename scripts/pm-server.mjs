@@ -134,7 +134,10 @@ const drive = DRIVE_ROOT
       driveRoot: DRIVE_ROOT,
       readDelivery: () =>
         deliveryV2Ctx.hasStore()
-          ? readDeliveryFromStore(deliveryV2Ctx.store, { requests: deliveryV2Ctx.stewardRequests() })
+          ? readDeliveryFromStore(deliveryV2Ctx.store, {
+              requests: deliveryV2Ctx.stewardRequests(),
+              localSummaries: rows => deliveryV2Ctx.local.list(rows),
+            })
           : { available: false, reason: "no-store", runs: [], requests: [] },
       readRollups: () => createRollupsSnapshotBuilder({ PM_DIR }).buildRollupsSnapshot(),
       // Local UAT records, read without the supervisor; the mirror never writes them.

@@ -6,6 +6,8 @@ status: in-progress
 
 # ERA Steward — Dot connection setup
 
+**Historical Confined launch experiment.** This checklist records the October test of direct MCP commands. The current Local pilot uses the existing Google Drive mirror and an owner-initiated launch. Start with the [supervisor runbook](ERA-Steward-Runbook.md#supervise-one-owner-launched-local-delivery).
+
 **Goal:** let Dot call the four ERA operations directly through a private MCP plugin, without launching local coding tasks for routine commands or status.
 
 **Done when:** Dot reads the existing Applied R44 run through the plugin, reconnects successfully with general local-computer access revoked, and the owner records the accepted delegation limits.

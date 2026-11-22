@@ -304,9 +304,9 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     if (d.applied) return "merged";
     return d.phase;
   }
-  function list() {
+  function list(selectedRows = null) {
     if (!hasStore()) return [];
-    return s().listRuns().filter(localRecord).map(row => {
+    return (selectedRows ?? s().listRuns()).filter(localRecord).map(row => {
       const d = localRecord(row);
       const active = tasks.has(row.run_id);
       // A parked session has no process by design; it is waiting, not interrupted.
