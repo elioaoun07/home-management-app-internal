@@ -15,7 +15,7 @@ export function localBoardActionAllowed(
   if (action === "commit" || action === "push")
     return run.publication?.action === action && !!run.publication.token && !run.publication.reason;
   if (action === "merge") return (run.phase === "uat-ready" || !!run.merge_pending) && !!run.canMerge;
-  return action === "cancel" && ["preparing", "building", "checking"].includes(run.phase);
+  return action === "cancel" && ["preparing", "building", "checking", "accepting"].includes(run.phase);
 }
 export function attentionActionAllowed(
   run: LocalRunView,
@@ -23,6 +23,7 @@ export function attentionActionAllowed(
   item: AttentionItem,
 ) {
   const action = item.action.run;
+  if (action === "test" && run.phase === "acceptance-paused") return !busy;
   if (action === "test") return !busy && !!run.handover && !!item.action.href;
   if (action === "review" || action === "cancel")
     return localBoardActionAllowed(run, busy, action);

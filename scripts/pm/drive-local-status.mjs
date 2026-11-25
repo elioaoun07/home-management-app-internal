@@ -6,6 +6,8 @@ const checkNames = new Set(["typecheck", "lint", "test", "pm:lint"]);
 const failureCodes = new Set(["install", "secrets", "native-error", "no-change", "commit-hook", "commit-timeout", "checks", "handover", "cancelled"]);
 const ownerSteps = new Map([
   ["uat-ready", ["local-review", "Review candidate and UAT"]],
+  // DLV-175: a missed or unclear Acceptance Check waits for Request changes or Stop.
+  ["acceptance-paused", ["local-acceptance", "Decide on acceptance findings"]],
   ["refresh-conflict", ["local-refresh", "Inspect refresh conflict"]],
   ["refresh-failed", ["local-refresh", "Inspect failed refresh"]],
   ["merged", ["local-commit", "Review commit"]],
@@ -49,6 +51,18 @@ export function bindLocalUat(delivery, views) {
   return { ...delivery, runs };
 }
 
+const verdicts = new Set(["met", "missed", "unclear"]);
+/** The recorded Acceptance Check of the current candidate, bounded for the mirror. */
+function acceptanceSummary(record) {
+  const acceptance = record.acceptance;
+  if (!acceptance || !Array.isArray(acceptance.criteria)) return null;
+  const line = value => String(value ?? "").replace(/s+/gu, " ").trim().slice(0, 300);
+  return { state: acceptance.state === "passed" ? "passed" : "paused", error: acceptance.error ? line(acceptance.error) : null,
+    revisions_used: Array.isArray(record.revisions) ? record.revisions.length : 0,
+    criteria: acceptance.criteria.slice(0, 20).map(entry => ({ id: line(entry.id).slice(0, 40), source: line(entry.source).slice(0, 40),
+      state: verdicts.has(entry.state) ? entry.state : "unclear", text: line(entry.text), evidence: (entry.evidence || []).slice(0, 2).map(line) })) };
+}
+
 export function localDriveStatus({ run, record, live, jobs, reviewFolder }) {
   const id = run.run_id;
   const closed = run.lifecycle === "CLOSED";
@@ -70,6 +84,9 @@ export function localDriveStatus({ run, record, live, jobs, reviewFolder }) {
     step = ["local-interrupted", "Inspect interrupted session"];
   } else if (stage === "refresh-conflict" || stage === "refresh-failed") {
     blockers.push({ kind: "refresh", ref: stage });
+  } else if (stage === "acceptance-paused" && !closed) {
+    const counts = record.acceptance?.counts || {};
+    blockers.push({ kind: "acceptance", ref: `${counts.missed ?? 0} missed · ${counts.unclear ?? 0} unclear` });
   }
   for (const check of candidateChecks.filter(check => check.state !== "pass"))
     blockers.push({ kind: "check", ref: check.name + "-" + check.state });
@@ -84,6 +101,7 @@ export function localDriveStatus({ run, record, live, jobs, reviewFolder }) {
     created_at: run.created_at, updated_at: run.updated_at,
     evidence: {
       base: revision(record.base), head, checks: candidateChecks,
+      acceptance: acceptanceSummary(record),
       handover_id: /^uat-[\da-f]{12}$/u.test(record.handover_id) ? record.handover_id : null,
       review_document: retained ? reviewFolder + "/" + id + ".md" : null,
       // The manual CLI can read persisted phases but cannot witness the laptop runner.

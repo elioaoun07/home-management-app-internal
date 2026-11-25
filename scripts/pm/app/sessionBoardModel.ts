@@ -343,7 +343,7 @@ export function sessionBoard(input: SessionBoardInput) {
     }
     if (run.lane === "local") {
       card.stage = localRunLabel({ phase: run.stage });
-      if (["merged", "committed", "refresh-conflict", "refresh-failed", "push-pending", "revert-push-pending", "uat-ready", "pushed"].includes(run.stage)) {
+      if (["merged", "committed", "refresh-conflict", "refresh-failed", "push-pending", "revert-push-pending", "uat-ready", "acceptance-paused", "pushed"].includes(run.stage)) {
         card.status = card.stage;
         card.lane = run.stage === "uat-ready" ? "uat" : "needs";
         card.action = "Open run";

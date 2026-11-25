@@ -1,5 +1,19 @@
 # Delivery — owner UAT
 
+## Acceptance Check and Request changes — DLV-175
+
+**Owner witness pending.** Restart the local PM Command Center, then start a fresh small item. The check uses one extra read-only session with the run's executor and model.
+
+1. **Pass.** After the four host checks, the stages read **Check → Acceptance → Test**. When every criterion is met, **Test steps** opens as before. At **Test**, the verdict lists each Outcome, Acceptance and Comment line with its evidence. Expected: nothing in the verdict counts as your sign-off.
+2. **Pause.** On an item whose candidate misses a line (for example HUB-93's Comment), the run reads **Misses acceptance**. Expected: no **Test steps**, no handover, and the missed line with its evidence at the **Test** station.
+3. **Request changes.** Optionally add notes and press **Request changes**. Expected: the counter reads **1 of 2**, the session builds again in the same worktree, then Seal, Verify and the Acceptance Check run again. Reopen the run: **Revisions** lists the request, and the first candidate's patch is under `.delivery/local-history/<run>/`.
+4. **Failed revision.** If the revision fails its checks, the run returns to **Misses acceptance** on the previous candidate. The counter stays spent.
+5. **Limit and Stop.** After **2 of 2**, **Request changes** is disabled. **Stop run → Confirm stop** closes the run as **Stopped** without a handover and cleans the worktree. The candidates and patches remain.
+6. **Discard and restart.** On a Ready-to-test run you do not want, press **Discard** at **Test**. Clean up opens with the worktree, branch and commands. Confirm **Discard**. Expected: the run reads **Discarded**, your main checkout is unchanged, the patch is archived, and **New attempt** opens the item's launch page.
+7. **Regression proof (bug item).** If the handover declares a regression test, the verdict shows a **Regression test** line. Expected: met only when the test failed on the base with the declared text and passed on the candidate.
+
+**Not witnessed:** a live reviewer session (fixture reviewers only), Game-mode placement of the decision in the Owner room, and a real Vitest regression run (a stand-in reporter exercised the base/candidate export).
+
 ## Local delivery from Start to Push — DLV-168
 
 **Inspect an existing run.** In Game, switch between **AI room** and **Owner room**. **Explore 3D** enters the selected floor of the observatory. Choose **Elevator** under **Go to station** and press **E** at the call panel, or use the **Elevator to…** button. On either floor, walk with WASD, sprint with Shift, or move and look with two thumbs. Try Map, Take seat and Ask ERA. On the Owner floor, approach a workstation and press **E** or tap its action to open the inspector. At **Merge**, pick a changed file, compare **Run base** or **Repo HEAD**, and expand the inspector to read the patch. **AI room → Activity** opens the mission feed. **Older events** goes back through the recording. **Chat** opens the conversation. In Calm, the same six stations appear above **Session evidence**.

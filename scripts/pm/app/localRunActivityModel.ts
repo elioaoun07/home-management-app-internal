@@ -486,10 +486,10 @@ export function localRunActivity(run: ActivityRun) {
     .reverse();
   const active =
     !run.interrupted &&
-    ["preparing", "building", "checking"].includes(run.phase);
+    ["preparing", "building", "checking", "accepting"].includes(run.phase);
   const waiting =
     !run.interrupted &&
-    ["uat-ready", "push-pending", "revert-push-pending"].includes(run.phase);
+    ["uat-ready", "acceptance-paused", "push-pending", "revert-push-pending"].includes(run.phase);
   let station: LocalActivityStation = "review";
   let label = "Session recorded";
   let detail: string | null = null;
@@ -508,9 +508,14 @@ export function localRunActivity(run: ActivityRun) {
   } else if (run.phase === "checking") {
     station = "lab";
     label = "Verifying";
+  } else if (run.phase === "accepting") {
+    station = "lab";
+    label = "Checking acceptance";
   } else {
     const labels: Record<string, string> = {
       "uat-ready": "Ready to test",
+      "acceptance-paused": "Misses acceptance",
+      stopped: "Stopped",
       merging: "Merging",
       "push-pending": "Push pending",
       failed: "Session failed",

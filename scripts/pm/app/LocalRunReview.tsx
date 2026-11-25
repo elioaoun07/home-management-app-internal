@@ -5,7 +5,7 @@ import { LocalActions, type LocalAct, type LocalRunView } from "./LocalDelivery"
 import { useGameLayer } from "./GameLayer";
 import { LocalRunGame } from "./LocalRunGame";
 import { LocalChat } from "./LocalChat";
-import { displayTitle } from "./localRunModel";
+import { displayTitle, newAttemptHref } from "./localRunModel";
 import { OwnerWorkspace } from "./OwnerWorkspace";
 import { LocalRunConsole, type Tool } from "./LocalRunConsole";
 import "./local-run.css";
@@ -53,13 +53,14 @@ export function LocalRunReview({
       />
     );
   const running =
-    ["preparing", "building", "checking"].includes(run.phase) &&
+    ["preparing", "building", "checking", "accepting"].includes(run.phase) &&
     !run.interrupted &&
     !run.parked;
   const health = liveness(run, now, poll);
   const snapshot = sceneAt(timeline, now);
   const failure = localRunFailure(run);
   const title = displayTitle(run);
+  const attempt = newAttemptHref(run);
   return (
     <>
       <header className="run-heading">
@@ -103,7 +104,7 @@ export function LocalRunReview({
           )}
         </div>
       </section>
-      {["preparing", "building", "checking"].includes(run.phase) &&
+      {["preparing", "building", "checking", "accepting"].includes(run.phase) &&
         <LocalActions run={run} busy={busy} act={act} station="session" />}
       {(run.error || run.failure || run.interrupted) && (
         <section className="local-run-failure" aria-label="Session issue">
@@ -121,14 +122,12 @@ export function LocalRunReview({
               <pre>{stripAnsi(run.error!)}</pre>
             </details>
           )}
-          {run.work.campaign && ["failed", "cancelled"].includes(run.phase) && (
-            <a
-              className="primary"
-              href={`#/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`}
-            >
-              New attempt
-            </a>
-          )}
+          {attempt && <a className="primary" href={attempt}>New attempt</a>}
+        </section>
+      )}
+      {attempt && !(run.error || run.failure || run.interrupted) && (
+        <section className="local-run-failure" aria-label="Session closed">
+          <a className="primary" href={attempt}>New attempt</a>
         </section>
       )}
       {run.parked && <LocalChat run={run} compact limit={1} composer={false} />}

@@ -19,6 +19,10 @@ const command = z.discriminatedUnion("action", [
   z.object({ action: z.enum(["commit", "push"]), run_id: runId, preview_id: z.string().min(1).max(128) }).strict(),
   z.object({ action: z.literal("refresh"), run_id: runId, expected_base: revision, expected_head: revision }).strict(),
   z.object({ action: z.literal("review"), run_id: runId, expected_head: revision.optional() }),
+  // DLV-175: the owner's decision after a paused Acceptance Check.
+  z.object({ action: z.literal("request-changes"), run_id: runId, expected_head: revision, note: z.string().max(4000).optional() }).strict(),
+  z.object({ action: z.literal("stop"), run_id: runId, expected_head: revision.optional() }).strict(),
+  z.object({ action: z.literal("check-acceptance"), run_id: runId }).strict(),
   z.object({ action: z.enum(["ship", "undo", "cancel", "preview", "stop-preview", "merge"]), run_id: runId }),
 ]);
 /** @param {{method:string, path:string, query?:URLSearchParams|null, body?:any, loopbackPeer?:boolean}} request */
@@ -60,6 +64,9 @@ export async function routeLocal({ method, path, query = null, body, loopbackPee
     else if (input.action === "commit" || input.action === "push") value = await ctx.local[input.action](input.run_id, input.preview_id);
     else if (input.action === "refresh") value = await ctx.local.refresh(input.run_id, input.expected_base, input.expected_head);
     else if (input.action === "review") value = await ctx.local.review(input.run_id, input.expected_head);
+    else if (input.action === "request-changes") value = await ctx.local.requestChanges(input.run_id, input.expected_head, input.note ?? "");
+    else if (input.action === "stop") value = await ctx.local.stop(input.run_id, input.expected_head ?? null);
+    else if (input.action === "check-acceptance") value = await ctx.local.recheckAcceptance(input.run_id);
     else if (input.action === "start" && ctx.store) {
       // Reuse Delivery's launch receipts: rejected Local starts must remain
       // observable on Bridge, and re-sending a UUID must not dispatch twice.

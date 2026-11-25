@@ -87,6 +87,11 @@ function renderReview(run, diff, env) {
   for (const check of evidence.checks || []) lines.push(`- ${check.name} · ${check.state}${Number.isInteger(check.exit) ? " · exit " + check.exit : ""}`);
   if (!evidence.checks?.length) lines.push("No completed check receipts recorded.");
   // bindLocalUat has matched the ready handover to this run, item and source revision.
+  // DLV-175: the reviewer's verdict is evidence for the owner, never a sign-off.
+  if (evidence.acceptance) {
+    lines.push("", "## Acceptance check", "", `${evidence.acceptance.state}${evidence.acceptance.error ? " · " + evidence.acceptance.error : ""}`);
+    for (const entry of evidence.acceptance.criteria) lines.push(`- ${entry.state} · ${entry.source} · ${entry.text}${entry.evidence.length ? " — " + entry.evidence.join(" · ") : ""}`);
+  }
   lines.push("", "## Owner UAT", "", evidence.uat && /^uat-[\da-f]{12}$/u.test(evidence.handover_id)
     ? `[Frozen handover r${evidence.uat.revision}](../02%20-%20Delivery%20Status/UAT/${evidence.handover_id}.md) · ${evidence.uat.state}`
     : "No matching ready handover was observed for this candidate.");

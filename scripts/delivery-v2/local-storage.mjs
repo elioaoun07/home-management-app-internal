@@ -6,7 +6,8 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 const maxWorktrees = 2;
 const generatedDirectories = ["node_modules", ".next"];
 const localId = /^local-[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/u;
-const terminal = new Set(["failed", "cancelled", "reverted", "pushed", "discarded"]);
+// DLV-175: "stopped" is an owner-closed run that never reached Handover.
+const terminal = new Set(["failed", "cancelled", "stopped", "reverted", "pushed", "discarded"]);
 export const individualDiscard = new Set(["uat-ready", "refresh-conflict", "refresh-failed", "merged", "committed", "push-pending", "revert-push-pending"]);
 const digest = value => createHash("sha256").update(value).digest("hex");
 const same = (left, right) => relative(left, right) === "";

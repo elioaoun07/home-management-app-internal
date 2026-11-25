@@ -147,6 +147,19 @@ export function localRunAttention(
       action: { label: "Review", run: "review" },
     });
   }
+  // DLV-175: a paused Acceptance Check waits for the owner's decision at Test.
+  if (run.phase === "acceptance-paused" && run.acceptance) {
+    const { missed, unclear } = run.acceptance.counts;
+    add("test", "acceptance", {
+      level: "act",
+      zone: "verify",
+      title: "Acceptance",
+      detail: `${missed} missed · ${unclear} unclear`,
+      state: "open",
+      since: time(run.acceptance.finished_at),
+      action: { label: "Decide", run: "test" },
+    });
+  }
   const testReached = run.phase === "uat-ready" || (!!ready && !!run.handover);
   if (testReached) {
     add("test", run.handover?.handover_id ?? "uat", {

@@ -107,7 +107,7 @@ export function coreSessionState({
           !run.active &&
           // DLV-165: a parked session waits on the owner by design.
           run.ownerActionKind !== "local-question" &&
-          ["preparing", "building", "checking"].includes(run.stage),
+          ["preparing", "building", "checking", "accepting"].includes(run.stage),
       )
       .map(
         (run): Terminal => ({

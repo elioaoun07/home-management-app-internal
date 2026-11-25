@@ -13,6 +13,9 @@ const labels: Record<string, string> = {
   preparing: "Preparing",
   building: "Building",
   checking: "Checking",
+  accepting: "Checking acceptance",
+  "acceptance-paused": "Misses acceptance",
+  stopped: "Stopped",
   "uat-ready": "Ready to test",
   merging: "Merging",
   "push-pending": "Push pending",
@@ -31,6 +34,12 @@ const labels: Record<string, string> = {
   "revert-push-pending": "Revert pending",
 };
 export type WorkflowRun = Pick<LocalRunView, "phase"> & Partial<LocalRunView>;
+
+/** Closed without a merge: the owner can start the same item again. */
+export function newAttemptHref(run: Pick<LocalRunView, "phase" | "run_id" | "work">): string | null {
+  if (!run.work.campaign || !["failed", "cancelled", "discarded", "stopped"].includes(run.phase)) return null;
+  return `#/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`;
+}
 
 /** Old file-copy receipts used phase "shipped" before Commit and Push existed. */
 export function localRunLabel(run: Pick<WorkflowRun, "phase" | "pushed" | "cleaned_at" | "committed" | "applied" | "interrupted" | "merge" | "merge_pending" | "mergePlan" | "canMerge" | "handover" | "risk" | "reviewed_head" | "head">): string {
@@ -54,14 +63,16 @@ export function localRunLabel(run: Pick<WorkflowRun, "phase" | "pushed" | "clean
 
 /** Milestones describe supervisor evidence, never invented native planning steps. */
 export function localRunStages(run: WorkflowRun): { label: string; state: "done" | "pending" | "stopped" | "current" }[] {
-  const stopped = run.interrupted || ["cancelled", "failed", "discarded", "refresh-conflict", "refresh-failed"].includes(run.phase);
+  const stopped = run.interrupted || ["cancelled", "failed", "discarded", "stopped", "acceptance-paused", "refresh-conflict", "refresh-failed"].includes(run.phase);
   const published = !!run.pushed || (run.phase === "shipped" && !!run.merge && !run.applied);
   const merged = !!run.applied || published;
   const tested = merged || !!run.canMerge || run.handover?.acceptance.state === "accepted";
-  const checked = merged || tested || (!!run.handover && run.phase === "uat-ready");
+  // DLV-175: Handover follows a passed Acceptance Check, so a handover proves both.
+  const accepted = merged || tested || (!!run.handover && run.phase === "uat-ready");
+  const checked = accepted || ["accepting", "acceptance-paused"].includes(run.phase) || (run.phase === "stopped" && !!run.acceptance);
   const milestones: [string, boolean][] = [
     ["Build", !!run.head || checked || run.phase === "checking"],
-    ["Check", checked], ["Test", tested],
+    ["Check", checked], ["Acceptance", accepted], ["Test", tested],
   ];
   if (run.risk?.required) milestones.push(["Review", merged || (!!run.head && run.reviewed_head === run.head)]);
   milestones.push(["Merge", merged], ["Commit", !!run.committed || published], ["Push", published], ["Clean up", !!run.cleaned_at && published]);

@@ -353,6 +353,21 @@ No live provider run.
 - **Implementation:** done. The selected item's PM receipt and exact file changes are computed before Merge. Commit preserves unrelated staging. Push previews every outgoing commit and pins the expected remote tip. A remote read can verify an external push. The authenticated fixture exercised separate merge, commit and publication with two remotes and parallel owner work.
 - **UAT:** pending. [Real publication witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
 
+### DLV-175
+
+**Outcome:** Every Local candidate is checked against its item's acceptance before Handover; a miss pauses for the owner, who can request changes or stop the run.
+**Kind:** feature
+**Source:** owner, 2026-11-25, after the HUB-93 candidate `6350b28d` passed all four host checks yet missed the item's Comment ("the form for creating a Contact should fire").
+**Touches:** `scripts/delivery-v2/`, `scripts/pm/`, `tests/delivery-v2/`, `tests/pm-ui/`, `docs/Delivery-UAT.md`
+
+- **Acceptance:** After Verify, a mandatory Acceptance Check reviews the sealed candidate and its draft UAT steps against the item's Outcome, each Acceptance bullet and each owner Comment, plus "the UAT steps test these criteria". Each criterion is met, missed or unclear with evidence. Only an all-met result freezes the Handover. Any miss, unclear result or reviewer failure pauses the run before Handover. The reviewer is a separate read-only session and its verdict never replaces owner UAT or sign-off.
+- **Acceptance:** Fails before, passes after applies only to regression tests that a bug item's handover declares as proving the reported bug fixed. The supervisor runs each one on exported copies of the base (with only the declared test-side files carried over) and of the candidate. It is met only if the test fails on the base with the declared failure text and passes on the candidate. Other new tests are not required to fail first.
+- **Acceptance:** At the pause the owner can Request changes (optional notes; the findings travel with the request) or Stop the run, which closes it without Handover. Nothing retries automatically. Each request spends one of the run's revision limit (2). The revision builds on the current candidate within the item's original scope and instruction, then reruns Seal, Verify and the Acceptance Check. Every sealed candidate, its checks and verdict, each request and its feedback are kept, including a patch per candidate that survives cleanup. A failed or cancelled revision restores the previous candidate and pauses again. Refresh also reruns the check.
+- **Implementation:** done (2026-11-25). `local-acceptance.mjs` holds the criteria, verdict, regression and revision rules; `local-lane.mjs#accept` runs after Verify on builds, revisions and Refresh and freezes the Handover only on all-met. A missing or invalid draft handover now pauses as a missed UAT criterion instead of failing the run. `request-changes`, `stop` and `check-acceptance` (owner-started, only after an interrupted check or a reviewer with no verdict) are the new Local routes. Calm and Game show the verdict and decision at the Test station; Drive mirrors the pause as an owner action and blocker. Replay-only coverage: 9 rule tests, 8 lane integration tests on real Git fixtures (including the base/candidate export with a stand-in Vitest reporter), 4 UI tests; delivery-v2 + pm-ui + Drive suites 2,453 passed, 8 skipped; typecheck and changed-file ESLint clean.
+- **Discard and restart (owner request, 2026-11-25):** the owner could not find how to throw away a Ready-to-test candidate (HUB-93) and restart it; Discard existed only behind the Clean up station. The Test station now offers **Discard** on an unmerged candidate, which opens Clean up's existing preview, and Discarded or Stopped runs offer **New attempt** in Calm and Game (`localRunModel.ts#newAttemptHref`). Covered in `tests/pm-ui/local-acceptance.test.ts`.
+- **Not witnessed:** a live reviewer session and a real Vitest regression run; the owner PM server needs a restart to load the change.
+- **UAT:** pending. [Owner walkthrough](<../../../docs/Delivery-UAT.md#acceptance-check-and-request-changes--dlv-175>).
+
 ### DLV-174
 
 **Outcome:** S5. A blocked Merge names the overlapping files and offers an action appropriate to their state.
@@ -2076,6 +2091,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-11-22 — **DLV-172** Keep the next action on the same Local run page → [record](<../_Archive/Shipped/Delivery.md#dlv-172>)
 - ✅ 2026-11-22 — **DLV-173** Commit and push the tested changes from the run page → [record](<../_Archive/Shipped/Delivery.md#dlv-173>)
 - ✅ 2026-11-22 — **DLV-174** Recover a blocked Merge and retest the refreshed candidate → [record](<../_Archive/Shipped/Delivery.md#dlv-174>)
+- ✅ 2026-11-25 — **DLV-175** Check each Local candidate against its acceptance before Handover → [record](<../_Archive/Shipped/Delivery.md#dlv-175>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

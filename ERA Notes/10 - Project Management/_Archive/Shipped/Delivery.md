@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-22
+updated: 2026-11-25
 type: archive
 status: superseded
 owner: Elio
@@ -573,6 +573,10 @@ owner: Elio
 ### DLV-174
 
 - ✅ 2026-11-22 — **DLV-174** Recover a blocked Merge and retest the refreshed candidate — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-174>) (Local Delivery workflow verified in temporary Git repositories and Chromium. 2388 Delivery and PM tests passed, 8 skipped. Owner decisions and manual witnesses are in the workflow record.)
+
+### DLV-175
+
+- ✅ 2026-11-25 — **DLV-175** Check each Local candidate against its acceptance before Handover — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-175>) (Acceptance Check + Request changes/Stop for Local runs; 21 new replay tests; delivery-v2+pm-ui+Drive 2453 passed/8 skipped; typecheck+ESLint clean; live reviewer unwitnessed)
 
 ## State log
 

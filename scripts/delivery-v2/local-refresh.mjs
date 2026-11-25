@@ -40,7 +40,7 @@ function matchingRebase(workspace, gitDir, record, branch) {
 }
 
 export async function refreshCandidate({ id, root, d, expectedBase, expectedHead, git, run, env, save, event,
-  planMerge, checks, inspect, freeze, stopPreview, ensureDeps, hookMs }) {
+  planMerge, checks, inspect, accept, stopPreview, ensureDeps, hookMs }) {
   if (d.phase !== "uat-ready" && !inRefresh(d)) throw new Error("Refresh needs a candidate waiting for Merge");
   if (!d.head || d.head !== expectedHead || !/^delivery\/[\w.-]+$/u.test(d.branch) ||
       resolve(d.workspace) !== resolve(dirname(root), basename(root) + "-delivery", d.branch.slice("delivery/".length)))
@@ -116,12 +116,13 @@ export async function refreshCandidate({ id, root, d, expectedBase, expectedHead
     persist("refreshing", { checks: results });
     if (results.length !== 4 || results.some(result => result.exit !== 0 || result.error)) throw new Error("Refreshed candidate failed host checks");
     if (await branch() !== d.branch || await head() !== d.head || await dirty()) throw new Error("Candidate changed during host checks");
-    const handover = freeze(id, d, d.head);
-    record = { ...record, step: "done", finished_at: iso() };
-    persist("uat-ready", { handover_id: handover });
-    event(id, "Refreshed candidate ready for owner UAT");
   } catch (error) {
     persist("refresh-failed", { error: String(error.message) });
     event(id, d.error);
+    return;
   }
+  // DLV-175: the rebased candidate passes the Acceptance Check before its Handover.
+  record = { ...record, step: "done", finished_at: iso() };
+  persist("accepting");
+  await accept(id);
 }

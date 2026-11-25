@@ -63,6 +63,7 @@ export function opensAtOwner(run: LocalRunView) {
       !!run.pushed ||
       [
         "uat-ready",
+        "acceptance-paused",
         "merging",
         "merged",
         "committed",

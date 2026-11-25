@@ -44,7 +44,7 @@ export function zoneForEvent(event: LocalActivityEvent | null): ZoneId | null {
   if (event.kind === "command") return "bench";
   if (event.kind === "check") return "verify";
   if (event.kind !== "event" || event.label === "Tool requested") return null;
-  if (event.summary === "Host checks started") return "verify";
+  if (event.summary === "Host checks started" || event.summary === "Acceptance check started") return "verify";
   if (event.summary === "Ready for owner UAT") return "handover";
   if (event.label !== event.summary) return null;
   if (/^(typecheck|lint|test|pm:lint) started$/u.test(event.summary))
@@ -77,7 +77,8 @@ export function phaseZone(run: LocalRunView): ZoneId {
   const fault = faultZone(run);
   if (fault) return fault;
   if (run.phase === "preparing") return "setup";
-  if (run.phase === "checking") return "verify";
+  // DLV-175: the Acceptance Check runs at the Verify station; a pause waits there.
+  if (["checking", "accepting", "acceptance-paused"].includes(run.phase)) return "verify";
   if (run.phase === "uat-ready") return "test";
   if (
     [

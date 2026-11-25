@@ -31,9 +31,11 @@ export function ownerStationState(
 ): OwnerStationState {
   if (id === "cleanup") {
     if (run.cleaned_at) return "done";
-    if (["failed", "cancelled", "reverted"].includes(run.phase))
+    if (["failed", "cancelled", "stopped", "reverted"].includes(run.phase))
       return "current";
   }
+  // DLV-175: the owner decides on a missed Acceptance Check at the Test station.
+  if (id === "test" && run.phase === "acceptance-paused") return "current";
   if (id === "review" && !run.head && !run.risk) return "pending";
   if (id === "review" && !run.risk?.required)
     return run.head && run.reviewed_head === run.head ? "done" : "optional";
@@ -68,7 +70,7 @@ export function currentOwnerStation(run: WorkflowRun): OwnerStation {
   if (run.phase === "push-pending" || run.phase === "revert-push-pending")
     return "push";
   if (run.publication) return run.publication.action;
-  if (["failed", "cancelled", "discarded", "reverted"].includes(run.phase))
+  if (["failed", "cancelled", "stopped", "discarded", "reverted"].includes(run.phase))
     return "cleanup";
   return (
     OWNER_STATIONS.find(({ id }) =>

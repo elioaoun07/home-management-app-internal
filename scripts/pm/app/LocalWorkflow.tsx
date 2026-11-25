@@ -58,7 +58,7 @@ export function LocalActions({ run, busy, act, station, reviewAvailable = false,
   const inConflict = !resumeMerge && !!(conflicts.length || run.refresh?.conflicts?.length || run.phase === "refresh-conflict");
   const refreshable = !resumeMerge && !!(plan?.canRefresh && plan.refreshBase && run.head);
   const offBranch = !!plan && plan.branch !== plan.expected && !plan.error;
-  const stopped = ["failed", "cancelled", "reverted", "shipped", "push-pending", "revert-push-pending"].includes(run.phase);
+  const stopped = ["failed", "cancelled", "stopped", "reverted", "shipped", "push-pending", "revert-push-pending"].includes(run.phase);
   const testReady = !inConflict && !offBranch && run.phase === "uat-ready" && !!run.handover && !run.canMerge && run.handover.acceptance.state !== "accepted";
   const needsReview = !inConflict && !offBranch && run.phase === "uat-ready" && !testReady && !!run.risk?.required && run.reviewed_head !== run.head && !run.canMerge;
   const optionalReview = station === "review" && !run.risk?.required && run.phase === "uat-ready" &&
@@ -102,7 +102,7 @@ export function LocalActions({ run, busy, act, station, reviewAvailable = false,
         </button></div>}
       {at("merge") && (inConflict || offBranch || run.phase === "refresh-failed" || (run.phase === "uat-ready" && !run.canMerge && !testReady && !needsReview)) &&
         <button className="secondary" disabled={busy} onClick={() => act("recheck")}>Recheck</button>}
-      {at("session") && ["preparing", "building", "checking"].includes(run.phase) && <>
+      {at("session") && ["preparing", "building", "checking", "accepting"].includes(run.phase) && <>
         {!!run.cancelCleanupCommands?.length && <details><summary>Cancel commands</summary>
           <GitCommands commands={run.cancelCleanupCommands} /><small>Delete {run.branch} at its archived commit.</small>
         </details>}

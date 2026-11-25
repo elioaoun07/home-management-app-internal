@@ -85,7 +85,7 @@ export function liveness(
       : run.phase === "uat-ready" && readyTimes.length
         ? Math.max(0, now - Math.max(...readyTimes))
         : null;
-  const terminal = ["failed", "cancelled", "shipped", "reverted", "pushed", "cleaned", "discarded"].includes(
+  const terminal = ["failed", "cancelled", "stopped", "shipped", "reverted", "pushed", "cleaned", "discarded"].includes(
     run.phase,
   );
   let state: LocalLivenessState;
@@ -99,11 +99,11 @@ export function liveness(
   )
     state = "link-down";
   else if (run.interrupted) state = "signal-lost";
-  else if (run.phase === "discarded") state = "cancelled";
+  else if (run.phase === "discarded" || run.phase === "stopped") state = "cancelled";
   else if (run.phase === "pushed" || run.phase === "cleaned") state = "shipped";
   else if (terminal)
     state = run.phase as "failed" | "cancelled" | "shipped" | "reverted";
-  else if (["uat-ready", "merged", "committed", "refresh-conflict", "refresh-failed", "merging"].includes(run.phase) || asked !== null) state = "your-turn";
+  else if (["uat-ready", "acceptance-paused", "merged", "committed", "refresh-conflict", "refresh-failed", "merging"].includes(run.phase) || asked !== null) state = "your-turn";
   else if (["push-pending", "revert-push-pending"].includes(run.phase))
     state = "push-pending";
   else {
@@ -125,7 +125,9 @@ export function liveness(
       ? "Preparing"
       : run.phase === "checking"
         ? "Verifying"
-        : "Building";
+        : run.phase === "accepting"
+          ? "Checking acceptance"
+          : "Building";
   const captions: Partial<Record<LocalLivenessState, string>> = {
     "link-down": "Link down",
     "signal-lost": "Signal lost",

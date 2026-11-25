@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { LocalAct, LocalRunView } from "./LocalDelivery";
 import { LocalActions } from "./LocalWorkflow";
+import { LocalAcceptance } from "./LocalAcceptance";
 import { OwnerDiff } from "./OwnerDiff";
 import {
   OWNER_STATIONS,
@@ -125,7 +126,14 @@ export function OwnerStationDetail({
             : statusText[state]}
         </span>
       </header>
-      {station === "test" && <TestEvidence run={run} />}
+      {station === "test" && <LocalAcceptance run={run} busy={busy} act={act} readOnly={readOnly} />}
+      {station === "test" && !["accepting", "acceptance-paused", "stopped"].includes(run.phase) && <TestEvidence run={run} />}
+      {/* An unmerged candidate can be thrown away from where the owner judges it; Clean up owns the preview. */}
+      {station === "test" && !readOnly && onSelectStation && run.phase === "uat-ready" && !run.applied && !run.merge_pending && !run.cleaned_at && (
+        <div className="gate-actions">
+          <button className="secondary" disabled={busy} onClick={() => onSelectStation("cleanup")}>Discard</button>
+        </div>
+      )}
       {station === "review" && !!run.risk?.flagged.length && (
         <details>
           <summary>
@@ -177,7 +185,7 @@ export function OwnerStationDetail({
         )}
       {station === "cleanup" &&
         state === "pending" &&
-        ["preparing", "building", "checking"].includes(run.phase) && (
+        ["preparing", "building", "checking", "accepting"].includes(run.phase) && (
           <p className="quiet">{dependsOn.cleanup}</p>
         )}
       {comparison && !readOnly ? (

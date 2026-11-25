@@ -32,8 +32,18 @@ function temp() { const root = mkdtempSync(join(tmpdir(), "era-local-")); roots.
 const git = (root: string, ...args: string[]) => execFileSync("git", args, { cwd: root, env: { ...localEnvironment(), NODE_ENV: "test" }, encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
 const put = (root: string, path: string, value: string) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); };
 const PM = "ERA Notes/10 - Project Management";
+// DLV-175: replay reviewers. They read the criteria ids from the instruction and never call a provider.
+type ReviewRequest = { request: { instruction: string; purpose: string; workspace: { root: string; access: string } } };
+const criterionIds = (instruction: string) => [...instruction.matchAll(/^\[([\w:-]+)\] /gmu)].map(match => match[1]);
+const verdictReview = (states: Record<string, "met" | "missed" | "unclear"> = {}, seen: ReviewRequest["request"][] = []) =>
+  async ({ request }: ReviewRequest) => {
+    seen.push(request);
+    const criteria = criterionIds(request.instruction).map(id => ({ id, state: states[id] ?? "met", evidence: [`fixture evidence for ${id}`] }));
+    return { status: "finished", observations: { nativeOutcome: "succeeded", finalText: "Reviewed.\n" + JSON.stringify({ criteria }) } };
+  };
+const passingReview = verdictReview();
 async function fixture(risk = false, red = false, failFirst = false, executor = "claude",
-  options: Pick<Parameters<typeof createLocalLane>[0], "run" | "limits" | "checks" | "session" | "prepareDependencies"> = {}) {
+  options: Pick<Parameters<typeof createLocalLane>[0], "run" | "limits" | "checks" | "session" | "prepareDependencies" | "reviewSession"> = {}) {
   const parent = temp(), root = join(parent, "repo"), remote = join(parent, "origin.git");
   mkdirSync(root); git(root, "init", "-b", "main"); git(root, "config", "user.email", "fixture@example.invalid"); git(root, "config", "user.name", "Fixture");
   git(parent, "init", "--bare", remote); git(root, "remote", "add", "origin", remote);
@@ -85,7 +95,7 @@ async function fixture(risk = false, red = false, failFirst = false, executor = 
       put(workspace, risk ? "src/features/accounts/change.ts" : "greeting.txt", "after\n");
       put(workspace, ".delivery-handover.json", JSON.stringify({ summary: "Changed greeting", scenarios: [{ id: "greeting", title: "Greeting", required: true, steps: [{ action: "Read greeting", expected: "after" }] }] }));
       return { status: "finished", observations: { nativeOutcome: "succeeded", usage: { input: 1, output: 1 } } };
-    }, ...options });
+    }, reviewSession: passingReview as never, ...options });
   const input = { file: "Delivery/4 - Checklist.md", id: "DLV-900", executor };
   return { parent, root, remote, store, lane, input, launches: () => launches, releaseFirst: () => releaseFirst(), requestedSettings: () => requestedSettings };
 }
@@ -407,16 +417,22 @@ describe("DLV-160 recorded failure reasons", () => {
     expect(view.checks.every((check: { exit: number }) => check.exit === 0)).toBe(true);
     expect(view.failure).toBeUndefined();
   }, 60_000);
-  it.each(["missing", "unparsable", "incomplete"])("names a %s handover", async condition => {
-    const view = await attempt({ session: async ({ request }) => {
+  // DLV-175: an absent or invalid draft is a missed UAT criterion; the run pauses for the owner instead of failing.
+  it.each(["missing", "unparsable", "incomplete"])("pauses on a %s handover before Handover", async condition => {
+    const f = await fixture(false, false, false, "claude", { session: async ({ request }) => {
       put(request.workspace.root, "greeting.txt", "after\n");
       if (condition !== "missing") put(request.workspace.root, ".delivery-handover.json", condition === "unparsable" ? "{bad json" : JSON.stringify({ summary: "missing scenarios" }));
       return { status: "finished", observations: { nativeOutcome: "succeeded" } };
     }, checks: async () => ["typecheck", "lint", "test", "pm:lint"].map(name => ({ name, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), exit: 0, stdout: "", stderr: "", error: null })) });
-    expect(view.failure).toMatchObject({ code: "handover", step: "Handover" });
-    expect(view.failure?.detail).toContain(`.delivery-handover.json ${condition}`);
-    if (condition === "incomplete") expect(view.failure?.detail).toContain("no-scenarios");
-    expect(view.error).toContain(view.failure?.detail);
+    const id = (await f.lane.start(f.input)).run_id!;
+    await f.lane.wait(id);
+    const view = await f.lane.detail(id);
+    expect(f.store.getRun(id).lifecycle).toBe("ACTIVE");
+    expect(view).toMatchObject({ phase: "acceptance-paused", handover: null, canStop: true, canRequestChanges: true });
+    const uat = view.acceptance!.criteria.find((entry: { id: string }) => entry.id === "uat")!;
+    expect(uat).toMatchObject({ state: "missed", by: "supervisor" });
+    expect(uat.evidence.join(" ")).toContain(`.delivery-handover.json ${condition}`);
+    if (condition === "incomplete") expect(uat.evidence.join(" ")).toContain("no-scenarios");
   }, 60_000);
   it("records cancellation independently of a native rejection", async () => {
     let startedNative: () => void = () => {};
@@ -457,7 +473,7 @@ describe("DLV-164/165 owner questions and messages", () => {
     finish(request.workspace.root, told(request.instruction));
     return succeeded();
   };
-  const restart = (f: Awaited<ReturnType<typeof fixture>>, session: unknown) => createLocalLane({ root: f.root, store: f.store, session: session as never,
+  const restart = (f: Awaited<ReturnType<typeof fixture>>, session: unknown) => createLocalLane({ root: f.root, store: f.store, session: session as never, reviewSession: passingReview as never,
     authenticate: () => ({ ok: true, method: "fixture", directory: join(f.parent, "subscription") }) });
   const gate = () => { let open: () => void = () => {}; const opened = new Promise<void>(resolve => { open = resolve; }); return { open, opened }; };
 
@@ -811,7 +827,8 @@ describe("Local worktree to owner merge and revert", () => {
     expect(activity.filter(line => !line.startsWith('["git"') && !line.startsWith("Git exit"))).toEqual([
       "Installing dependencies", "Native session started", "Committing candidate", "Host checks started",
       "typecheck started", "typecheck: 0", "lint started", "lint: 0", "test started", "test: 0",
-      "pm:lint started", "pm:lint: 0", "Freezing handover", "Ready for owner UAT",
+      "pm:lint started", "pm:lint: 0", "Acceptance check started", "Acceptance reviewer started", "Acceptance passed · 3 met",
+      "Freezing handover", "Ready for owner UAT",
     ]); expect(f.launches()).toBe(1);
     expect((await f.lane.start(f.input)).run_id).toBe(f.id); expect(f.launches()).toBe(1);
     expect(await f.lane.detail(f.id)).toMatchObject({ canShip: false });
@@ -1256,4 +1273,192 @@ describe("DLV-167 Merge into the main checkout", () => {
     await expect(f.lane.merge(f.id)).rejects.toThrow("checkout-main-first");
     expect(readFileSync(join(f.root, "greeting.txt"), "utf8")).toBe("before\n");
   }, 60_000);
+});
+
+describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
+  type Session = { request: { instruction: string; workspace: { root: string } } };
+  const passChecks = async () => ["typecheck", "lint", "test", "pm:lint"].map(name => ({ name, started_at: "", finished_at: "", exit: 0, stdout: "", stderr: "", error: null }));
+  const handover = (expected: string, extra: Record<string, unknown> = {}) => JSON.stringify({ summary: "Greeting",
+    scenarios: [{ id: "greeting", title: "Greeting", required: true, steps: [{ action: "Read greeting", expected }] }], ...extra });
+  /** Each native call writes the next greeting and records its instruction. */
+  const writer = (values: string[], seen: string[] = [], extra: Record<string, unknown> = {}, files: Record<string, string> = {}) => {
+    let call = 0;
+    return async ({ request }: Session) => {
+      const value = values[Math.min(call++, values.length - 1)];
+      seen.push(request.instruction);
+      put(request.workspace.root, "greeting.txt", value + "\n");
+      for (const [path, body] of Object.entries(files)) put(request.workspace.root, path, body);
+      put(request.workspace.root, ".delivery-handover.json", handover(value, extra));
+      return { status: "finished", observations: { nativeOutcome: "succeeded" } };
+    };
+  };
+  async function launch(f: Awaited<ReturnType<typeof fixture>>) {
+    const id = (await f.lane.start(f.input)).run_id!;
+    await f.lane.wait(id);
+    return { id, view: (await f.lane.detail(id)) as LocalRunView };
+  }
+
+  it("hands over only after every criterion is met, judged by a read-only reviewer", async () => {
+    const reviews: ReviewRequest["request"][] = [];
+    const f = await fixture(false, false, false, "claude", { checks: passChecks, reviewSession: verdictReview({}, reviews) as never });
+    const { id, view } = await launch(f);
+    expect(view).toMatchObject({ phase: "uat-ready", acceptance: { state: "passed", counts: { met: 3, missed: 0, unclear: 0 } } });
+    expect(view.handover!.binding!.source_revision).toBe(view.head);
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toMatchObject({ purpose: "review", workspace: { access: "read-only" } });
+    expect(criterionIds(reviews[0].instruction)).toEqual(["outcome", "a1", "uat"]);
+    expect(reviews[0].instruction).toContain("greeting changes");
+    expect(reviews[0].instruction).toContain("Read greeting");
+    expect(reviews[0].instruction).toContain("+after");
+    expect(view.candidates).toMatchObject([{ n: 1, head: view.head, source: "build", outcome: "handed-over", acceptance: { state: "passed" } }]);
+    expect(readFileSync(join(f.root, view.candidates![0].patch!), "utf8")).toContain("+after");
+    expect(existsSync(join(f.root, ".delivery/local", id, "home"))).toBe(false);
+  }, 60_000);
+
+  it("pauses on a miss, revises only on the owner's request and checks the new candidate again", async () => {
+    const instructions: string[] = [], reviews: ReviewRequest["request"][] = [];
+    let states: Record<string, "met" | "missed" | "unclear"> = { a1: "missed" };
+    let checksRun = 0;
+    const f = await fixture(false, false, false, "claude", { checks: async () => { checksRun++; return passChecks(); },
+      session: writer(["after", "after, revised"], instructions) as never,
+      reviewSession: (async (input: ReviewRequest) => verdictReview(states, reviews)(input)) as never });
+    const { id, view: paused } = await launch(f);
+    expect(paused).toMatchObject({ phase: "acceptance-paused", handover: null, canRequestChanges: true, canStop: true,
+      canRecheckAcceptance: false, revisions_used: 0, revision_limit: 2, acceptance: { state: "paused", counts: { met: 2, missed: 1, unclear: 0 } } });
+    expect(paused.acceptance!.criteria.find(entry => entry.id === "a1")).toMatchObject({ state: "missed", evidence: ["fixture evidence for a1"] });
+    expect(f.store.getRun(id).lifecycle).toBe("ACTIVE");
+    await expect(f.lane.recheckAcceptance(id)).rejects.toThrow("Check again needs");
+    await expect(f.lane.requestChanges(id, "0".repeat(40))).rejects.toThrow("Candidate changed");
+    expect(instructions).toHaveLength(1);
+    states = {};
+    const routed = await routeLocal({ method: "POST", path: "/api/delivery/v2/local", loopbackPeer: true,
+      body: { action: "request-changes", run_id: id, expected_head: paused.head, note: "Say it twice." } }, { kind: "browser" }, { local: f.lane });
+    expect(routed).toMatchObject({ status: 200, json: { ok: true, run_id: id } });
+    await f.lane.wait(id);
+    const revised: LocalRunView = await f.lane.detail(id);
+    expect(revised).toMatchObject({ phase: "uat-ready", revisions_used: 1, revision: null, acceptance: { state: "passed" } });
+    expect(revised.head).not.toBe(paused.head);
+    expect(git(revised.workspace, "rev-parse", "HEAD~1")).toBe(paused.head);
+    expect(git(revised.workspace, "log", "-1", "--format=%s")).toBe("Revise DLV-900 (revision 1)");
+    expect(revised.handover!.binding!.source_revision).toBe(revised.head);
+    expect(checksRun).toBe(2);
+    expect(reviews).toHaveLength(2);
+    expect(instructions[1]).toContain("revision 1 of 2 of DLV-900");
+    expect(instructions[1]).toContain("[missed] (Acceptance) changed greeting");
+    expect(instructions[1]).toContain("Owner notes:\nSay it twice.");
+    expect(instructions[1]).toContain("Implement only DLV-900");
+    expect(revised.revisions).toMatchObject([{ n: 1, state: "sealed", from_head: paused.head, to_head: revised.head, note: "Say it twice.",
+      findings: [{ id: "a1", state: "missed" }] }]);
+    expect(revised.candidates).toMatchObject([
+      { n: 1, head: paused.head, outcome: "revision-requested", acceptance: { state: "paused" } },
+      { n: 2, head: revised.head, source: "revision", revision: 1, outcome: "handed-over", acceptance: { state: "passed" } }]);
+  }, 90_000);
+
+  it("never retries, honours the revision limit and stops without Handover", async () => {
+    const f = await fixture(false, false, false, "claude", { checks: passChecks, session: writer(["after", "after 2", "after 3"]) as never,
+      reviewSession: verdictReview({ a1: "missed" }) as never });
+    const launched = await launch(f);
+    const id = launched.id;
+    let view = launched.view;
+    for (const n of [1, 2]) {
+      await f.lane.requestChanges(id, view.head!);
+      await f.lane.wait(id);
+      view = await f.lane.detail(id);
+      expect(view).toMatchObject({ phase: "acceptance-paused", revisions_used: n, handover: null });
+    }
+    expect(view.canRequestChanges).toBe(false);
+    await expect(f.lane.requestChanges(id, view.head!)).rejects.toThrow("revision-limit-reached: 2 of 2");
+    const workspace = view.workspace;
+    const stopped: LocalRunView = await f.lane.stop(id, view.head!);
+    expect(stopped).toMatchObject({ phase: "stopped", handover: null });
+    expect(f.store.getRun(id)).toMatchObject({ lifecycle: "CLOSED", closed_outcome: "stopped" });
+    expect(stopped.cleaned_at).toBeTruthy();
+    expect(existsSync(workspace)).toBe(false);
+    expect(stopped.candidates!.map(entry => entry.outcome)).toEqual(["revision-requested", "revision-requested", "stopped"]);
+    for (const entry of stopped.candidates!) expect(existsSync(join(f.root, entry.patch!))).toBe(true);
+    expect(stopped.revisions!.map(entry => entry.state)).toEqual(["sealed", "sealed"]);
+    await expect(f.lane.stop(id)).rejects.toThrow("Stop needs a paused acceptance check");
+  }, 120_000);
+
+  it("restores the paused candidate when a revision fails Verify", async () => {
+    let call = 0;
+    const f = await fixture(false, false, false, "claude", {
+      checks: async () => { const results = await passChecks(); if (++call === 2) results[2] = { ...results[2], exit: 1, stdout: "revision broke a test" }; return results; },
+      session: writer(["after", "after, broken"]) as never, reviewSession: verdictReview({ a1: "missed" }) as never });
+    const { id, view: paused } = await launch(f);
+    await f.lane.requestChanges(id, paused.head!);
+    await f.lane.wait(id);
+    const view: LocalRunView = await f.lane.detail(id);
+    expect(view).toMatchObject({ phase: "acceptance-paused", head: paused.head, revisions_used: 1, canRequestChanges: true, revision: null,
+      acceptance: { state: "paused" } });
+    expect(view.checks.every(check => check.exit === 0)).toBe(true);
+    expect(git(view.workspace, "rev-parse", "HEAD")).toBe(paused.head);
+    expect(git(view.workspace, "status", "--porcelain", "--untracked-files=all")).toBe("");
+    expect(view.revisions![0]).toMatchObject({ state: "failed", failure: { code: "checks", step: "Verify" } });
+    expect(readFileSync(join(f.root, view.revisions![0].attempt_patch!), "utf8")).toContain("after, broken");
+    expect(f.store.getRun(id).lifecycle).toBe("ACTIVE");
+  }, 90_000);
+
+  it("lets the owner check again only when the reviewer gave no verdict", async () => {
+    let broken = true;
+    const f = await fixture(false, false, false, "claude", { checks: passChecks, reviewSession: (async (input: ReviewRequest) => broken
+      ? { status: "finished", observations: { nativeOutcome: "succeeded", finalText: "Looks fine to me." } }
+      : passingReview(input)) as never });
+    const { id, view } = await launch(f);
+    expect(view).toMatchObject({ phase: "acceptance-paused", canRecheckAcceptance: true, acceptance: { error: "The reviewer returned no verdict", counts: { met: 0 } } });
+    broken = false;
+    await f.lane.recheckAcceptance(id);
+    await f.lane.wait(id);
+    expect(await f.lane.detail(id)).toMatchObject({ phase: "uat-ready", revisions_used: 0, acceptance: { state: "passed" } });
+  }, 60_000);
+
+  describe("regression proof for bug items", () => {
+    // A stand-in for Vitest's JSON reporter: the "test" compares one file with an expected value.
+    const FAKE_VITEST = [
+      'import { readFileSync, writeFileSync } from "node:fs";',
+      'import { resolve } from "node:path";',
+      "const args = process.argv.slice(2);",
+      'const out = args.find(arg => arg.startsWith("--outputFile=")).slice(13);',
+      'const spec = JSON.parse(readFileSync(args[1], "utf8"));',
+      'const actual = readFileSync(spec.file || "greeting.txt", "utf8").trim();',
+      "const passed = actual === spec.expect;",
+      "const message = \"AssertionError: expected '\" + actual + \"' to be '\" + spec.expect + \"'\";",
+      'writeFileSync(out, JSON.stringify({ testResults: [{ name: resolve(args[1]), assertionResults: [{ fullName: spec.name, title: spec.name, status: passed ? "passed" : "failed", failureMessages: passed ? [] : [message] }] }] }));',
+      "process.exitCode = passed ? 0 : 1;",
+    ].join("\n");
+    async function bug(spec: Record<string, string>, expected: string, seen: string[] = []) {
+      const test = "tests/greeting.test.ts";
+      const f = await fixture(false, false, false, "claude", { checks: passChecks,
+        session: writer(["after"], seen, { regression: [{ test, name: spec.name, expected_failure: expected }] }, { [test]: JSON.stringify(spec) }) as never,
+        prepareDependencies: async (workspace: string) => {
+          put(workspace, "node_modules/.pnpm/lock.yaml", readFileSync(join(workspace, "pnpm-lock.yaml"), "utf8"));
+          put(workspace, "node_modules/vitest/vitest.mjs", FAKE_VITEST);
+          return { status: 0 };
+        } });
+      const book = join(f.root, `${PM}/Delivery/Delivery — Master Book.md`);
+      writeFileSync(book, readFileSync(book, "utf8").replace("**Outcome:** greeting changes", "**Outcome:** greeting changes\n\n**Kind:** bug"));
+      git(f.root, "commit", "-am", "mark the fixture item a bug");
+      return { f, ...(await launch(f)) };
+    }
+    const proof = (view: LocalRunView) => view.acceptance!.criteria.find(entry => entry.id === "regression1");
+    it("is met when the test fails on the base for the declared reason and passes on the candidate", async () => {
+      const seen: string[] = [];
+      const { view } = await bug({ name: "greeting reads after", expect: "after" }, "expected 'before' to be 'after'", seen);
+      expect(seen[0]).toContain('"regression":[{"test"');
+      expect(proof(view)).toMatchObject({ state: "met", by: "supervisor" });
+      expect(proof(view)!.evidence[0]).toContain("Base: failed — AssertionError: expected 'before' to be 'after'");
+      expect(view).toMatchObject({ phase: "uat-ready", acceptance: { state: "passed" } });
+      expect(git(view.workspace, "status", "--porcelain", "--untracked-files=all")).toBe("");
+    }, 60_000);
+    it("is missed when the test already passes before the fix", async () => {
+      const { view } = await bug({ name: "instructions exist", expect: "Fixture instructions", file: "CLAUDE.md" }, "expected");
+      expect(proof(view)).toMatchObject({ state: "missed", evidence: ["Passes before the fix, so it does not prove the bug fixed", expect.any(String), expect.any(String)] });
+      expect(view).toMatchObject({ phase: "acceptance-paused", handover: null });
+    }, 60_000);
+    it("is unclear when the base fails for another reason", async () => {
+      const { view } = await bug({ name: "greeting reads after", expect: "after" }, "expected 'nothing' to be 'after'");
+      expect(proof(view)).toMatchObject({ state: "unclear", evidence: ["Failed on the base for a different reason", expect.any(String), expect.any(String)] });
+      expect(view.phase).toBe("acceptance-paused");
+    }, 60_000);
+  });
 });

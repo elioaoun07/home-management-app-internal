@@ -104,6 +104,59 @@ export interface LocalRunView {
   publication_log?: { at: string; argv: string[]; exit: number | null; tail: string }[];
   publication?: { action: "commit" | "push"; commands: string[][]; files: string[]; token: string | null; reason: string | null; recover?: boolean; outgoing?: string[]; cleanupCommands?: string[][]; cleanupInput?: string | null } | null;
   refresh?: { conflicts?: string[] } | null;
+  /** DLV-175: the Acceptance Check of the current candidate and the owner's revisions. */
+  acceptance?: LocalAcceptance | null;
+  candidates?: LocalCandidate[];
+  revisions?: LocalRevision[];
+  revision?: number | null;
+  revision_limit?: number;
+  revisions_used?: number;
+  canRequestChanges?: boolean;
+  canStop?: boolean;
+  canRecheckAcceptance?: boolean;
+}
+export type LocalVerdict = "met" | "missed" | "unclear";
+export interface LocalAcceptanceCriterion {
+  id: string;
+  source: string;
+  text: string;
+  state: LocalVerdict;
+  evidence: string[];
+  by: "reviewer" | "supervisor";
+}
+export interface LocalAcceptance {
+  state: "passed" | "paused";
+  error: string | null;
+  criteria: LocalAcceptanceCriterion[];
+  counts: { met: number; missed: number; unclear: number };
+  head?: string;
+  started_at?: string;
+  finished_at?: string;
+}
+export interface LocalCandidate {
+  n: number;
+  head: string;
+  base: string;
+  sealed_at: string;
+  source?: "build" | "revision" | "refresh";
+  revision: number | null;
+  patch: string | null;
+  checks: { name: string; exit: number | null; error: string | null }[];
+  acceptance: LocalAcceptance | null;
+  outcome: string | null;
+  handover_id?: string;
+}
+export interface LocalRevision {
+  n: number;
+  requested_at: string;
+  from_head: string;
+  note: string | null;
+  findings: Pick<LocalAcceptanceCriterion, "id" | "source" | "text" | "state" | "evidence">[];
+  state: "building" | "sealed" | "failed" | "cancelled";
+  to_head?: string;
+  finished_at?: string;
+  failure?: LocalFailureRecord;
+  attempt_patch?: string | null;
 }
 export interface LocalMergePlan {
   files: { status: string; path: string }[];
@@ -117,7 +170,8 @@ export interface LocalMergePlan {
   refreshBase?: string;
   canRefresh?: boolean;
 }
-export type LocalAction = "review" | "merge" | "commit" | "push" | "refresh" | "recheck" | "test" | "cancel" | "discard";
+export type LocalAction = "review" | "merge" | "commit" | "push" | "refresh" | "recheck" | "test" | "cancel" | "discard"
+  | "request-changes" | "stop" | "check-acceptance";
 export type LocalAct = (action: LocalAction, evidence?: Record<string, string>) => void;
 export interface LocalPreviewView {
   state: "starting" | "ready" | "stopped" | "failed";
@@ -407,7 +461,7 @@ export function LocalRun({ id }: { id: string }) {
     refetchInterval: (query) => {
       const phase = query.state.data?.phase;
       if (query.state.data?.activeCommand) return 2000;
-      return query.state.data?.cleaned_at || (phase && ["failed", "cancelled", "reverted", "discarded", "cleaned"].includes(phase))
+      return query.state.data?.cleaned_at || (phase && ["failed", "cancelled", "stopped", "reverted", "discarded", "cleaned"].includes(phase))
         ? false
         : phase === "shipped"
           ? 15_000

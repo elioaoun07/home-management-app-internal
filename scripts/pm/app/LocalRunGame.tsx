@@ -36,7 +36,7 @@ import type { StageTempo, ReplayMode } from "./stage/director";
 import type { View } from "./brain/layout";
 import "./local-run-game.css";
 import { Back } from "./components";
-import { displayTitle } from "./localRunModel";
+import { displayTitle, newAttemptHref } from "./localRunModel";
 import { OwnerWorkspace, RoomSwitch, opensAtOwner, type DeliveryRoom } from "./OwnerWorkspace";
 import { currentOwnerStation, type OwnerStation } from "./ownerStations";
 
@@ -483,7 +483,7 @@ export function LocalRunGame({
             data-candidate={!!run.head}
             data-closed-failed={["failed", "cancelled"].includes(run.phase)}
           >
-            {["failed", "cancelled"].includes(run.phase) && run.work.campaign && <a className="primary" href={`#/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`}>New attempt</a>}
+            {newAttemptHref(run) && <a className="primary" href={newAttemptHref(run)!}>New attempt</a>}
             <LocalActions run={run} busy={busy} act={action} station="session" />
           </div>
         )}

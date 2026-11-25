@@ -1,6 +1,6 @@
 // DLV-150–153. Local worktree supervision over the existing run/job/activity store.
 import { randomUUID, createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { runProcess } from "./process.mjs";
 import { decisiveLines } from "./failure-lines.mjs";
@@ -12,7 +12,9 @@ import { loadExecutionPolicy } from "./policy.mjs";
 import { makeJobRequest } from "./adapters/adapter.mjs";
 import { parseWorkItems } from "./work-ref.mjs";
 import { idSection } from "../pm/shared/work-id.mjs";
-import { bindDirect, freezeHandover, viewOne } from "./uat.mjs";
+import { bindDirect, freezeHandover, validateContent, viewOne } from "./uat.mjs";
+import { REGRESSION_INSTRUCTION, REVISION_LIMIT, UAT_CRITERION, acceptanceCriteria, acceptanceInstruction, decideAcceptance,
+  findingsOf, isBugItem, parseVerdict, regressionDeclarations, regressionVerdict, revisionPreamble, runRegressions } from "./local-acceptance.mjs";
 import { applyCopy, createPublication, obstructedCopyPath, prepareCopy } from "./local-publication.mjs";
 import { localMessageBodies, normalizeAnswers, normalizeMessage, normalizeQuestion, projectQuestions, readLedger, resumePrompt, writeLedger } from "./local-questions.mjs";
 import { createPreviews } from "./local-preview.mjs";
@@ -27,6 +29,9 @@ export const localRecord = run => parse(run?.base_manifest_json)?.lane === "loca
 const sha = value => createHash("sha256").update(value).digest("hex");
 const at = () => new Date().toISOString();
 const PM = "ERA Notes/10 - Project Management";
+/** Phases a supervisor task drives; without one they read as interrupted. */
+const WORKING_PHASES = ["preparing", "building", "checking", "accepting"];
+const trimTail = (value, max = 4000) => typeof value === "string" && value.length > max ? value.slice(-max) : value;
 const HOOK_STAGES = new Map([
   ["Checking AI guidance docs...", "docs"],
   ["Checking generated agent setup...", "mirrors"],
@@ -41,8 +46,10 @@ const HOOK_STAGES = new Map([
  * dependencies?:typeof installedDependencies, checks?:typeof hostChecks,
  * prepareDependencies?:((workspace:string)=>Promise<{status:number|null}>)|null,
  * baseBranch?:string, hasStore?:()=>boolean, catalog?:()=>object|null,
- * limits?:{hookMs?:number, pushMs?:number}, previews?:ReturnType<typeof createPreviews>|null}} options */
-export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession,
+ * limits?:{hookMs?:number, pushMs?:number}, previews?:ReturnType<typeof createPreviews>|null,
+ * reviewSession?:typeof nativeLocalSession}} options
+ * `reviewSession` runs the read-only acceptance reviewer (DLV-175); it defaults to `session`. */
+export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession, reviewSession = session,
   authenticate = localWorkerSubscription, dependencies = installedDependencies, checks = hostChecks,
   prepareDependencies = null, baseBranch = "main", hasStore = () => true, limits = {},
   catalog = () => { const loaded = loadExecutionPolicy({ root }); return loaded.ok ? loaded.policy.executors.catalog : null; },
@@ -311,12 +318,13 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       const active = tasks.has(row.run_id);
       // A parked session has no process by design; it is waiting, not interrupted.
       const parked = !!d.parked && !active && row.lifecycle !== "CLOSED";
-      const interrupted = ["preparing", "building", "checking"].includes(d.phase) && !active && !parked;
+      const interrupted = WORKING_PHASES.includes(d.phase) && !active && !parked;
       const asking = (active || parked) && chatOf(row.run_id, d).questions.some(entry => entry.state === "open");
       return { run_id: row.run_id, engine: "v2", lane: "local", title: d.work.title, alias: d.work.id, file: d.work.file, campaign: d.work.campaign,
         lifecycle: row.lifecycle, closed_outcome: row.closed_outcome, waiting_reason: null, executor: d.settings.executor, model: d.settings.model,
         effort: d.settings.effort, ownerAction: interrupted ? "Interrupted" : asking ? "Question" : d.phase,
-        ownerActionKind: asking ? "local-question" : row.lifecycle === "CLOSED" || active ? "none" : d.phase === "uat-ready" ? "local-review" : "inspect-session", active,
+        ownerActionKind: asking ? "local-question" : row.lifecycle === "CLOSED" || active ? "none" : d.phase === "uat-ready" ? "local-review"
+          : d.phase === "acceptance-paused" ? "local-acceptance" : "inspect-session", active,
         created_at: row.created_at, updated_at: row.updated_at, resources: null, application: null, stage: visiblePhase(d), branch: d.branch };
     });
   }
@@ -394,7 +402,14 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const cancelCleanupCommands = ["preparing", "building", "checking"].includes(d.phase)
       ? await storage.cleanupCommands(d.workspace, d.branch).catch(() => []) : [];
     const window = s().listActivity(id, 201, true);
+    // DLV-175: the owner's decision after a paused acceptance check.
+    const revisionLimit = d.revision_limit ?? REVISION_LIMIT, revisionsUsed = (d.revisions || []).length;
+    const paused = d.phase === "acceptance-paused" && s().getRun(id)?.lifecycle !== "CLOSED" && !task;
+    const acceptanceInterrupted = d.phase === "accepting" && !task && s().getRun(id)?.lifecycle !== "CLOSED";
     return { ...d, phase: visiblePhase(d), publication: publicationPlan, run_id: id, current_head: head, clean, risk: changes.risk, patch: changes.patch,
+      revision_limit: revisionLimit, revisions_used: revisionsUsed,
+      canRequestChanges: paused && current && revisionsUsed < revisionLimit, canStop: paused,
+      canRecheckAcceptance: (paused && !!d.acceptance?.error) || acceptanceInterrupted,
       activity: localMessageBodies(window.slice(-200), observed), earlier_activity: window.length > 200, usage: observed?.usage || null,
       handover, questions: chat.questions, messages: chat.messages, parked, preview: apps.view(id), activeCommand: activeCommand(id), cancelCleanupCommands,
       canMessage: running && (!!task?.accepting || parked),
@@ -402,7 +417,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       mergePlan, canMerge: !!d.merge_pending || (d.phase === "uat-ready" && current && reviewed && signed && passed && !!mergePlan && !mergePlan.error && mergePlan.branch === baseBranch
         && mergePlan.files.length > 0 && mergePlan.conflicts.length === 0),
       // A file-copy merge (DLV-167) has no merge commit to revert.
-      canUndo: false, interrupted: ["preparing", "building", "checking"].includes(d.phase) && !task && !parked };
+      canUndo: false, interrupted: WORKING_PHASES.includes(d.phase) && !task && !parked };
   }
 
   // DLV-167. The run started from `main` at d.base (ALPHA); the owner's checkout
@@ -437,7 +452,9 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
   async function refresh(id, expectedBase, expectedHead) {
     return locked("refresh", id, async () => {
       await refreshCandidate({ id, root, d: dataOf(id), expectedBase, expectedHead, git, run, env, save,
-        event, planMerge, checks, inspect: diff, freeze: freezeCandidate, stopPreview: key => apps.stop(key), hookMs,
+        event, planMerge, checks, inspect: diff, stopPreview: key => apps.stop(key), hookMs,
+        // DLV-175: a rebased candidate is a new sealed candidate; it passes the check before Handover.
+        accept: key => accept(key, null, { readyEvent: "Refreshed candidate ready for owner UAT", source: "refresh" }),
         ensureDeps: async (key, candidate) => {
           assertNoLocalSecrets(candidate.workspace);
           const changed = await git(candidate.workspace, "diff", "--name-only", candidate.refresh.old_base,
@@ -469,7 +486,250 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return frozen.handover.handover_id;
   }
 
+  // ---------------------------------------------------------------------------
+  // DLV-175. Acceptance Check between Verify and Handover, and owner revisions.
+  // ---------------------------------------------------------------------------
 
+  const historyFile = (id, name) => join(root, ".delivery/local-history", id, name);
+  const revisionOf = d => d.revision ? (d.revisions || []).find(entry => entry.n === d.revision) || null : null;
+  /** Raw Git output (patches keep their bytes and final newline). */
+  async function gitRaw(cwd, args, timeout = 60_000) {
+    const out = await run("git", ["--no-optional-locks", ...args], { cwd, env: env(), timeout });
+    if (out.status !== 0 || out.error) throw new Error(`git ${args[0]}: ${out.stderr || out.error?.message || out.status}`);
+    return out.stdout;
+  }
+  function keepFile(id, name, body) {
+    const file = historyFile(id, name);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, body);
+    return relative(root, file).replace(/\\/gu, "/");
+  }
+  const checkSummary = checks => (checks || []).map(check => ({ name: check.name, exit: check.exit, error: check.error ? String(check.error).slice(0, 200) : null }));
+
+  /** Every sealed candidate is kept: its commit, a patch that survives cleanup, checks and verdict. */
+  async function recordCandidate(id, d, source) {
+    const list = [...(d.candidates || [])];
+    const last = list.at(-1);
+    if (last?.head === d.head && last.base === d.base) return d;
+    const n = list.length + 1;
+    let patch = null;
+    try { patch = keepFile(id, `candidate-${n}.patch`, await gitRaw(d.workspace, ["diff", "--binary", "--no-ext-diff", "--no-textconv", d.base, d.head])); }
+    catch (error) { event(id, "Candidate patch not kept: " + error.message); }
+    list.push({ n, head: d.head, base: d.base, sealed_at: at(), source, revision: d.revision ?? null, patch,
+      checks: checkSummary(d.checks), acceptance: null, outcome: null });
+    return { ...d, candidates: list };
+  }
+  function withCandidate(d, fields) {
+    const list = [...(d.candidates || [])];
+    const index = list.findLastIndex(entry => entry.head === d.head);
+    if (index < 0) return d;
+    list[index] = { ...list[index], ...fields };
+    return { ...d, candidates: list };
+  }
+
+  /** The independent reviewer: a fresh read-only session with no build context. */
+  async function reviewer(id, d, instruction, signal) {
+    const childEnv = prepareHome(id, d);
+    try {
+      const request = makeJobRequest({ job_id: `${id}:accept:${randomUUID().slice(0, 8)}`, run_id: id, purpose: "review", backend_id: d.settings.backend_id,
+        contract: { contract_id: id, revision: 1 }, grant: { grant_id: "local-owner", revision: 1 },
+        reservation: { unit: "tokens", basis: "subscription-advisory" },
+        workspace: { root: d.workspace, access: "read-only", backing: "git-worktree" }, settings: d.settings, instruction });
+      return await reviewSession({ request: { ...request, settings: d.settings }, env: childEnv, signal: signal ?? undefined,
+        onActivity: () => {}, onQuestion: () => {}, onDelivered: () => {}, onChannel: () => {} });
+    } finally {
+      try { await storage.removeHome(id); } catch (error) { event(id, "Credential home cleanup pending: " + error.message); }
+    }
+  }
+
+  async function checkAcceptance(id, d, signal) {
+    const head = d.head, started_at = at();
+    const criteria = [...acceptanceCriteria(d.work), UAT_CRITERION];
+    let content = null, draft;
+    const handoverFile = join(d.workspace, HANDOVER_FILE);
+    try {
+      content = JSON.parse(readFileSync(handoverFile, "utf8"));
+      const checked = validateContent(content);
+      draft = { ok: checked.ok, problems: [`${HANDOVER_FILE} incomplete`, ...checked.problems.map(p => [p.code, p.detail, p.scenario, p.step].filter(value => value != null).join(" "))] };
+    } catch (error) {
+      draft = { ok: false, problems: [existsSync(handoverFile) ? `${HANDOVER_FILE} unparsable: ${error.message}` : `${HANDOVER_FILE} missing`] };
+    }
+    const names = await git(d.workspace, "diff", "--no-renames", "--name-status", "-z", d.base, head);
+    const fields = names.split("\0").filter(Boolean), files = [];
+    for (let i = 0; i + 1 < fields.length; i += 2) if (fields[i + 1] !== HANDOVER_FILE) files.push({ status: fields[i][0], path: fields[i + 1] });
+    const tree = new Set((await git(d.workspace, "ls-tree", "-r", "--name-only", "-z", head)).split("\0").filter(Boolean));
+    const { declared, problems } = regressionDeclarations(content, { bug: isBugItem(d.work), exists: path => tree.has(path) });
+    const privateDir = join(root, ".delivery/local", id, "regression");
+    let ran = [];
+    try {
+      if (declared.length) event(id, "Regression proof started");
+      ran = await runRegressions({ declared, run, env: env(), workspace: d.workspace, base: d.base, head, privateDir, record: line => event(id, line) });
+    } finally { rmSync(privateDir, { recursive: true, force: true, maxRetries: 3 }); }
+    const regression = ran.map(entry => {
+      const verdict = regressionVerdict(entry, entry.base, entry.head);
+      const plain = side => ({ status: side.status, message: side.message });
+      return { test: entry.test, name: entry.name, expected_failure: entry.expected_failure, files: entry.files,
+        base: plain(entry.base), head: plain(entry.head), state: verdict.state, evidence: verdict.evidence };
+    });
+    if (signal?.aborted) throw new Error("cancelled");
+    let verdict = null, reviewerError = null, usage = null;
+    try {
+      event(id, "Acceptance reviewer started");
+      const patch = await gitRaw(d.workspace, ["diff", "--no-ext-diff", "--no-textconv", d.base, head, "--", ".", ":(exclude)" + HANDOVER_FILE]);
+      const result = await reviewer(id, d, acceptanceInstruction({ work: d.work, criteria, files, patch, handover: content, regression }), signal);
+      const observations = result?.observations || {};
+      usage = observations.usage || null;
+      if (result?.status !== "finished" || observations.nativeOutcome !== "succeeded")
+        reviewerError = "The reviewer did not finish: " + String(observations.error || observations.nativeOutcome || result?.status || "unknown").slice(0, 300);
+      else {
+        const parsed = parseVerdict(observations.finalText, criteria);
+        reviewerError = parsed.error;
+        verdict = parsed.verdicts;
+      }
+    } catch (error) {
+      if (signal?.aborted) throw new Error("cancelled");
+      reviewerError = "The reviewer could not run: " + String(error.message).slice(0, 300);
+    }
+    if (signal?.aborted) throw new Error("cancelled");
+    const decided = decideAcceptance({ criteria, verdict, reviewerError, draft, regression, regressionProblems: problems });
+    return { ...decided, head, base: d.base, started_at, finished_at: at(), regression,
+      reviewer: { executor: d.settings.executor, model: d.settings.model ?? null, effort: d.settings.effort ?? null, usage } };
+  }
+
+  /** Acceptance Check, then Handover only on an all-met verdict. Never retries. */
+  async function accept(id, signal = null, { readyEvent = "Ready for owner UAT", source = "build" } = {}) {
+    let d = await recordCandidate(id, { ...dataOf(id), phase: "accepting", acceptance: null, handover_id: null }, source);
+    const head = d.head;
+    save(id, d); event(id, "Acceptance check started");
+    const acceptance = await checkAcceptance(id, d, signal);
+    d = dataOf(id);
+    if (d.head !== head || head !== await git(d.workspace, "rev-parse", "HEAD") || await git(d.workspace, "status", "--porcelain", "--untracked-files=all"))
+      throw new Error("candidate changed during the acceptance check");
+    d = withCandidate({ ...d, acceptance }, { acceptance });
+    // A revision ends once its candidate has a verdict; a later failure is not that revision's.
+    const settled = data => {
+      const entry = revisionOf(data);
+      return entry ? { ...data, revision: null, revisions: data.revisions.map(item => item.n === entry.n ? { ...item, state: "sealed", to_head: head, finished_at: at() } : item) } : data;
+    };
+    const { met, missed, unclear } = acceptance.counts;
+    if (acceptance.state !== "passed") {
+      save(id, settled({ ...d, phase: "acceptance-paused" }));
+      event(id, `Acceptance paused · ${missed} missed · ${unclear} unclear`);
+      return false;
+    }
+    save(id, d); event(id, `Acceptance passed · ${met} met`);
+    const handover_id = freezeCandidate(id, d, head);
+    save(id, settled(withCandidate({ ...dataOf(id), phase: "uat-ready", handover_id }, { outcome: "handed-over", handover_id })));
+    event(id, readyEvent);
+    return true;
+  }
+
+  /** A failed or cancelled revision restores the candidate it started from and pauses again. */
+  async function restoreRevision(id, failure, message, cancelled) {
+    const d = dataOf(id), entry = revisionOf(d);
+    if (!entry) return false;
+    const from = entry.previous.head;
+    let attempt = null;
+    try {
+      await git(d.workspace, "add", "--all");
+      const patch = await gitRaw(d.workspace, ["diff", "--cached", "--binary", "--no-ext-diff", "--no-textconv", from]);
+      if (patch) attempt = keepFile(id, `revision-${entry.n}-attempt.patch`, patch);
+    } catch (error) { event(id, "Revision attempt not kept: " + error.message); }
+    await git(d.workspace, "reset", "--hard", from);
+    await git(d.workspace, "clean", "-fd");
+    if (await git(d.workspace, "rev-parse", "HEAD") !== from || await git(d.workspace, "status", "--porcelain", "--untracked-files=all"))
+      throw new Error("the previous candidate could not be restored");
+    const state = cancelled ? "cancelled" : "failed";
+    const revisions = d.revisions.map(item => item.n === entry.n
+      ? { ...item, state, finished_at: at(), failure: cancelled ? { code: "cancelled", step: "—", detail: "—" } : failure, error: String(message).slice(0, 2000), attempt_patch: attempt }
+      : item);
+    const candidates = (d.candidates || []).map(item => item.revision === entry.n && !item.outcome ? { ...item, outcome: state } : item);
+    const p = entry.previous;
+    save(id, { ...d, phase: "acceptance-paused", head: from, checks: p.checks, risk: p.risk, acceptance: p.acceptance,
+      reviewed_head: p.reviewed_head ?? null, reviewed_risk: p.reviewed_risk ?? null, native_ref: p.native_ref ?? null,
+      revision: null, revisions, candidates, parked: null, error: null, failure: null, handover_id: null });
+    event(id, `Revision ${entry.n} ${state} · restored ${from.slice(0, 12)}`);
+    return true;
+  }
+
+  /** The owner's explicit request: one revision of the paused candidate, within the original scope.
+   * @param {string} id @param {string} expectedHead @param {string} [note] */
+  async function requestChanges(id, expectedHead, note = "") {
+    return locked("request-changes", id, async () => {
+      const d = dataOf(id), row = s().getRun(id);
+      if (row.lifecycle === "CLOSED" || d.phase !== "acceptance-paused" || tasks.has(id)) throw new Error("Request changes needs a paused acceptance check");
+      if (!expectedHead || d.head !== expectedHead) throw new Error("Candidate changed. Reload the run.");
+      const limit = d.revision_limit ?? REVISION_LIMIT, used = (d.revisions || []).length;
+      if (used >= limit) throw new Error(`revision-limit-reached: ${used} of ${limit}`);
+      const text = String(note ?? "").trim();
+      if (text.length > 4000) throw new Error("Notes are limited to 4000 characters");
+      const current = selected(d.work.file, d.work.id);
+      if (current.brief !== d.work.brief || current.row !== d.work.row) throw new Error("Acceptance changed. Stop this run and start a new one.");
+      if (await git(d.workspace, "rev-parse", "HEAD") !== d.head || await git(d.workspace, "status", "--porcelain", "--untracked-files=all")) throw new Error("candidate-changed");
+      const n = used + 1;
+      const previous = { head: d.head, checks: (d.checks || []).map(check => ({ ...check, stdout: trimTail(check.stdout), stderr: trimTail(check.stderr) })),
+        risk: d.risk ?? null, acceptance: d.acceptance ?? null, reviewed_head: d.reviewed_head ?? null, reviewed_risk: d.reviewed_risk ?? null, native_ref: d.native_ref ?? null };
+      const entry = { n, requested_at: at(), actor: "owner", from_head: d.head, note: text || null, findings: findingsOf(d.acceptance), state: "building", previous };
+      save(id, withCandidate({ ...d, revision_limit: limit, revision: n, revisions: [...(d.revisions || []), entry], phase: "building",
+        native_ref: null, parked: null, error: null, failure: null, handover_id: null }, { outcome: "revision-requested", revision_requested: n }));
+      event(id, `Owner requested changes · revision ${n} of ${limit}`);
+      const controller = new AbortController();
+      tasks.set(id, { controller, promise: null, send: null, accepting: true });
+      tasks.get(id).promise = build(id, controller);
+      return { ok: true, run_id: id };
+    });
+  }
+
+  /** Close a paused run without Handover. Candidates and feedback stay recorded.
+   * @param {string} id @param {string|null} [expectedHead] */
+  async function stopRun(id, expectedHead = null) {
+    return locked("stop", id, async () => {
+      const d = dataOf(id), row = s().getRun(id);
+      if (row.lifecycle === "CLOSED" || d.phase !== "acceptance-paused" || tasks.has(id)) throw new Error("Stop needs a paused acceptance check");
+      if (expectedHead && expectedHead !== d.head) throw new Error("Candidate changed. Reload the run.");
+      closeQuestions(id);
+      save(id, withCandidate({ ...d, phase: "stopped", stopped_at: at(), revision: null }, { outcome: "stopped" }), "CLOSED", "stopped");
+      s().updateJob(id, { status: "finished", reservation_open: false }); s().markAfterJob(id, "done");
+      event(id, "Owner stopped the run before Handover");
+      try { await storage.removeHome(id); } catch (error) { event(id, "Credential home cleanup pending: " + error.message); }
+      await autoClean(id);
+      return detail(id);
+    });
+  }
+
+  function assertSupervisorGone(d) {
+    if (d.supervisor?.instance === supervisor.instance) return;
+    if (!Number.isSafeInteger(d.supervisor?.pid) || d.supervisor.pid < 1 || !d.supervisor.instance) throw new Error("supervisor-ownership-unknown; inspect session");
+    try { process.kill(d.supervisor.pid, 0); throw new Error("supervisor-still-running; cancel in its process"); }
+    catch (error) { if (error.code !== "ESRCH") throw error; }
+  }
+
+  /** Owner-started only: an interrupted check, or one whose reviewer could not give a verdict. */
+  async function recheckAcceptance(id) {
+    return locked("check-acceptance", id, async () => {
+      const d = dataOf(id), row = s().getRun(id);
+      const interrupted = d.phase === "accepting" && !tasks.has(id);
+      const failedReview = d.phase === "acceptance-paused" && !!d.acceptance?.error && !tasks.has(id);
+      if (row.lifecycle === "CLOSED" || !(interrupted || failedReview)) throw new Error("Check again needs an interrupted or failed acceptance check");
+      if (interrupted) assertSupervisorGone(d);
+      if (await git(d.workspace, "rev-parse", "HEAD") !== d.head || await git(d.workspace, "status", "--porcelain", "--untracked-files=all")) throw new Error("candidate-changed");
+      const prior = d.acceptance ?? null;
+      save(id, { ...d, supervisor }); event(id, "Owner asked to check acceptance again");
+      const controller = new AbortController();
+      tasks.set(id, { controller, promise: null, send: null, accepting: false });
+      tasks.get(id).promise = (async () => {
+        try { await accept(id, controller.signal); }
+        catch (error) {
+          const cancelled = controller.signal.aborted;
+          const acceptance = cancelled ? prior : { ...(prior || { criteria: [], counts: { met: 0, missed: 0, unclear: 0 }, regression: [] }),
+            state: "paused", error: String(error.message).slice(0, 600) };
+          save(id, { ...dataOf(id), phase: "acceptance-paused", acceptance });
+          event(id, cancelled ? "Acceptance check cancelled" : "Acceptance check failed: " + error.message);
+        } finally { tasks.delete(id); }
+      })();
+      return { ok: true, run_id: id };
+    });
+  }
 
   /** The private home for the native CLI: subscription credential, config, hooks. Idempotent for resumes. */
   function prepareHome(id, d) {
@@ -516,17 +776,24 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const askInstruction = d.settings.executor === "claude"
       ? " If you are blocked on a decision that is genuinely the owner's, ask with AskUserQuestion: put your recommended option first and end its label with \" (Recommended)\". Otherwise decide with sensible defaults and continue."
       : " If you are blocked on a decision that is genuinely the owner's, call the ask_owner tool: put your recommended option first and end its label with \" (Recommended)\", then end your turn. Otherwise decide with sensible defaults and continue.";
-    return `Implement only ${d.work.id}. Read CLAUDE.md and start-task; use the repository skills and hooks. Work only in this worktree. Never push, merge, read the main checkout's secrets or write any database. Do not commit; the supervisor commits your work. Do not ship PM records; the owner ships. ${checkInstruction}${askInstruction} The owner may message you while you work; follow those messages. Write .delivery-handover.json with the UAT schema {summary,scenarios:[{id,title,required:true,steps:[{action,expected}]}]}.\n\n${d.work.brief}`;
+    const bug = isBugItem(d.work);
+    const instruction = `Implement only ${d.work.id}. Read CLAUDE.md and start-task; use the repository skills and hooks. Work only in this worktree. Never push, merge, read the main checkout's secrets or write any database. Do not commit; the supervisor commits your work. Do not ship PM records; the owner ships. ${checkInstruction}${askInstruction} The owner may message you while you work; follow those messages. Write .delivery-handover.json with the UAT schema {summary,scenarios:[{id,title,required:true,steps:[{action,expected}]}]}. An independent acceptance check compares your candidate and its UAT steps with every Outcome, Acceptance and Comment line below before the owner sees it.${bug ? REGRESSION_INSTRUCTION : ""}\n\n${d.work.brief}`;
+    // DLV-175: a revision keeps the original instruction and scope, with the findings first.
+    const revision = revisionOf(d);
+    return revision ? revisionPreamble({ work: d.work, n: revision.n, limit: d.revision_limit ?? REVISION_LIMIT, fromHead: revision.from_head,
+      findings: revision.findings, note: revision.note, regressionAsked: bug }) + instruction : instruction;
   }
 
-  /** `resumeWith` continues a parked session with the owner's answer/messages (DLV-165). */
+  /** `resumeWith` continues a parked session with the owner's answer/messages (DLV-165).
+   * With `d.revision` set, it builds the owner's requested revision on the sealed candidate (DLV-175). */
   async function build(id, controller, resumeWith = null) {
     let d = dataOf(id);
+    const revising = revisionOf(d);
     let failure = { code: "install", step: "Setup", detail: "" };
     let checking = "host checks";
     const task = tasks.get(id);
     try {
-      if (!resumeWith) {
+      if (!resumeWith && !revising) {
         event(id, "Installing dependencies");
         const install = await prepareRunDependencies(id, d);
         if (install.status !== 0 || install.error || !dependencies(d.workspace)) {
@@ -546,13 +813,15 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         const segment = prompt ? (d.segments || 0) + 1 : 0;
         d = { ...dataOf(id), phase: "building", parked: null, supervisor, ...(prompt ? { segments: segment } : {}) };
         save(id, d); event(id, prompt ? "Session resumed" : "Native session started");
-        const jobId = prompt ? `${id}:r${segment}` : id;
+        const jobId = prompt ? `${id}:r${segment}` : revising ? `${id}:v${revising.n}` : id;
         const request = makeJobRequest({ job_id: jobId, run_id: id, backend_id: d.settings.backend_id, contract: { contract_id: id, revision: 1 },
           grant: { grant_id: "local-owner", revision: 1 }, reservation: { unit: "tokens", basis: "subscription-advisory" },
           workspace: { root: d.workspace, access: "write", backing: "git-worktree" }, settings: d.settings,
           instruction: prompt || instructionFor(d) });
         // makeJobRequest carries model/effort; executor is the local dispatch choice.
-        if (prompt) s().updateJob(id, { status: "active" }); else s().markDispatchStarted(id, at());
+        if (prompt) s().updateJob(id, { status: "active" });
+        else if (revising) { s().updateJob(id, { status: "active", outcome: null, reservation_open: true }); s().markAfterJob(id, null); }
+        else s().markDispatchStarted(id, at());
         failure = { code: "native-error", step: "Build", detail: "" };
         let lastNativeSeq = -1;
         try {
@@ -618,20 +887,21 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         event(id, "Committing candidate");
         const seen = new Set();
         failure = { code: "commit-hook", step: "Seal", detail: "" };
-        await buildGit(id, d.workspace, ["commit", "-m", `Build ${d.work.id}`], hookMs, line => {
+        await buildGit(id, d.workspace, ["commit", "-m", revising ? `Revise ${d.work.id} (revision ${revising.n})` : `Build ${d.work.id}`], hookMs, line => {
           const stage = HOOK_STAGES.get(line.trim());
           if (stage && !seen.has(stage)) { seen.add(stage); event(id, `Hook: ${stage}`); }
         });
       }
       failure = null;
       const head = await git(d.workspace, "rev-parse", "HEAD");
-      if (head === d.base) {
+      if (head === (revising ? revising.from_head : d.base)) {
         failure = { code: "no-change", step: "Build", detail: result.observations?.finalText?.slice(0, 400) || "" };
         throw new Error(`candidate needs a change: ${failure.detail || "no reason reported"}`);
       }
       await git(d.workspace, "merge-base", "--is-ancestor", d.base, head);
+      if (revising) await git(d.workspace, "merge-base", "--is-ancestor", revising.from_head, head);
       const changes = await diff(d, head);
-      d = { ...d, phase: "checking", head, risk: changes.risk, checks: [] }; save(id, d); event(id, "Host checks started");
+      d = { ...d, phase: "checking", head, risk: changes.risk, checks: [], reviewed_head: null, reviewed_risk: null }; save(id, d); event(id, "Host checks started");
       failure = { code: "checks", step: "Verify", detail: "" };
       const results = await checks({ workspace: d.workspace, env: env(), onStart: name => { checking = name; event(id, `${name} started`); }, onCheck: c => { d.checks.push(c); save(id, d); event(id, `${c.name}: ${c.exit}`); } });
       if (controller.signal.aborted) throw new Error("cancelled");
@@ -646,14 +916,26 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         failure.detail = `${checking}\n${decisiveLines(raw)}`;
         throw new Error(`host checks failed: ${checking}\n${raw}`);
       }
+      // DLV-175: Acceptance Check, then Handover only when every criterion is met.
+      d = { ...d, checks: results }; save(id, d);
       failure = { code: "handover", step: "Handover", detail: "" };
-      d = { ...d, phase: "uat-ready", handover_id: freezeCandidate(id, d, head) }; save(id, d); event(id, "Ready for owner UAT");
+      await accept(id, controller.signal, { source: revising ? "revision" : "build" });
     } catch (error) {
       const message = String(error.message);
       if (controller.signal.aborted) failure = { code: "cancelled", step: "—", detail: "—" };
       else if (failure?.code === "commit-hook" && message.startsWith("git commit: timed out")) failure = { code: "commit-timeout", step: "Seal", detail: `timed out after ${hookMs / 1000} s` };
       else if (failure && !failure.detail && failure.code !== "no-change") failure.detail = failure.code === "checks" ? `${checking}\n${decisiveLines(message)}` : failure.code === "commit-hook" ? decisiveLines(message) : failure.code === "handover" ? message.replace(/^handover incomplete: /u, "") : message;
-      d = { ...d, phase: controller.signal.aborted ? "cancelled" : "failed", parked: null, error: controller.signal.aborted ? "cancelled" : message, ...(failure ? { failure } : {}) };
+      // DLV-175: a revision that fails or is cancelled restores the candidate it started from.
+      if (revising && revisionOf(dataOf(id))) {
+        try {
+          if (task) task.accepting = false;
+          closeQuestions(id);
+          s().updateJob(id, { status: "finished", reservation_open: false, outcome: controller.signal.aborted ? "cancelled" : "failed" }); s().markAfterJob(id, "done");
+          try { await storage.removeHome(id); } catch (cleanup) { event(id, "Credential home cleanup pending: " + cleanup.message); }
+          if (await restoreRevision(id, failure, message, controller.signal.aborted)) return;
+        } catch (restore) { event(id, "Revision restore failed: " + restore.message); }
+      }
+      d = { ...dataOf(id), phase: controller.signal.aborted ? "cancelled" : "failed", parked: null, error: controller.signal.aborted ? "cancelled" : message, ...(failure ? { failure } : {}) };
       if (task) task.accepting = false;
       closeQuestions(id);
       save(id, d, "CLOSED", d.phase);
@@ -809,7 +1091,16 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       if (task) { task.controller.abort(); return { ok: true }; }
       const d = dataOf(id), row = s().getRun(id);
       if (d.phase === "cancelled") return { ok: true };
+      // DLV-175: stopping a revision returns to the candidate it started from.
+      const restore = async () => {
+        closeQuestions(id);
+        s().updateJob(id, { status: "finished", reservation_open: false, outcome: "cancelled" }); s().markAfterJob(id, "done");
+        try { await storage.removeHome(id); } catch (error) { event(id, "Credential home cleanup pending: " + error.message); }
+        await restoreRevision(id, { code: "cancelled", step: "—", detail: "—" }, "cancelled", true);
+        return { ok: true };
+      };
       // DLV-165: a parked session has no process to stop; close it directly.
+      if (d.parked && row.lifecycle !== "CLOSED" && revisionOf(d)) return restore();
       if (d.parked && row.lifecycle !== "CLOSED") {
         closeQuestions(id);
         save(id, { ...d, parked: null, phase: "cancelled", error: "cancelled", failure: { code: "cancelled", step: "—", detail: "—" } }, "CLOSED", "cancelled");
@@ -820,10 +1111,11 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         await autoClean(id);
         return { ok: true };
       }
-      if (row.lifecycle === "CLOSED" || !["preparing", "building", "checking"].includes(d.phase)) throw new Error("session-not-running-in-this-process");
+      if (row.lifecycle === "CLOSED" || !WORKING_PHASES.includes(d.phase)) throw new Error("session-not-running-in-this-process");
       if (!Number.isSafeInteger(d.supervisor?.pid) || d.supervisor.pid < 1 || !d.supervisor.instance) throw new Error("supervisor-ownership-unknown; inspect session");
       try { process.kill(d.supervisor.pid, 0); throw new Error("supervisor-still-running; cancel in its process"); }
       catch (error) { if (error.code !== "ESRCH") throw error; }
+      if (revisionOf(d)) return restore();
       save(id, { ...d, phase: "cancelled", error: "cancelled", failure: { code: "cancelled", step: "—", detail: "—" } }, "CLOSED", "cancelled");
       s().updateJob(id, { status: "finished", reservation_open: false, outcome: "cancelled" });
       s().markAfterJob(id, "done");
@@ -834,7 +1126,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     });
   }
   return { readiness, startPlan, start, list, detail, comparison, refresh, review, preview, stopPreview, merge, ship, undo, cancel, answer, message,
-    commit, push, pushSettings, configurePush, inspectPushDestination,
+    commit, push, pushSettings, configurePush, inspectPushDestination, requestChanges, stop: stopRun, recheckAcceptance,
     storage: options => storage.view(options), discard, cleanup,
     earlierActivity(id, before) {
       dataOf(id);

@@ -122,7 +122,7 @@ describe("Local session review", () => {
   it("never marks unobserved steps or null-exit checks as completed", () => {
     expect(localRunStages(run).map((stage) => stage.state)).toEqual([
       "stopped",
-      ...Array(6).fill("pending"),
+      ...Array(7).fill("pending"),
     ]);
     expect(
       localRunStages({
@@ -131,7 +131,7 @@ describe("Local session review", () => {
         error: undefined,
         activity: [],
       }).map((stage) => stage.state),
-    ).toEqual(["current", ...Array(6).fill("pending")]);
+    ).toEqual(["current", ...Array(7).fill("pending")]);
     expect(
       localRunStages({
         ...run,
@@ -139,7 +139,7 @@ describe("Local session review", () => {
         head: "candidate",
         error: undefined,
       }).map((stage) => stage.state),
-    ).toEqual(["done", "current", ...Array(5).fill("pending")]);
+    ).toEqual(["done", "current", ...Array(6).fill("pending")]);
     expect(localCheckLabel(undefined)).toBe("Not run");
     expect(
       localCheckLabel({
