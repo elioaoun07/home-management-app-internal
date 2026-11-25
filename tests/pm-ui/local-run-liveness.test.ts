@@ -43,6 +43,15 @@ describe("Local liveness facts", () => {
     );
   });
 
+  it("keeps a known long test step quiet past the phase threshold", () => {
+    const at = (summary: string, phase: string, ms: number) =>
+      liveness({ ...base, phase, activity: [{ at: new Date(start).toISOString(), summary }] }, start + ms, { dataUpdatedAt: start + ms });
+    expect(at("test started", "checking", 11 * 60_000)).toMatchObject({ state: "quiet", caption: "Quiet 11:00" });
+    expect(at("Hook: tests", "building", 11 * 60_000).state).toBe("quiet");
+    expect(at("test started", "checking", LIVENESS.longStepAfter).state).toBe("stale");
+    expect(at("Hook: lint", "building", LIVENESS.staleAfter.building).state).toBe("stale");
+  });
+
   it("gives a failed or expired observation link precedence over interruption", () => {
     const run = { ...base, interrupted: true };
     expect(liveness(run, start + 12_001, { dataUpdatedAt: start }).state).toBe(

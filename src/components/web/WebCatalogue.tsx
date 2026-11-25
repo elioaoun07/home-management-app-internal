@@ -109,11 +109,14 @@ type DocOwnerFilter = "all" | "mine" | "partner";
 export default function WebCatalogue({
   initialSection,
   initialItemId,
+  initialNewContact,
   stickyTopClass = "top-0",
 }: {
   initialSection?: "chores";
   /** Deep link (?item=) — open this item's detail in its own module. */
   initialItemId?: string;
+  /** Deep link (?newContact=) — open the contact form prefilled with this name. */
+  initialNewContact?: string;
   stickyTopClass?: string;
 } = {}) {
   const themeClasses = useThemeClasses();
@@ -340,6 +343,23 @@ export default function WebCatalogue({
     setShowItemDetailDialog(true);
   }, [linkedItem, moduleById]);
 
+  // Deep link (?newContact=) from ERA: the contacts form opens prefilled and
+  // nothing is saved until Save — once.
+  const [prefillName, setPrefillName] = useState<string | undefined>();
+  const newContactConsumed = useRef(false);
+  useEffect(() => {
+    if (newContactConsumed.current || !initialNewContact) return;
+    const contacts = modules.find((module) => module.type === "contacts");
+    if (!contacts) return;
+    newContactConsumed.current = true;
+    setCurrentLevel("categories");
+    setSelectedModule(contacts);
+    setSelectedCategory(null);
+    setEditingItem(null);
+    setPrefillName(initialNewContact);
+    setShowItemDialog(true);
+  }, [initialNewContact, modules]);
+
   // Item actions
   const handleViewItem = (item: CatalogueItem) => {
     if (isChoresSection) setItemModule(moduleById.get(item.module_id) ?? null);
@@ -349,10 +369,6 @@ export default function WebCatalogue({
 
   const handleTogglePin = (item: CatalogueItem) => {
     updateItem.mutate({ id: item.id, is_pinned: !item.is_pinned });
-  };
-
-  const handleToggleFavorite = (item: CatalogueItem) => {
-    updateItem.mutate({ id: item.id, is_favorite: !item.is_favorite });
   };
 
   const handleEditItem = (item: CatalogueItem) => {
@@ -880,12 +896,16 @@ export default function WebCatalogue({
       {/* Dialogs */}
       <CatalogueItemDialog
         open={showItemDialog}
-        onOpenChange={setShowItemDialog}
+        onOpenChange={(next) => {
+          setShowItemDialog(next);
+          if (!next) setPrefillName(undefined);
+        }}
         moduleId={dialogModule?.id || ""}
         moduleType={dialogModule?.type || "custom"}
         categoryId={dialogCategoryId}
         editingItem={editingItem}
         isPlaces={isPlaces}
+        initialName={prefillName}
       />
 
       <CatalogueTaskItemDialog

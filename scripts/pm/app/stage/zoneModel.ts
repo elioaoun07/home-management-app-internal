@@ -1,5 +1,6 @@
 import type { LocalRunView } from "../LocalDelivery";
 import type { LocalActivityEvent } from "../localRunActivityModel";
+import { openQuestion } from "../localChatModel";
 import { localRunFailure } from "../localRunFailure";
 import { LOCAL_CHECKS } from "../localRunModel";
 import type { LocalScene } from "../localRunScene";
@@ -27,6 +28,7 @@ export interface ZoneEvidence {
 }
 export interface ZoneBoardState {
   zones: ZoneEvidence[];
+  currentZone: ZoneId | null;
   activeZone: ZoneId | null;
   buildZone: ZoneId;
   doneCount: number;
@@ -72,25 +74,53 @@ export function faultZone(run: LocalRunView): ZoneId | null {
   return "build";
 }
 
-/** Current phase supplies location, never an unevidenced completed lamp. */
+function workflowZone(run: LocalRunView): ZoneId | null {
+  switch (run.phase) {
+    case "preparing":
+      return "setup";
+    case "building":
+      return "build";
+    case "checking":
+    case "accepting":
+    case "acceptance-paused":
+    case "refreshing":
+    case "refresh-failed":
+      return "verify";
+    case "uat-ready":
+      return run.canMerge ? "ship" : "test";
+    case "refresh-conflict":
+    case "merging":
+    case "merged":
+    case "committed":
+    case "push-pending":
+    case "revert-push-pending":
+      return "ship";
+    default:
+      return null;
+  }
+}
+
+/** Cargo and fault locations persist on the board at the end of a run. */
 export function phaseZone(run: LocalRunView): ZoneId {
-  const fault = faultZone(run);
-  if (fault) return fault;
-  if (run.phase === "preparing") return "setup";
-  // DLV-175: the Acceptance Check runs at the Verify station; a pause waits there.
-  if (["checking", "accepting", "acceptance-paused"].includes(run.phase)) return "verify";
-  if (run.phase === "uat-ready") return "test";
-  if (
-    [
-      "merging",
-      "push-pending",
-      "revert-push-pending",
-      "shipped",
-      "reverted",
-    ].includes(run.phase)
-  )
-    return "ship";
-  return "build";
+  if (["shipped", "reverted", "pushed", "cleaned"].includes(run.phase)) return "ship";
+  return faultZone(run) ?? workflowZone(run) ?? "build";
+}
+
+/** The workflow step at this cursor, independent of the actor's animation and the open inspector. */
+export function currentAiZone(scene: LocalScene): ZoneId | null {
+  if (scene.run.interrupted) return null;
+  if (["checking", "accepting"].includes(scene.phase) && zoneForEvent(scene.latest) === "handover") return "handover";
+  if (scene.phase === "building") {
+    if (openQuestion(scene.run)) return "think";
+    for (let index = scene.events.length - 1; index >= 0; index--) {
+      const event = scene.events[index];
+      // A new build or revision must not inherit a station from its previous attempt.
+      if (event.kind === "event" && event.label !== "Tool requested" && event.summary === "Native session started") break;
+      const zone = zoneForEvent(event);
+      if (zone && ["explore", "think", "build", "bench", "seal"].includes(zone)) return zone;
+    }
+  }
+  return workflowZone(scene.run);
 }
 
 /** Lamps use immediate evidence; only the active work pose follows delayed staging. */
@@ -98,6 +128,7 @@ export function zoneEvidence(
   scene: LocalScene,
   beat: Pick<BeatFrame, "event" | "stage"> | null = null,
   attention: readonly ZoneAttention[] = [],
+  cursorMissing = false,
 ): ZoneBoardState {
   const run = scene.run;
   const has = (summary: string) =>
@@ -121,24 +152,10 @@ export function zoneEvidence(
   const reviewed = !!run.head && run.reviewed_head === run.head;
   const accepted = run.handover?.acceptance.state === "accepted";
   const fault = faultZone(run);
-  const operational =
-    !run.interrupted &&
-    !["failed", "cancelled", "shipped", "reverted"].includes(scene.phase);
-  const freezing =
-    scene.phase === "checking" &&
-    scene.latest?.summary === "Freezing handover" &&
-    zoneForEvent(scene.latest) === "handover";
-  let activeZone: ZoneId | null = null;
-  if (operational) {
-    if (freezing) activeZone = "handover";
-    else if (scene.phase === "preparing") activeZone = "setup";
-    else if (scene.phase === "checking") activeZone = "verify";
-    else if (scene.phase === "uat-ready") activeZone = "test";
-    else if (scene.phase === "merging") activeZone = "ship";
-    else if (beat)
-      activeZone = beat.stage === "think" ? "think" : zoneForEvent(beat.event);
-    else if (zoneForEvent(scene.latest) === "seal") activeZone = "seal";
-  }
+  const currentZone = cursorMissing ? null : currentAiZone(scene);
+  let activeZone = currentZone;
+  if (currentZone && scene.phase === "building" && beat)
+    activeZone = beat.stage === "think" ? "think" : zoneForEvent(beat.event) ?? currentZone;
   const zones = ZONE_IDS.map((id): ZoneEvidence => {
     let done = false,
       skipped = false;
@@ -173,7 +190,7 @@ export function zoneEvidence(
             ? "done"
             : skipped
               ? "skipped"
-              : id === activeZone
+              : id === currentZone
                 ? "active"
                 : "off";
     return {
@@ -192,8 +209,9 @@ export function zoneEvidence(
       : null;
   return {
     zones,
+    currentZone,
     activeZone,
-    buildZone: freezing ? "handover" : phaseZone(run),
+    buildZone: currentZone === "handover" ? "handover" : phaseZone(run),
     doneCount: zones.filter((zone) => zone.done || zone.skipped).length,
     total: 11,
     runningCheck,

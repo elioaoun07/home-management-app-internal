@@ -13,6 +13,7 @@ export function bakeBuild(scene: LocalScene, p: StagePalette): Sprite {
   c.translate(55, 132);
   const a = ART.build;
   cylinder(c, p.trim, 0, 0, 0, a.r, a.height);
+  if (scene.run.head) cylinder(c, p.zones.build, 0, 0, a.height - 3, a.r + 1, 3);
   const nodes = scene.nodes
     .filter((node) => node.edited)
     .slice(0, 4 * a.layers);
@@ -36,36 +37,20 @@ export function bakeBuild(scene: LocalScene, p: StagePalette): Sprite {
       { top: tone, left: p.hull.left, right: p.hull.right },
       -a.block + (i % 2) * (a.block + a.gap),
       -a.block + (Math.floor(i / 2) % 2) * (a.block + a.gap),
-      a.height + Math.floor(i / 4) * (a.block + a.gap),
+      a.height + Math.floor(i / 4) * (a.tileHeight + a.gap),
       a.block,
       a.block,
-      a.block,
+      a.tileHeight,
     );
   });
-  if (scene.run.head) cylinder(c, p.zones.build, 0, 0, 6, a.r + 1, 4);
-  scene.seals.forEach((seal, i) =>
-    box(
-      c,
-      {
-        top:
-          seal.state === "passed"
-            ? p.ok
-            : seal.state === "failed"
-              ? p.bad
-              : seal.state === "inconclusive"
-                ? p.warn
-                : p.trim.right,
-        left: p.trim.left,
-        right: p.trim.right,
-      },
-      -18 + i * 10,
-      19,
-      5,
-      6,
-      6,
-      5,
-    ),
-  );
+  scene.seals.forEach((seal, i) => {
+    const angle = Math.PI * (i + 1) / (scene.seals.length + 1);
+    c.fillStyle = seal.state === "passed" ? p.ok : seal.state === "failed" ? p.bad :
+      seal.state === "inconclusive" ? p.warn : p.trim.right;
+    c.beginPath();
+    c.ellipse(Math.cos(angle) * a.r, Math.sin(angle) * a.r / 2 - a.height / 2, 2, 1.5, 0, 0, Math.PI * 2);
+    c.fill();
+  });
   return { image, x: -55, y: -132, width: 110, height: 150 };
 }
 export function drawBuild(

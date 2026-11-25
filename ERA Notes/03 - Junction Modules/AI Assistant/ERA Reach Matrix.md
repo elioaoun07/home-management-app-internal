@@ -20,7 +20,7 @@ Generated from `src/features/era/reach.ts` by `src/features/era/reach.test.ts` (
 | Meal Planning | ✓ `/meal-plan` | – | meal.assign, meal.gaps | ✓ |  |
 | Inventory | ✓ `/catalogue` | – | – | – |  |
 | Debts | ✓ `/expense` | – | debt.record | ✓ | Settle waits on BUD-68. |
-| Catalogue | ✓ `/catalogue` | – | contact.create, place.create | ✓ | Search waits on HUB-69 (KIT-20/22). |
+| Catalogue | ✓ `/catalogue` | – | contact.create, contact.update, place.create | ✓ | Search waits on HUB-69 (KIT-20/22). |
 | Future Purchases | ✓ `/dashboard` | – | purchases.read | – |  |
 | Budget Allocation | ✓ `/dashboard` | – | spend.month | ✓ |  |
 | Preferences (LBP, theme) | ✓ `/settings` | – | – | – |  |

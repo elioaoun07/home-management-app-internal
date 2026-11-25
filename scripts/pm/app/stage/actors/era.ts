@@ -73,7 +73,6 @@ export function bakeEra(p: StagePalette) {
   return { p, left: body(p, -1), right: body(p, 1), image, ctx: image.getContext("2d")! };
 }
 export type EraSprites = ReturnType<typeof bakeEra>;
-export type OperatorOcclusion = (ctx: CanvasRenderingContext2D) => void;
 
 function leg(c: CanvasRenderingContext2D, p: StagePalette, sole: Sole, side: number, bob: number) {
   const foot = { x: sole.x, y: sole.y - sole.lift };
@@ -103,7 +102,7 @@ function arm(c: CanvasRenderingContext2D, p: StagePalette, shoulder: Vec2, hand:
 }
 export function drawEra(
   c: CanvasRenderingContext2D, sprites: EraSprites, x: number, y: number, seconds: number,
-  pose: EraPose, feet: readonly Sole[] = planted, occlude?: OperatorOcclusion,
+  pose: EraPose, feet: readonly Sole[] = planted,
 ) {
   const { p, ctx: k, image } = sprites, { gesture, facing, target } = pose;
   k.setTransform(1, 0, 0, 1, 0, 0);
@@ -138,13 +137,6 @@ export function drawEra(
   arm(k, p, shoulder, hand, facing);
   if (gesture === "edit" || gesture === "scan")
     oval(k, hand.x + facing * 2.2, hand.y, 1.6, 1.4, p.emissive);
-  if (occlude) {
-    k.save();
-    k.globalCompositeOperation = "destination-out";
-    k.translate(-x, -y);
-    occlude(k);
-    k.restore();
-  }
   c.save();
   if (pose.ghost) c.globalAlpha *= .36;
   c.drawImage(image, x + OPERATOR_BOUNDS.x, y + OPERATOR_BOUNDS.y, OPERATOR_BOUNDS.width, OPERATOR_BOUNDS.height);

@@ -87,6 +87,7 @@ export const ERA_ARTIFACT_ENTITIES = {
   contact: { label: "Contact", module: "catalogue", bin: "catalogue", href: itemOr((id) => `/catalogue?item=${enc(id)}`, "/catalogue") },
   place: { label: "Place", module: "catalogue", bin: "catalogue", href: itemOr((id) => `/catalogue?item=${enc(id)}`, "/catalogue") },
   catalogue_module: { label: "Catalogue module", module: "catalogue", href: () => "/catalogue" },
+  catalogue_category: { label: "Category", module: "catalogue", href: () => "/catalogue" },
   shopping_item: { label: "Shopping", module: "chef", href: (_id, _action, ref) => thread(ref) },
   shopping_group: { label: "Shopping group", module: "chef", href: (_id, _action, ref) => thread(ref) },
 } satisfies Record<string, EntitySpec>;

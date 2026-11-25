@@ -89,6 +89,13 @@ describe("reportOfferId", () => {
     expect(reportOfferId([msg("user", 1, { intent_kind: "unknown" }), reply])).toBeNull();
   });
 
+  it("HUB-123 — offers Report on a keyword echo that switched nothing, not on an asked-for switch", () => {
+    const echo = msg("assistant", 1, { intent_kind: "switchFace", intent_payload: { face: "brain" } });
+    expect(reportOfferId([msg("user", 1), echo])).toBe(echo.id);
+    const asked = msg("assistant", 1, { intent_kind: "switchFace", intent_payload: { face: "brain", explicit: true } });
+    expect(reportOfferId([msg("user", 1), asked])).toBeNull();
+  });
+
   it("offers Report on a failed or uncertain outcome", () => {
     const failed = msg("assistant", 1, { intent_kind: "draftReminder", intent_payload: { outcome: { status: "failed" } } });
     expect(reportOfferId([msg("user", 1), failed])).toBe(failed.id);

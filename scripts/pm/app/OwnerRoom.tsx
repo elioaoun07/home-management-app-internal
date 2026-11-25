@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import {
   Check,
-  CircleDot,
   CirclePause,
   GitCommitHorizontal,
   GitMerge,
@@ -17,6 +16,7 @@ import {
   type OwnerStation,
 } from "./ownerStations";
 import type { BerthLabel, OwnerWorld } from "./ownerWorld";
+import { RoomStepReadout } from "./RoomStepReadout";
 import "./owner-room.css";
 
 const glyphs = {
@@ -29,34 +29,39 @@ const glyphs = {
 };
 const stateLabels: Record<string, string> = {
   done: "Complete",
-  current: "Current step",
+  current: "Ready",
   pending: "Pending",
   stopped: "Stopped",
   optional: "Optional",
 };
 const assetPath = "/app/assets/brain-room.js";
-const stateIcons = { done: Check, current: CircleDot, stopped: CirclePause, pending: null, optional: null };
+const stateIcons = { done: Check, current: null, stopped: CirclePause, pending: null, optional: null };
 type SceneModule = Pick<typeof import("./ownerWorld"), "createOwnerWorld">;
 
 export function OwnerRoom({
   run,
   selected,
+  current,
   onSelect,
   patch,
   blocked = false,
+  replay = false,
 }: {
   run: LocalRunView;
   selected: OwnerStation;
+  current: OwnerStation | null;
   onSelect: (id: OwnerStation) => void;
   patch?: string | null;
   blocked?: boolean;
+  replay?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null),
     world = useRef<OwnerWorld | null>(null);
   const [labels, setLabels] = useState<BerthLabel[]>([]);
   const instructions = useId();
   const signals = ownerStationSignals(run);
-  const state = { selected, signals, patch };
+  const state = { selected, current, signals, patch };
+  const currentIndex = OWNER_STATIONS.findIndex(({ id }) => id === current);
   const latest = useRef({ state, onSelect, blocked });
   latest.current = { state, onSelect, blocked };
 
@@ -93,8 +98,9 @@ export function OwnerRoom({
   useEffect(() => {
     world.current?.update(latest.current.state);
     if (blocked) world.current?.stop();
-  }, [selected, run, patch, blocked]);
+  }, [selected, current, run, patch, blocked]);
   const boardLabels = labels.length > 0;
+  const activeBerth = labels.find(berth => berth.id === current);
   return (
     <section
       className="owner-room"
@@ -110,16 +116,28 @@ export function OwnerRoom({
         tabIndex={-1}
         style={{ pointerEvents: blocked ? "none" : undefined }}
       />
+      {!blocked && activeBerth && (
+        <svg className="owner-room-trace" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <polygon key={activeBerth.id} points={activeBerth.rim} pathLength="100" vectorEffect="non-scaling-stroke" />
+        </svg>
+      )}
+      {!blocked && currentIndex >= 0 && (
+        <RoomStepReadout number={currentIndex + 1} total={OWNER_STATIONS.length}
+          label={OWNER_STATIONS[currentIndex].label} replay={replay} />
+      )}
       <nav
         className="owner-room-stations"
         data-layout={boardLabels ? "berths" : "schematic"}
         aria-label="Owner workstations"
       >
-        {OWNER_STATIONS.map(({ id, label }) => {
+        {OWNER_STATIONS.map(({ id, label }, index) => {
           const marker = labels.find((p) => p.id === id),
             Icon = glyphs[id],
             status = signals[id];
           const StateIcon = stateIcons[status];
+          const description = id === current
+            ? status === "stopped" ? "Current step · Blocked" : "Current step"
+            : stateLabels[status];
           return (
             <button
               key={id}
@@ -128,10 +146,11 @@ export function OwnerRoom({
               aria-label={label}
               aria-describedby={instructions + "-" + id}
               aria-pressed={id === selected}
+              aria-current={id === current ? "step" : undefined}
               data-station={id}
               data-state={status}
               className="owner-room-station"
-              title={label + " · " + stateLabels[status]}
+              title={label + " · " + description}
               onClick={() => onSelect(id)}
               style={
                 boardLabels && marker
@@ -148,10 +167,14 @@ export function OwnerRoom({
                 strokeWidth={1.8}
                 aria-hidden="true"
               />
+              <span className="owner-station-number" aria-hidden="true">
+                {String(index + 1).padStart(2, "0")}
+              </span>
               <span>{label}</span>
               <span id={instructions + "-" + id} className="stage-announcement">
-                {stateLabels[status]}
+                {description}
               </span>
+              {id === current && <i className="room-step-signal" aria-hidden="true" />}
               {StateIcon && (
                 <StateIcon
                   className="owner-room-signal"

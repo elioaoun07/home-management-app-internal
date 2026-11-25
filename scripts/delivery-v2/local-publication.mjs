@@ -184,7 +184,10 @@ async function receiptChanges(root, d, changes, id, original, git, mainHead) {
 }
 
 const journalDir = (root, id) => join(root, ".delivery/local", id, "merge-inputs");
-export async function prepareCopy(root, d, plan, id, git) {
+/** `hand` (DLV-176): merge the colliding `paths` three-way into the owner's
+ * current file instead of refusing; uncommitted edits elsewhere are allowed. */
+export async function prepareCopy(root, d, plan, id, git, hand = null) {
+  const merged = [];
   const changes = new Map();
   const originals = new Map();
   const modes = new Map();
@@ -220,11 +223,12 @@ export async function prepareCopy(root, d, plan, id, git) {
     return originals.get(path);
   };
   for (const { path, status } of plan.files) {
-    if (obstructedCopyPath(root,path) || (status === "A" && existsSync(safeRunPath(root,path))))
+    const byHand = !!hand?.paths.has(path);
+    if (obstructedCopyPath(root,path) || (!byHand && status === "A" && existsSync(safeRunPath(root,path))))
       throw new Error("Changed in your checkout: " + path);
     original(path);
     if (!["A", "M", "D"].includes(status)) throw new Error("Unsupported change: " + path);
-    const data = status === "D" ? null : contents(d.workspace, path);
+    let data = status === "D" ? null : contents(d.workspace, path);
     if (status !== "D" && data === null) throw new Error("Missing candidate file: " + path);
     if (data !== null) {
       const tree = tested.get(path);
@@ -240,6 +244,18 @@ export async function prepareCopy(root, d, plan, id, git) {
       if (process.platform === "win32" && status === "A" && tree[0] === "100755")
         throw new Error("Executable mode requires a manual merge: " + path);
     }
+    const ours = byHand ? original(path) : null;
+    if (byHand && ours !== null) {
+      // A deletion never removes the owner's edited file; it stays as theirs.
+      if (status === "D") {
+        data = ours;
+        merged.push({ path, conflicts: 0, kept: true });
+      } else {
+        const result = await hand.merge(path, ours, data);
+        data = result.bytes;
+        merged.push({ path, conflicts: result.conflicts });
+      }
+    }
     changes.set(path, data);
   }
   await receiptChanges(root, d, changes, id, original, git, plan.refreshBase);
@@ -253,7 +269,7 @@ export async function prepareCopy(root, d, plan, id, git) {
     )
     .sort();
   if (!paths.length) throw new Error("No changes to merge");
-  const dirty = await git(
+  const dirty = hand ? "" : await git(
     root,
     "--literal-pathspecs",
     "status",
@@ -282,7 +298,7 @@ export async function prepareCopy(root, d, plan, id, git) {
     const mode = modes.get(path) ?? (before === null ? 0o644 : statSync(safeRunPath(root, path)).mode & 0o777);
     return { path, before, after, mode };
   });
-  return { manifest, files: candidatePaths, main_head: mainHead };
+  return { manifest, files: candidatePaths, main_head: mainHead, ...(hand ? { by_hand: merged } : {}) };
 }
 
 export function applyCopy(root, id, pending) {
@@ -440,6 +456,8 @@ export function createPublication({ root, git, run, env, dataOf, save, event, ho
         )
           throw new Error("Finish the Git operation in your checkout first");
         if (d.applied.pm_error) throw new Error("Review this run's PM error before committing");
+        // DLV-176: these files also hold the owner's own edits; only they can commit them.
+        if (d.applied.by_hand) throw new Error("Merged by hand. Resolve, then commit in your repo.");
         const manifest = d.applied.manifest;
         if (!manifest?.length)
           throw new Error("This older merge has no verified file list. Review and commit it manually.");

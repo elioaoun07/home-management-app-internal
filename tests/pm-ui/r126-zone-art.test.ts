@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ART, MACHINE_PARTS, ZONE_IDS, type ZoneId } from "../../scripts/pm/app/stage/config";
+import { ART, BOARD, MACHINE_PARTS, ZONE_IDS, type ZoneId } from "../../scripts/pm/app/stage/config";
 import { LOCAL_CHECKS } from "../../scripts/pm/app/localRunModel";
 import { ZONE_ART } from "../../scripts/pm/app/stage/board";
+import { conveyorGates } from "../../scripts/pm/app/stage/zones/gates";
 import { stagePaletteFromColors } from "../../scripts/pm/app/stage/palette";
 import { machineEvidence } from "../../scripts/pm/app/stage/machineEvidence";
 import { beatAt, planBeats } from "../../scripts/pm/app/stage/director";
@@ -74,12 +75,32 @@ describe("R126 cached zone assemblies", () => {
     const a = art(zone, "message", summary, 0.2), b = art(zone, "message", summary, 0.6);
     if (zone !== "think") expect(draw(a)).toEqual(draw(b));
   });
-  it("paints the complete emissive orb in front of the ring's opaque inner face", () => {
+  it("places the orb between the rear and front halves of the event rail", () => {
     const probe = context();
-    ZONE_ART.think.bakePart?.(probe.ctx, { zone: "think", palette });
-    const fills = probe.calls.filter(call => call[0] === "fill").map(call => call[2]);
-    expect(fills.slice(-3)).toEqual([palette.zones.build.right, palette.zones.build.left, palette.zones.build.top]);
-    expect(fills.lastIndexOf(palette.trim.right)).toBeLessThan(fills.indexOf(palette.zones.build.right));
+    const value = art("think", "message", "Update", 0.2, { activity:
+      Array.from({ length: ART.orb.beads }, (_, i) => row(i, "message", "Recorded update")) });
+    ZONE_ART.think.state(probe.ctx, value);
+    const arcs = probe.calls.flatMap((call, index) => call[0] === "arc" ? [{ y: Number(call[4]), index }] : []);
+    const globe = probe.calls.findIndex(call => call[0] === "fill" && call[2] === palette.zones.build.right);
+    expect(arcs).toHaveLength(ART.orb.beads);
+    expect(arcs.slice(0, ART.orb.beads / 2).every(point => point.index < globe && point.y <= -ART.orb.z)).toBe(true);
+    expect(arcs.slice(ART.orb.beads / 2).every(point => point.index > globe && point.y >= -ART.orb.z)).toBe(true);
+    const nearSpark = draw(value);
+    expect(nearSpark.at(-1)?.[3]).toBe(glow);
+    const farSpark = draw(art("think", "message", "Update", 0.75));
+    expect(farSpark[0][3]).toBe(glow);
+    expect(farSpark[1][3]).toBe(image);
+  });
+  it("fits the fully loaded carrier under every conveyor gate, including a lowered seal head", () => {
+    const cargo = ART.build;
+    const top = cargo.standZ + cargo.height + cargo.layers * cargo.tileHeight + (cargo.layers - 1) * cargo.gap;
+    const radius = (cargo.r + 1) / Math.SQRT2;
+    for (const gate of conveyorGates) {
+      expect(top).toBeLessThan(gate.z + gate.height);
+      expect(radius).toBeLessThan(gate.halfDepth - gate.postDepth);
+      expect(gate.y - gate.halfDepth).toBeGreaterThan(BOARD.belt.walkway + 4);
+    }
+    expect(top).toBeLessThan(ART.parts.seal[0][2] - ART.details.seal.drop);
   });
   it.each(ZONE_IDS)("holds %s still after closure, lost connection and reduced motion", zone => {
     const driver = drivers.find(value => value[0] === zone) ?? [zone, "status", "Installing dependencies"];

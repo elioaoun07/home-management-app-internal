@@ -1,14 +1,15 @@
-﻿import { boardFactKey } from "./facts";
+﻿import { boardFactKey, thinkBeadKey } from "./facts";
 import { createMotionPainter } from "./renderMotion";
 import { BOARD, BUDGET, TIMING } from "./config";
-import { boardPlacements, drawState } from "./board";
+import { boardPlacements } from "./board";
+import { blit, buildBoardScene, paintGroundFacts, type ScenePiece } from "./boardScene";
 import { bakeBoardAssets, bakePartFacts } from "./boardAssets";
 import { machineEvidence, type MachineEvidence } from "./machineEvidence";
 import { createEngineCamera } from "./engineCamera";
 import type { BoardCameraObservation, ZoomBucket } from "./boardCamera";
 import { resolveStagePalette } from "./palette";
 import { bakeEra } from "./actors/era";
-import { bakeBuild, drawBuild } from "./actors/build";
+import { bakeBuild } from "./actors/build";
 import { bakeGlow, createBoardFx } from "./fx";
 import { createMotionState, needsBoardAnimation } from "./motion";
 import { createPerfMeter } from "./perfMeter";
@@ -46,6 +47,8 @@ export function createBoardEngine(options: BoardEngineOptions) {
     era = bakeEra(palette);
   let assets = bakeBoardAssets(palette);
   let parts = assets.parts, partsKey = "";
+  let scenery: ScenePiece[] = [];
+  const surfaces = new Map<string, HTMLCanvasElement>();
   let build: Sprite | null = null,
     evidence: MachineEvidence | undefined,
     buildKey = "",
@@ -72,7 +75,8 @@ export function createBoardEngine(options: BoardEngineOptions) {
     if (!facts) return;
     prepare(front, stateDpr);
     const nextPartsKey = JSON.stringify([facts.snapshot.objectiveCount, facts.snapshot.objectivesAccepted,
-      facts.retry, Math.min(3, facts.snapshot.counts.commands), facts.snapshot.run.handover?.handover_id]);
+      facts.retry, Math.min(3, facts.snapshot.counts.commands), facts.snapshot.run.handover?.handover_id,
+      thinkBeadKey(facts.snapshot), evidence?.reached]);
     if (evidence && nextPartsKey !== partsKey) {
       partsKey = nextPartsKey;
       parts = bakePartFacts(assets, palette, facts, evidence);
@@ -86,17 +90,10 @@ export function createBoardEngine(options: BoardEngineOptions) {
       buildKey = nextBuildKey;
       build = bakeBuild(facts.snapshot, palette);
     }
-    if (evidence) drawState(front, palette, facts, parts, { assets, evidence });
-    if (["linkdown", "signallost"].includes(normalize(facts.state))) {
-      const frame: BoardMotionFrame = lastFrame ?? {
-        beat: null,
-        vitality: 0,
-        heat: 0,
-        elapsed: 0,
-        tempo: 1,
-      };
-      const carrier = movement.build(facts, frame, 0);
-      if (build) drawBuild(front, build, carrier.point.x, carrier.point.y);
+    if (evidence) {
+      scenery = buildBoardScene(palette, facts, parts, assets, evidence, surfaces);
+      paintGroundFacts(front, palette, facts);
+      for (const piece of scenery) if (piece.kind !== "part") blit(front, piece.sprite);
     }
   };
   const bake = () => {
@@ -112,7 +109,7 @@ export function createBoardEngine(options: BoardEngineOptions) {
       prepare(motion, motionDpr);
       painter.draw(
         motion,
-        { facts, palette, glow, ownerGlow, smoke, era, foreground: assets.foreground, parts, offParts: assets.offParts,
+        { facts, palette, glow, ownerGlow, smoke, era, scenery, padLights: assets.padLights,
           dimPalette: assets.dimPalette, glows: assets.glows, evidence, build },
         lastFrame,
         0,
@@ -217,7 +214,7 @@ export function createBoardEngine(options: BoardEngineOptions) {
       prepare(motion, motionDpr);
       const particles = painter.draw(
         motion,
-        { facts, palette, glow, ownerGlow, smoke, era, foreground: assets.foreground, parts, offParts: assets.offParts,
+        { facts, palette, glow, ownerGlow, smoke, era, scenery, padLights: assets.padLights,
           dimPalette: assets.dimPalette, glows: assets.glows, evidence, build },
         composeStill ? { ...frame, reducedMotion: true } : frame,
         dt,

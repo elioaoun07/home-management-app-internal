@@ -124,6 +124,17 @@ describe("3D delivery", () => {
     });
     expect(roomLighting(scene, zones, liveness(scene.run, now, { isError: true }), false).endpoint).toBeNull();
     expect(roomLighting(scene, zones, { ...live, state: "your-turn", active: false }, true)).toMatchObject({ endpoint: "seat", owner: true });
+    const ready = run("uat-ready", ["Ready for owner UAT"]);
+    for (const [canMerge, endpoint] of [[false, "test"], [true, "ship"]] as const) {
+      ready.canMerge = canMerge;
+      const handoff = sceneAt(buildTimeline(ready), now);
+      expect(roomLighting(handoff, zoneEvidence(handoff), liveness(handoff.run, now), false))
+        .toMatchObject({ endpoint, owner: true, marks: { handover: "reached" } });
+    }
+    for (const phase of ["accepting", "acceptance-paused", "refreshing", "refresh-failed"]) {
+      const verify = sceneAt(buildTimeline(run(phase, ["Host checks started"])), now);
+      expect(roomLighting(verify, zoneEvidence(verify), liveness(verify.run, now), false).endpoint).toBe("verify");
+    }
     const cancelled = sceneAt(buildTimeline(run("cancelled", ["Installing dependencies"])), now);
     expect(roomLighting(cancelled, zoneEvidence(cancelled), liveness(cancelled.run, now), false)).toMatchObject({
       endpoint: null, marks: { setup: "reached" }, working: false, failed: false, faultZone: null,

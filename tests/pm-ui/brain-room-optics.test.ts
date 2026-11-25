@@ -1,6 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { Mesh, MeshStandardMaterial, ShaderMaterial } from "three";
+import { Mesh, MeshStandardMaterial, PerspectiveCamera, ShaderMaterial, Vector3 } from "three";
+import { ambientRegion } from "../../scripts/pm/app/brain/ambientRegion";
 import { makeSphere } from "../../scripts/pm/app/brain/topicSphere";
+
+it("repaints the current workstation beyond the collector on software graphics", () => {
+  const camera = new PerspectiveCamera(65, 16 / 9, .08, 63);
+  camera.position.set(0, 1.65, 7);
+  camera.updateMatrixWorld();
+  const center = new Vector3(0, 2, 0);
+  const desk = new Vector3(8, .055, -3);
+  const width = 1280, height = 720;
+  const damage = ambientRegion();
+  const without = damage(camera, width, height, center, 2.06, [])!;
+  const withDesk = damage(camera, width, height, center, 2.06, [], desk)!;
+  // At the expanded edge of the floor ring and the highest tip of the pointer.
+  for (const point of [desk.clone().add(new Vector3(1.03, 0, 0)), new Vector3(desk.x, 2.50, desk.z)]) {
+    point.project(camera);
+    const x = (point.x + 1) * width / 2, y = (1 - point.y) * height / 2;
+    expect(x).toBeGreaterThan(without.x + without.width);
+    expect(x).toBeGreaterThanOrEqual(withDesk.x);
+    expect(x).toBeLessThanOrEqual(withDesk.x + withDesk.width);
+    expect(y).toBeGreaterThanOrEqual(withDesk.y);
+    expect(y).toBeLessThanOrEqual(withDesk.y + withDesk.height);
+  }
+});
 
 describe.each([false,true])("ERA optics (software %s)", software => {
   it("turns continuously, holds a frozen clock, and preserves the topic card heading", () => {

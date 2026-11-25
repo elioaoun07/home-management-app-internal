@@ -3,6 +3,8 @@
 @import './local-run-mission.css';
 .board-game { min-width: 0; --run-violet: var(--chart-2); --run-glow: color-mix(in srgb, var(--accent) 22%, transparent); }
 .board-game .run-game-tag { color: var(--accent); font: 600 11px var(--font-mono, monospace); }
+/* DLV-175: a second try, or a revision, is marked beside the item ID. */
+.board-game .board-title .run-game-attempt { color: var(--warning-ink, var(--accent)); white-space: nowrap; }
 .board-game .run-game-commandbar[data-closed-failed="true"] > .gate-actions > button.primary { background: var(--surface); color: var(--ink); }
 .board-game .stage-black-box dl { display: grid; grid-template-columns: min-content minmax(0, 1fr); }
 .board-game .stage-black-box dt { white-space: nowrap; }

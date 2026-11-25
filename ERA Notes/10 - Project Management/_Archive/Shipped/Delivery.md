@@ -578,6 +578,10 @@ owner: Elio
 
 - ✅ 2026-11-25 — **DLV-175** Check each Local candidate against its acceptance before Handover — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-175>) (Acceptance Check + Request changes/Stop for Local runs; 21 new replay tests; delivery-v2+pm-ui+Drive 2453 passed/8 skipped; typecheck+ESLint clean; live reviewer unwitnessed)
 
+### DLV-176
+
+- ✅ 2026-11-25 — **DLV-176** Merge a candidate whose files collide with your checkout, by hand — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-176>) (Both-sides view + Merge by hand (three-way, markers, no Git write); lane test DLV-176 on a real Git fixture; typecheck and changed-file ESLint clean. UAT pending (needs PM restart).)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._

@@ -120,6 +120,7 @@ export function CommandBar({
   const formRef = useRef<HTMLFormElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
+  const startersRef = useRef<HTMLDivElement>(null);
   const swipe = useRef<{ x: number; y: number; t: number } | null>(null);
   const moveCaret = useRef(false);
   const [atEnd, setAtEnd] = useState(true);
@@ -142,6 +143,23 @@ export function CommandBar({
       shell.style.removeProperty("--era-composer-height");
     };
   }, [variant]);
+  // HUB-123 — the starter pills sit above the bar (outside its measured box):
+  // publish their height so the thread above clears them instead of hiding
+  // its newest message underneath.
+  const showStarters = !pendingTranscript && !busy && active;
+  useLayoutEffect(() => {
+    if (variant !== "floating") return;
+    const shell = formRef.current?.closest<HTMLElement>(".era-shell");
+    if (!shell) return;
+    const pills = startersRef.current;
+    shell.style.setProperty(
+      "--era-starters-height",
+      showStarters && pills ? `${pills.offsetHeight + 8}px` : "0px",
+    );
+    return () => {
+      shell.style.removeProperty("--era-starters-height");
+    };
+  }, [variant, showStarters]);
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
@@ -322,8 +340,11 @@ export function CommandBar({
       }
     >
       <span className={styles.sheen} aria-hidden="true" />
-      {!pendingTranscript && !busy && active && (
-        <div className="absolute bottom-full left-0 right-0 mb-2 flex justify-center gap-2">
+      {showStarters && (
+        <div
+          ref={startersRef}
+          className="absolute bottom-full left-0 right-0 mb-2 flex justify-center gap-2"
+        >
           {GROUPS.map((group) => {
             const hue = MODULE_COLORS[group[0].mod].hue;
             return (

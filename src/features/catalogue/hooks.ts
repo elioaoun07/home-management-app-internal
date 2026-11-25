@@ -742,6 +742,10 @@ export function useUpdateItem() {
     },
     onSettled: (_data, _error, input) => {
       qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+      // HUB-123 — a move between categories changes their item counts.
+      if (input.category_id !== undefined) {
+        qc.invalidateQueries({ queryKey: catalogueKeys.categories() });
+      }
       // PATCH fans is_chore out to linked schedule items server-side.
       if (input.is_chore !== undefined) {
         qc.invalidateQueries({ queryKey: qk.scheduleItems() });
@@ -770,6 +774,9 @@ export function useUpdateItem() {
               );
             } finally {
               qc.invalidateQueries({ queryKey: catalogueKeys.items() });
+              if ("category_id" in inverse) {
+                qc.invalidateQueries({ queryKey: catalogueKeys.categories() });
+              }
             }
           },
         },

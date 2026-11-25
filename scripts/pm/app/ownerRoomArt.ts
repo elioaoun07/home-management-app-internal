@@ -1,5 +1,6 @@
 import * as T from "three";
 import type { OwnerStation } from "./ownerStations";
+import type { StagePalette } from "./stage/palette";
 
 // A cutaway of the same workshop the player enters at eye level.
 export const ownerBerths: Record<OwnerStation, readonly [number, number]> = {
@@ -13,14 +14,13 @@ export const ownerBerths: Record<OwnerStation, readonly [number, number]> = {
 
 type Point = readonly [number, number, number];
 const point = (p: Point) => new T.Vector3(...p);
-const enamel = (color: string) =>
+const enamel = () =>
   new T.MeshStandardMaterial({
-    color,
     roughness: 0.54,
     metalness: 0.24,
     flatShading: true,
   });
-const lamp = (color: string) => new T.MeshBasicMaterial({ color });
+const lamp = (color = "#ffffff") => new T.MeshBasicMaterial({ color });
 const tau = Math.PI * 2;
 
 function fit(
@@ -82,14 +82,7 @@ function strut(
   rod.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), vector.normalize());
 }
 // Milled slabs have clipped corners and a shallow bevel so the deck reads at board scale.
-function plate(
-  parent: T.Object3D,
-  material: T.Material,
-  p: Point,
-  w: number,
-  d: number,
-  h: number,
-) {
+function plateOutline(w: number, d: number) {
   const a = w / 2,
     b = d / 2,
     c = Math.min(w, d) * 0.14;
@@ -103,7 +96,17 @@ function plate(
   outline.lineTo(-a, b - c);
   outline.lineTo(-a, -b + c);
   outline.closePath();
-  const geometry = new T.ExtrudeGeometry(outline, {
+  return outline;
+}
+function plate(
+  parent: T.Object3D,
+  material: T.Material,
+  p: Point,
+  w: number,
+  d: number,
+  h: number,
+) {
+  const geometry = new T.ExtrudeGeometry(plateOutline(w, d), {
     depth: h,
     bevelEnabled: true,
     bevelSize: 0.035,
@@ -137,28 +140,18 @@ function contactShade() {
   };
 }
 
-export function buildOwnerWorkshop(textured: boolean) {
+export function buildOwnerWorkshop(textured: boolean, palette: StagePalette) {
   const group = new T.Group();
-  const steel = enamel("#52677b"),
-    edge = enamel("#9fb3bb"),
-    dark = enamel("#1b3144");
-  const deck = enamel("#344b5a"),
-    bone = enamel("#dfddd0"),
-    brass = enamel("#bf8855");
-  const ink = lamp("#132936"),
-    turquoise = lamp("#65e5d0"),
-    violet = lamp("#bba3ff");
-  const ice = lamp("#9de5ff"),
-    dim = lamp("#567a88");
+  const steel = enamel(), edge = enamel(), dark = enamel(), deck = enamel();
+  const bone = edge, brass = enamel(), ceramic = enamel();
+  const ink = lamp(), turquoise = lamp(), violet = lamp(), ice = lamp(), dim = lamp();
   const glass = new T.MeshBasicMaterial({
-    color: "#69c5de",
     transparent: true,
     opacity: 0.17,
     side: T.DoubleSide,
     depthWrite: false,
   });
   const halo = new T.MeshBasicMaterial({
-    color: "#a4ffe5",
     transparent: true,
     opacity: 0.1,
     side: T.DoubleSide,
@@ -166,11 +159,31 @@ export function buildOwnerWorkshop(textured: boolean) {
   });
   const machines = new Map<OwnerStation, T.Group>(),
     lamps = new Map<OwnerStation, T.MeshBasicMaterial>();
+  function setPalette(p: StagePalette) {
+    steel.color.set(p.hull.left);
+    edge.color.set(p.hull.top);
+    dark.color.set(p.board.right);
+    deck.color.set(p.pad.top);
+    ceramic.color.set(p.hull.top);
+    brass.color.set(p.zones.test.left);
+    ink.color.set(p.bg);
+    turquoise.color.set(p.zones.ship.top);
+    violet.color.set(p.zones.verify.top);
+    ice.color.set(p.emissive);
+    dim.color.set(p.trim.top);
+    glass.color.set(p.emissive);
+    halo.color.set(p.emissive);
+  }
+  setPalette(palette);
   const shade = textured ? contactShade() : null;
   shade?.(group, [0.22, -0.67, 0.08], 18.4, 13.9);
   plate(group, dark, [0, -0.62, 0], 14, 10.25, 0.3);
-  plate(group, brass, [0, -0.32, 0], 13.86, 10.12, 0.055);
+  plate(group, steel, [0, -0.32, 0], 13.86, 10.12, 0.055);
   plate(group, deck, [0, -0.255, 0], 13.82, 10.08, 0.21);
+  const rimSize = [3.48, 3.14] as const;
+  const currentRim = plate(group, ice, [0, 0.15, 0], ...rimSize, 0.04);
+  const rimOutline = plateOutline(...rimSize).getPoints();
+  currentRim.visible = false;
   for (const x of [-6.5, 6.5]) {
     block(group, steel, [x, 0.005, 0], [0.22, 0.05, 7.85]);
     for (const z of [-3.3, 0, 3.3])
@@ -376,7 +389,6 @@ export function buildOwnerWorkshop(textured: boolean) {
           new T.Vector2(0.82, 0.32),
           new T.Vector2(1, 0.51),
         ];
-        const ceramic = enamel("#c6dcdf");
         ceramic.side = T.DoubleSide;
         fit(dish, new T.LatheGeometry(sections, 36), ceramic, [0, 0, 0]);
         ring(dish, brass, [0, 0.51, 0], 1, 0.04).rotation.x = -Math.PI / 2;
@@ -420,5 +432,5 @@ export function buildOwnerWorkshop(textured: boolean) {
       }
     }
   }
-  return { group, machines, lamps };
+  return { group, machines, lamps, currentRim, rimOutline, setPalette };
 }

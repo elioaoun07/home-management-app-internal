@@ -10,6 +10,8 @@ import {
 } from "../../scripts/pm/app/stage/hud/FoundryHud";
 import { Debrief } from "../../scripts/pm/app/Debrief";
 import { AttentionCard } from "../../scripts/pm/app/stage/hud/AttentionCard";
+import { DeliveryWorkshop } from "../../scripts/pm/app/DeliveryWorkshop";
+import { boardPlacements } from "../../scripts/pm/app/stage/board";
 
 const epoch = Date.parse("2026-11-15T10:00:00Z");
 const row = (seconds: number, kind: string, summary: string) => ({
@@ -68,6 +70,24 @@ function markup(
 }
 
 describe("R123 board HUD", () => {
+  it("paints the Think pad indicator between the deck and its occupants", () => {
+    const timeline = buildTimeline(run({ activity: [row(2, "message", "ERA update")] }));
+    const snapshot = sceneAt(timeline, timeline.end!);
+    const html = renderToStaticMarkup(createElement(DeliveryWorkshop, {
+      snapshot, timeline, railOpen: false, stageRef: { current: null },
+      positions: boardPlacements(), onZone: () => {},
+      staging: { beat: "work", zone: "think", label: "SAY ERA update", event: snapshot.latest, message: snapshot.latest, gap: null },
+    }));
+    const floor = html.slice(html.indexOf('data-layer="static"'), html.indexOf('data-layer="state"'));
+    expect(floor).toMatch(/class="board-floor-marks".*?<g data-zone="think"><polyline class="board-current-edge"/u);
+    expect(floor).toContain('class="board-current-trace"');
+    const controls = html.slice(html.indexOf('data-layer="motion"'));
+    expect(controls).toContain('data-zone="think" aria-current="step"');
+    expect(controls).not.toContain('class="board-current-trace"');
+    const shelf = html.indexOf('class="board-readouts"');
+    expect(html.slice(0, shelf)).not.toContain("foundry-command-chip");
+    expect(html.slice(shelf)).toContain('title="SAY ERA update"');
+  });
   it("disables a blocked primary action while retaining local SQL acknowledgement", () => {
     const item = {
       id: "sql",
@@ -93,7 +113,7 @@ describe("R123 board HUD", () => {
     expect(html).toContain(">HUD fixture</h1>");
     for (const label of ["SETUP", "BUILD", "VERIFY", "TEST", "SHIP"])
       expect(html).toContain(`>${label}</b>`);
-    expect(html).toContain("LINE 2/11");
+    expect(html).toContain("2/11 complete");
     expect(html).toContain('class="board-hud"');
     expect(html).toContain('class="board-rail"');
     expect(html).not.toContain('class="foundry-mission"');

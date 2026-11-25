@@ -6,7 +6,7 @@ import { Box2, PerspectiveCamera, Vector2, Vector3 } from "three";
  * paint because point projection is unbounded there. */
 export function ambientRegion() {
   const bounds = new Box2(), projected = new Vector2(), p = new Vector3();
-  return (camera: PerspectiveCamera, width: number, height: number, center: Vector3, radius: number, route: readonly Vector3[]) => {
+  return (camera: PerspectiveCamera, width: number, height: number, center: Vector3, radius: number, route: readonly Vector3[], activeDesk?: Vector3 | null) => {
     bounds.makeEmpty();
     let clipped = false;
     function include(point: Vector3, extent: number) {
@@ -22,6 +22,10 @@ export function ambientRegion() {
       }
     }
     include(center, radius);
+    if (activeDesk) {
+      include(activeDesk, 1.04);
+      include(p.set(activeDesk.x, 2.28, activeDesk.z), .25);
+    }
     let priorDepth: number | undefined;
     for (const point of route) {
       const depth = p.copy(point).applyMatrix4(camera.matrixWorldInverse).z;

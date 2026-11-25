@@ -7,7 +7,7 @@ export interface ZoneChipProps {
   style?: CSSProperties;
 }
 
-/** Parent places this with the zone labels on resize or beat entry, never RAF. */
+/** The recorded action stays readable on the shelf while the camera moves. */
 export const ZoneChip = forwardRef<HTMLOutputElement, ZoneChipProps>(
   function ZoneChip({ zone, label, style }, ref) {
     return (
@@ -15,6 +15,7 @@ export const ZoneChip = forwardRef<HTMLOutputElement, ZoneChipProps>(
         ref={ref}
         className="board-zone-chip foundry-command-chip"
         data-zone={zone ?? undefined}
+        title={label}
         style={style}
         hidden={!zone || !label}
         tabIndex={0}

@@ -1,7 +1,7 @@
 import { ART, MACHINE_PARTS, ZONE_BY_ID } from "../config";
 import { box, contactShadow, project, polygon } from "../iso";
 import type { ZoneArtContext, ZoneRenderState } from "../types";
-export function base(ctx: CanvasRenderingContext2D, art: ZoneArtContext) {
+export function floorShadow(ctx: CanvasRenderingContext2D, art: ZoneArtContext) {
   const p = art.palette,
     h = ART.shadow;
   const height = Math.max(
@@ -9,6 +9,10 @@ export function base(ctx: CanvasRenderingContext2D, art: ZoneArtContext) {
   );
   contactShadow(ctx, p, 0, 4, h.r * 0.8, h.depth * 0.7);
   contactShadow(ctx, p, h.x, height * 0.35, h.r, h.depth);
+}
+export function base(ctx: CanvasRenderingContext2D, art: ZoneArtContext) {
+  const p = art.palette;
+  if (p.shadow !== "transparent") floorShadow(ctx, art);
   for (const [x, y, z, w, d, height, material] of MACHINE_PARTS[art.zone])
     box(
       ctx,

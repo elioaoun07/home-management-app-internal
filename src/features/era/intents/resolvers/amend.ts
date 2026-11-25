@@ -14,6 +14,7 @@ import { saveLexiconRule } from "../../useEraLexicon";
 import { moneyIn } from "../formatters/budget";
 import { parseEdits, type EditRequest } from "../followUp";
 import { prepareTransfer } from "./budget";
+import { resolveMoveContact, tidyCategoryName } from "./contacts";
 import {
   createShoppingGroup,
   listOpenShoppingItems,
@@ -81,7 +82,13 @@ export async function resolveAmendByName(targetHint: string, editText: string): 
   const open = await listOpenShoppingItems().catch(() => null);
   if (!open) return { text: "Couldn't read the list.", ok: false };
   const matches = matchShoppingItems(open.items, targetHint);
-  if (matches.length === 0) return { text: `No "${targetHint}" on the list.`, ok: false };
+  if (matches.length === 0) {
+    // HUB-123 — "move Racha under Family category": not on the list, but a contact.
+    const category = tidyCategoryName(parseEdits(editText).group ?? "");
+    const contact = category ? await resolveMoveContact(targetHint, category, editText, true) : null;
+    if (contact) return contact as AmendResult;
+    return { text: `No "${targetHint}" on the list.`, ok: false };
+  }
   if (matches.length > 1) {
     return slot(
       "amend.target",

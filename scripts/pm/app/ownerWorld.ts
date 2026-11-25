@@ -4,9 +4,11 @@ import { release } from "./brain/art";
 import type { OwnerStation, OwnerStationState } from "./ownerStations";
 import { buildOwnerWorkshop, ownerBerths } from "./ownerRoomArt";
 import { mountPatchProjection } from "./ownerPatchProjection";
+import { resolveStagePalette } from "./stage/palette";
 
 export interface OwnerWorldState {
   selected: OwnerStation;
+  current: OwnerStation | null;
   patch?: string | null;
   signals: Record<OwnerStation, OwnerStationState>;
 }
@@ -19,6 +21,7 @@ export interface BerthLabel {
   id: OwnerStation;
   x: number;
   y: number;
+  rim: string;
 }
 
 // SVG is a geometry renderer for hosts that do not offer a WebGL context.
@@ -46,24 +49,23 @@ export function createOwnerWorld(
   const surface = renderer.domElement;
   surface.setAttribute("aria-hidden", "true");
   host.append(surface);
+  let palette = resolveStagePalette(host);
+  if (renderer instanceof SVGRenderer) renderer.setClearColor(new T.Color(palette.bg), 1);
   const scene = new T.Scene(),
-    workshop = buildOwnerWorkshop(renderer instanceof T.WebGLRenderer);
+    workshop = buildOwnerWorkshop(renderer instanceof T.WebGLRenderer, palette);
   scene.add(workshop.group);
   const projectPatch =
     renderer instanceof T.WebGLRenderer
       ? mountPatchProjection(workshop.machines.get("merge")!)
       : null;
-  scene.add(new T.HemisphereLight("#e8f5ff", "#536278", 2.25));
-  const sun = new T.DirectionalLight("#ffe9ca", 2.67);
+  scene.add(new T.HemisphereLight("#ffffff", "#97a3b4", 1.55));
+  const sun = new T.DirectionalLight("#ffffff", 1.85);
   sun.position.set(-4, 8, 6);
   scene.add(sun);
-  const rim = new T.DirectionalLight("#9acfff", 1.9);
+  const rim = new T.DirectionalLight("#c6d4e5", 0.72);
   rim.position.set(7, 4, -6);
   scene.add(rim);
   const map = new T.OrthographicCamera(-8, 8, 6, -6, 0.1, 90);
-  map.position.set(4.4, 17.0, 22.3);
-  map.lookAt(0, 0.63, 0);
-  map.updateMatrixWorld();
   const label = new T.Vector3(),
     ray = new T.Raycaster();
   const ids = Object.keys(ownerBerths) as OwnerStation[];
@@ -99,11 +101,11 @@ export function createOwnerWorld(
       width < 550,
     );
     const aspect = width / height;
-    map.position.set(4.4, width < 550 ? 27 : 17, 22.3);
+    map.position.set(width < 550 ? 7.8 : 13.4, width < 550 ? 27 : 18.5, 22.3);
     map.lookAt(0, 0.63, 0);
     map.updateMatrixWorld();
     // Frame the complete hull at any ratio, leaving enough room for berth names.
-    const halfHeight = Math.max(4.78, 8.12 / aspect);
+    const halfHeight = Math.max(5.28, 8.95 / aspect);
     map.left = -halfHeight * aspect;
     map.right = halfHeight * aspect;
     map.top = halfHeight;
@@ -122,8 +124,12 @@ export function createOwnerWorld(
     placeLabels(
       ids.map((id) => {
         const [x, z] = ownerBerths[id];
+        const rim = workshop.rimOutline.map(corner => {
+          label.set(x + corner.x, 0.19, z - corner.y).project(map);
+          return `${(label.x + 1) * 50},${(1 - label.y) * 50}`;
+        }).join(" ");
         label.set(x, width < 550 ? 0.41 : 0.13, z + 1.46).project(map);
-        return { id, x: (label.x + 1) * 50, y: (1 - label.y) * 50 };
+        return { id, x: (label.x + 1) * 50, y: (1 - label.y) * 50, rim };
       }),
     );
     invalidate();
@@ -131,20 +137,23 @@ export function createOwnerWorld(
   function apply(next: OwnerWorldState) {
     state = next;
     projectPatch?.(next.selected === "merge" ? next.patch : null, width < 550);
+    workshop.currentRim.visible = next.current !== null;
+    if (next.current) {
+      const [x, z] = ownerBerths[next.current];
+      workshop.currentRim.position.set(x, 0.15, z);
+    }
     for (const id of ids) {
       const status = next.signals[id];
       workshop.lamps
         .get(id)!
         .color.set(
-          id === next.selected
-            ? "#ffe0a6"
+          id === next.current
+            ? palette.emissive
             : status === "done"
-              ? "#66c7b9"
-              : status === "current"
-                ? "#b6dfff"
-                : status === "stopped"
-                  ? "#dfaf85"
-                  : "#527182",
+              ? palette.ok
+              : status === "stopped"
+                ? palette.warn
+                : palette.trim.top,
         );
     }
     invalidate();
@@ -194,6 +203,17 @@ export function createOwnerWorld(
   }
   const observer = new ResizeObserver(resize);
   observer.observe(host);
+  const theme = new MutationObserver(() => {
+    const next = resolveStagePalette(host);
+    if (next.top === palette.top && next.emissive === palette.emissive && next.bg === palette.bg) return;
+    palette = next;
+    if (renderer instanceof SVGRenderer) renderer.setClearColor(new T.Color(next.bg), 1);
+    workshop.setPalette(next);
+    apply(state);
+  });
+  for (let node: HTMLElement | null = host; node; node = node.parentElement) {
+    theme.observe(node, { attributes: true, attributeFilter: ["data-theme", "data-color", "class", "style"] });
+  }
   const lost = () => onLoss();
   surface.addEventListener("pointerdown", down);
   surface.addEventListener("pointermove", move);
@@ -211,6 +231,7 @@ export function createOwnerWorld(
       disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
+      theme.disconnect();
       finishDrag();
       document.removeEventListener("visibilitychange", invalidate);
       surface.removeEventListener("pointerdown", down);

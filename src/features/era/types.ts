@@ -44,7 +44,8 @@ export interface Face {
  * behavior in later phases without a type churn.
  */
 export type Intent =
-  | { kind: "switchFace"; face: FaceKey; rawText: string }
+  /** `explicit`: the person asked for the face ("open brain"); otherwise a keyword echo that did nothing. */
+  | { kind: "switchFace"; face: FaceKey; rawText: string; explicit?: boolean }
   | {
       kind: "draftTransaction";
       capture?: ExpenseCapture;
@@ -220,8 +221,10 @@ export type Intent =
   | { kind: "reminderSkip"; face: "schedule"; itemId: string | null; title: string | null; targetHint?: string; rawText: string }
   // HUB-78 — marginal-cost capability: add items to the household shopping list.
   | { kind: "addShopping"; face: "chef"; items: string[]; groupHint?: string; rawText: string; target?: Extract<NativeCapture, { kind: "shopping" }> }
-  /** HUB-89 — add a Catalogue contact ("add Laura as a contact"). */
-  | { kind: "addContact"; face: "brain"; name: string; rawText: string }
+  /** HUB-89 — add a Catalogue contact ("add Laura as a contact"); HUB-123 — optionally into a category. */
+  | { kind: "addContact"; face: "brain"; name: string; categoryHint?: string; rawText: string }
+  /** HUB-123 — file an existing contact under a category ("move Racha contact under Family"). */
+  | { kind: "moveContact"; face: "brain"; name: string; categoryHint: string; rawText: string }
   /** HUB-88/94 — save a Catalogue place ("add Kobeize as a location"). */
   | { kind: "addPlace"; face: "brain"; name: string; rawText: string }
   /**
@@ -269,7 +272,11 @@ export interface EraPendingSlot {
     // HUB-94 — event date, event place (free text or a saved place), save a new place.
     | "event.when"
     | "event.location"
-    | "place.save";
+    | "place.save"
+    // HUB-123 — file a contact: pick a category, create a missing one, pick which contact.
+    | "contact.category"
+    | "contact.newCategory"
+    | "contact.pick";
   /** Arguments already resolved (ids, amounts, whenText, action). */
   args: Record<string, unknown>;
   /** The argument the chips fill. */

@@ -75,12 +75,15 @@ async function verify({ width, height, mobile }) {
   page.setDefaultTimeout(24_000);
   page.on("pageerror", error => errors.push(error.message));
   const now = Date.now();
-  const run = boardRun({ run_id: "local-00000000-0000-4000-8000-000000000190", phase: "uat-ready",
+  const run = boardRun({ run_id: "local-00000000-0000-4000-8000-000000000190", phase: "uat-ready", canMerge: true,
     base: "b".repeat(40), head: "c".repeat(40), current_head: "c".repeat(40), checks: passedChecks(),
     handover: handover(true), activity: ["Native session started", "src/clock.ts", "Ready for owner UAT"].map((summary, i) =>
       ({ at: new Date(now - 60_000 + i * 15_000).toISOString(), job_id: "fixture", kind: i === 1 ? "edit" : "status", seq: i, summary })) });
   const reads = [];
-  await context.addInitScript(() => localStorage.setItem("pm-game-layer", "on"));
+  await context.addInitScript(theme => {
+    localStorage.setItem("pm-game-layer", "on");
+    localStorage.setItem("pm-app-theme", theme);
+  }, mobile ? "pink" : "blue");
   await context.route("**/*", route => {
     const req = route.request(), url = new URL(req.url()), params = url.searchParams;
     if (url.origin !== origin) return route.abort();
@@ -112,6 +115,12 @@ async function verify({ width, height, mobile }) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name + " fits");
     await page.screenshot({ path: directory + "/" + profile + "-" + name + ".png" });
   };
+  async function checkStepMotion(expectedMotion) {
+    const signal = page.locator(".room-step-readout .room-step-signal");
+    await signal.waitFor();
+    const animation = await signal.evaluate(node => getComputedStyle(node, "::after").animationName);
+    assert.equal(animation !== "none", expectedMotion, "the progress cue follows the motion preference");
+  }
   async function floor(name) {
     await page.locator(`.era-brain[data-load="ready"][data-floor="${name}"] .era-brain-viewport[data-pose]:not([data-lift="moving"])`).waitFor();
   }
@@ -127,9 +136,29 @@ async function verify({ width, height, mobile }) {
   try {
     await page.goto(origin + "/#/delivery/run/" + run.run_id);
     // Handover runs open on the Owner board, including when entering 3D directly.
-    await page.getByRole("navigation", { name: "Owner workstations" }).waitFor();
+    const rooms = page.getByRole("navigation", { name: "Delivery rooms" });
+    const ownerStations = page.getByRole("navigation", { name: "Owner workstations" });
+    const merge = ownerStations.getByRole("button", { name: "Merge", exact: true });
+    await page.locator(".owner-room[data-loaded=true]").waitFor();
+    assert.equal(await merge.getAttribute("aria-current"), "step");
+    await ownerStations.getByRole("button", { name: "Review", exact: true }).click();
+    assert.equal(await merge.getAttribute("aria-current"), "step", "inspecting Review keeps the marker at Merge");
+    assert.equal(await merge.getAttribute("aria-pressed"), "false");
+    await page.getByRole("button", { name: "Close inspector", exact: true }).click();
+    await checkStepMotion(!mobile);
+    await shot("owner-board");
+    await rooms.getByRole("button", { name: "AI room" }).click();
+    await page.locator('.board-zone-name[data-zone="ship"][aria-current="step"]').waitFor();
+    await checkStepMotion(!mobile);
+    await shot("ai-board");
+    await rooms.getByRole("button", { name: "Owner room" }).click();
     await page.getByRole("button", { name: "Explore 3D", exact: true }).click();
     await floor("owner");
+    assert.equal(await room.getAttribute("data-active-station"), "merge");
+    await ownerStations.getByRole("button", { name: "Test", exact: true }).click();
+    assert.equal(await merge.getAttribute("aria-current"), "step");
+    assert.equal(await room.getAttribute("data-active-station"), "merge");
+    await page.getByRole("button", { name: "Close inspector", exact: true }).click();
     const handle = await viewport.locator("canvas").evaluateHandle(canvas => ({ canvas, gl: canvas.getContext("webgl2") }));
     const sameRoom = async () => {
       assert.equal(await viewport.locator("canvas").count(), 1);
@@ -170,6 +199,7 @@ async function verify({ width, height, mobile }) {
       ]);
     }
     await floor("ai");
+    assert.equal(await room.getAttribute("data-active-station"), "ship");
     await sameRoom();
     await move(page, mobile);
     await shot("ai-walk");
@@ -186,6 +216,7 @@ async function verify({ width, height, mobile }) {
     const beforeReplay = reads.length;
     await tapLift("owner");
     await sameRoom();
+    assert.equal(await ownerStations.locator('[aria-current="step"]').count(), 0, "an early replay frame precedes owner work");
     await station.selectOption("owner:merge");
     await inspect.click();
     await reader.getByText("Comparison available in Live", { exact: true }).waitFor();
@@ -197,6 +228,12 @@ async function verify({ width, height, mobile }) {
     if (!await recorder.isVisible()) await page.getByRole("button", { name: /^Recorder$|^Replay$/ }).click();
     assert.equal(await recorder.getAttribute("aria-valuetext"), cursor, "lift preserved the exact replay cursor");
     await handle.dispose();
+    await room.getByRole("button", { name: "Low motion", exact: true }).click();
+    await room.getByRole("button", { name: "Board", exact: true }).click();
+    await checkStepMotion(false);
+    await page.locator(".board-replay-strip").getByRole("button", { name: "Live", exact: true }).click();
+    await rooms.getByRole("button", { name: "Owner room" }).click();
+    await checkStepMotion(false);
     results.push({ profile, reads, uploads: await page.evaluate(() => [...new Set(window.floorUploads)]) });
   } catch (error) {
     await page.screenshot({ path: directory + "/" + profile + "-failure.png" });

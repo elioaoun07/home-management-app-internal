@@ -7,27 +7,41 @@
   min-height: 0;
   overflow: hidden;
   container-type: inline-size;
-  background:
-    radial-gradient(ellipse at 49% 42%, rgb(86 129 139 / 22%), transparent 66%),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--theme-bg) 90%, #7696ae),
-      var(--theme-bg) 70%
-    );
+  background: linear-gradient(145deg, var(--surface), var(--theme-bg) 65%);
 }
-.owner-room::before {
-  content: "";
+.owner-room > .room-step-readout {
   position: absolute;
-  inset: 0;
+  inset: 14px auto auto 14px;
+  z-index: 1;
   pointer-events: none;
-  opacity: 0.24;
-  background-image: radial-gradient(var(--ink-muted) 0.65px, transparent 0.8px);
-  background-size: 17px 17px;
-  mask-image: linear-gradient(transparent 4%, black 54%, transparent);
 }
 .owner-room-render {
   position: absolute;
   inset: 0;
+}
+.owner-room-trace {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .board-game:not([data-low-motion="true"]):not([data-liveness="link-down"]) .owner-room-trace {
+    display: block;
+  }
+  .owner-room-trace polygon {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-dasharray: 9 91;
+    animation: owner-berth-trace 3.6s linear infinite;
+  }
+}
+@keyframes owner-berth-trace {
+  to { stroke-dashoffset: -100; }
 }
 .owner-room-render:focus-visible {
   outline: 2px solid var(--accent);
@@ -59,33 +73,40 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45em;
-  color: var(--ink);
-  border: 1px solid color-mix(in srgb, var(--ink-muted) 49%, var(--surface));
-  border-radius: 6px;
-  background: var(--surface);
-  font:
-    600 clamp(12px, 1.28cqw, 15px) / 1.15 Geist,
-    system-ui,
-    sans-serif;
+  gap: 0.48em;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--theme-bg);
+  font: 600 clamp(11px, 1.22cqw, 14px) / 1.15 var(--font-mono, monospace);
+  letter-spacing: .035em;
+  text-transform: uppercase;
   min-height: 32px;
   padding: 5px 10px;
   white-space: nowrap;
-  box-shadow: 0 2px 7px rgb(3 12 21 / 30%);
+  cursor: pointer;
+}
+.owner-room .owner-station-number {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
 }
 .owner-room .owner-room-station:hover,
 .owner-room .owner-room-station:focus-visible {
-  border-color: var(--accent);
+  color: var(--ink);
+  border-color: var(--ink);
 }
 .owner-room .owner-room-station[aria-pressed="true"] {
-  border-color: var(--warning, #e9bf79);
-  background: color-mix(in srgb, var(--surface) 89%, #dcb67b);
-  box-shadow:
-    inset 0 -2px var(--warning, #e9bf79),
-    0 2px 12px rgb(4 14 21 / 40%);
+  color: var(--ink);
+  border-color: var(--ink-muted);
+  background: var(--surface);
 }
-.owner-room .owner-room-station[aria-pressed="true"] .owner-room-glyph {
-  color: var(--warning, #e9bf79);
+.owner-room .owner-room-station[aria-current="step"] {
+  color: var(--ink);
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent), 0 0 0 1px var(--accent);
+}
+.owner-room .owner-room-station[aria-current="step"] .owner-station-number {
+  color: var(--accent);
 }
 .owner-room .owner-room-signal {
   color: var(--accent);
@@ -98,9 +119,12 @@
   position: absolute;
   transform: translate(-50%, -8%);
 }
+.owner-room-stations[data-layout="berths"] .owner-room-glyph {
+  display: none;
+}
 .owner-room-stations[data-layout="schematic"] {
   position: absolute;
-  inset: 12% 7%;
+  inset: max(76px, 12%) 7% 12%;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-rows: repeat(2, minmax(0, 1fr));
@@ -126,15 +150,17 @@
   top: 8px;
   right: 8px;
 }
+.owner-room-stations[data-layout="schematic"] .owner-station-number {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
 @container (max-width: 580px) {
   .owner-room-stations[data-layout="berths"] .owner-room-station {
-    padding: 4px 7px;
+    gap: 4px;
+    padding: 4px 6px;
     min-height: 32px;
   }
-  .owner-room-stations[data-layout="berths"] .owner-room-glyph {
-    display: none;
-  }
-
 }
 @media (pointer: coarse) {
   .owner-room .owner-room-station {

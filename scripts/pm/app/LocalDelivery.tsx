@@ -92,7 +92,10 @@ export interface LocalRunView {
   /** DLV-167: the session's files against the main checkout since the run's base. */
   mergePlan?: LocalMergePlan | null;
   canMerge?: boolean;
-  applied?: { at: string; files: string[]; main_head: string; pm_error: string | null; manifest?: { path: string }[] } | null;
+  /** DLV-176: Merge is blocked only by files that collide with your checkout. */
+  canMergeByHand?: boolean;
+  applied?: { at: string; files: string[]; main_head: string; pm_error: string | null; manifest?: { path: string }[];
+    by_hand?: { path: string; conflicts: number; kept?: boolean }[] } | null;
   committed?: { sha: string; at: string } | null;
   pushed?: { sha: string; at: string; remote: string; branch: string } | null;
   cleaned_at?: string | null;
@@ -112,8 +115,11 @@ export interface LocalRunView {
   revision_limit?: number;
   revisions_used?: number;
   canRequestChanges?: boolean;
+  canReuseAttempt?: boolean;
   canStop?: boolean;
   canRecheckAcceptance?: boolean;
+  /** This run's place among the item's Local runs. */
+  attempt?: { n: number; of: number };
 }
 export type LocalVerdict = "met" | "missed" | "unclear";
 export interface LocalAcceptanceCriterion {
@@ -148,6 +154,9 @@ export interface LocalCandidate {
 }
 export interface LocalRevision {
   n: number;
+  /** Its place in the revision budget; a failed or cancelled revision is not counted. */
+  ordinal?: number;
+  after?: { n: number; ordinal: number; step: string | null; stage: string | null; code: string; detail: string; reused: boolean };
   requested_at: string;
   from_head: string;
   note: string | null;
@@ -171,7 +180,7 @@ export interface LocalMergePlan {
   canRefresh?: boolean;
 }
 export type LocalAction = "review" | "merge" | "commit" | "push" | "refresh" | "recheck" | "test" | "cancel" | "discard"
-  | "request-changes" | "stop" | "check-acceptance";
+  | "request-changes" | "stop" | "check-acceptance" | "merge-by-hand";
 export type LocalAct = (action: LocalAction, evidence?: Record<string, string>) => void;
 export interface LocalPreviewView {
   state: "starting" | "ready" | "stopped" | "failed";

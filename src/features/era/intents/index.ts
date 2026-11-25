@@ -5,7 +5,7 @@ import { resolveEntityRef } from "../focusMemory";
 import { matchTemplates } from "../templates/matcher";
 import type { FaceKey, Intent, IntentRouter } from "../types";
 import { useEraStore } from "../useEraStore";
-import { brainRouter } from "./brain";
+import { brainRouter, parseContactIntent } from "./brain";
 import { budgetRouter } from "./budget";
 import { chefRouter } from "./chef";
 import type { FaceIntentRouter } from "./schedule";
@@ -166,6 +166,7 @@ const OTHER_WRITES: ReadonlySet<Intent["kind"]> = new Set([
   "reminderSkip",
   "addShopping",
   "addContact",
+  "moveContact",
   "addPlace",
   "draftEvent",
   "defineAlias",
@@ -235,7 +236,7 @@ function routeIntent(text: string): Intent {
   // 1) Explicit face-switch commands always win
   const switchFace = detectFaceSwitch(trimmed);
   if (switchFace)
-    return { kind: "switchFace", face: switchFace, rawText: text };
+    return { kind: "switchFace", face: switchFace, rawText: text, explicit: true };
 
   // HUB-81 — household activity: "what changed today", "what did Racha do".
   if (/\b(?:what(?:'s)?\s+(?:changed|happened|new)|recent\s+activity|activity\s+(?:today|log)|what\s+did\s+(?:my\s+)?(?:partner|wife|husband|\w+)\s+(?:do|change|add))\b/i.test(trimmed)
@@ -255,6 +256,11 @@ function routeIntent(text: string): Intent {
   if (explicitNav?.route) {
     return { kind: "navigate", to: explicitNav.route, label: explicitNav.label, module: explicitNav.module, rawText: text };
   }
+
+  // HUB-123 — a sentence that names a contact ("move Racha contact under
+  // Family") is a Catalogue contact write, never a shopping-list edit.
+  const contactHit = parseContactIntent(trimmed);
+  if (contactHit) return contactHit;
 
   // HUB-84 — an edit that NAMES the item: "move salt under Spinneys group",
   // "put the salt in the Spinneys group". Only with "under" or "… group"

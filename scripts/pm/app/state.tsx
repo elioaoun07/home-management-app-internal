@@ -47,7 +47,7 @@ export const pmKeys = {
   localReadiness: (executor: string) => ["pm-app", "local", "readiness", executor] as const,
   localRun: (id: string) => ["pm-app", "local", "run", id] as const,
   localActivityPage: (id: string, before: number) => ["pm-app", "local", "activity", id, before] as const,
-  localComparison: (id: string, against: "base" | "repo", source: string, head: string, path: string | null) =>
+  localComparison: (id: string, against: "base" | "repo" | "checkout", source: string, head: string, path: string | null) =>
     ["pm-app", "local", "comparison", id, against, source, head, path] as const,
   localStoragePreview: (id: string) => ["pm-app", "local", "storage", id] as const,
   localRunListPrefix: ["pm-app", "local", "run"] as const,

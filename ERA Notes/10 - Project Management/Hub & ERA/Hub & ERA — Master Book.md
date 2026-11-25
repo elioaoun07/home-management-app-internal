@@ -230,6 +230,21 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Tier:** CLAUDE_MID; owner review (public routes). Routing: [Fable 2 model tiers](<../Fable 2/Model Tiers/_Routing.md>).
 - **Reading guide:** Follow HUB-118 in the same area.
 
+### HUB-123
+
+**Outcome:** Contacts can be filed under a category from ERA and from Catalogue, and the ERA thread is never hidden behind the starter pills.
+
+**Kind:** bug
+**Source:** owner report 2026-11-25 (ERA top layer screenshot): "Move Racha Contact under Family Category" answered `No "Racha Contact" on the list.`; "In Catalogue, move …" answered that Catalogue changes aren't possible; "Add Racha as a Contact" filed Racha under no category; the Catalogue edit form had no category field; the Expense/Reminder/Event/Shopping pills covered the newest message.
+**Implementation:** done
+**UAT:** pending
+
+- **Acceptance:** "Move Racha contact under Family (category)", "In Catalogue, move …", "move contact Racha to the Friends category" and "Move Racha under Friends category" file the contact with Undo. "Add Laura as a contact under Friends" / "as a family contact" create it in that category. A missing category asks `No "X" category. Create it?` [Create] [No]; Create makes it and files the contact, Undo reverts both. A plain add asks **Category?** (category chips, Details, Skip). An existing contact is reused. Catalogue's item dialog has a Category select. The thread clears the starter pills. "Don't move …" writes nothing.
+- **Evidence (2026-11-25):** Gym `report-hub-123` … `-i` and `report-hub-95` red → green, `-neg` green; known-miss list unchanged (20). Contract rows `contact.create (category)`, `contact.update`, `contact.category`, `contact.newCategory` + Undo test. Router rows (HUB-123) in `rootIntentRouter.test.ts`. `pnpm vitest run tests/era-gym src/features/era src/lib/era tests/catalogue-patch.test.ts`: 785 passed. Typecheck clean. Local dev, read-only: stage bottom 1069 px vs pills top 1082 px (overlapped by 35 px before); Edit Contact shows Category (None, House Maintenance, Car Maintenance, Family); nothing saved.
+- **Owner check (phone):** in ERA, send "Move Racha contact under Family category" → `Racha → Family` with Undo, and Racha appears under Family in Catalogue → Contacts. Send "Add Test Person as a contact under Pets" → [Create] → both exist; Undo removes the filing and the Pets category. Open a contact's Edit in Catalogue → change Category → Save → Undo. With a long ERA thread, the newest reply sits above the four pills.
+- **Follow-up (2026-11-25, owner: "does that mean it is still working?"):** a 7:53 PM retry answered `Over to Brain.`: a tab still running the old code (localhost served the fix; a hard refresh loads it). That reply is a keyword echo that does nothing yet read as a hand-off in progress. A switch the person did not ask for (`switchFace` without `explicit`) now answers `Nothing done — <face> can't do that from here yet.` and offers Report; "open brain" keeps the old lines. The thinking dots now read `Working…`. Tests: `rootIntentRouter.test.ts` + `thread.test.ts` (HUB-123 rows).
+- **Reading guide:** `src/features/era/intents/brain.ts#parseContactIntent` → `resolvers/contacts.ts`; pills: `src/components/era/CommandBar.tsx` (`--era-starters-height`) + `EraComposer.module.css`; Catalogue: `src/components/web/CatalogueItemDialog.tsx`.
+
 ### HUB-117
 
 **Outcome:** ERA handles "Location for Women's night is Kobeize".
@@ -351,6 +366,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - **Acceptance:** This request ends in the right outcome — done with Undo, one confirm card, one question with chips, a prefilled form, or an honest limit with a door — never a wrong action or a dead end. An ERA Gym case replays the transcript below.
 - **Comment:** Adding Racha as a Contact should request me to fill more info. So the form for creating a Contact should fire to prompt me into adding more details
 - **Reading guide:** start at `src/features/era/useEraTurn.ts` (one turn), then the router in `src/features/era/intents/` and the capability's resolver; add the sentence to `tests/era-gym/`.
+- **Implementation:** done (2026-11-25). A plain add of a new contact saves nothing: ERA replies "New contact · Racha" with an Open door to `/catalogue?newContact=Racha`, where the contact form opens prefilled, Category picker included (`contacts.ts#resolveAddContact`, `WebCatalogue.tsx`, `CatalogueItemDialog.tsx#initialName`). Ported from the Local candidate `5dcada5e` (run `local-15f95526`) into the HUB-123 work, which collided with it in five files; that run is superseded, Discard it. An add naming a category ("add Racha to Family") or an existing contact keeps HUB-123's path. Gym `report-hub-89`/`-b`/`-c` and `report-hub-93` expect `handed_off`; contract test "a plain add opens the prefilled form and saves nothing".
+- **UAT:** pending. Owner: "Add Rana as a contact" → Open → the form shows Rana; Cancel leaves no contact.
 
 **Transcript**
 
@@ -2758,6 +2775,7 @@ The remaining retained defects, decisions and enhancements are indexed below and
 
 - **Acceptance:** "Add Laura as a contact" when Laura exists (by normalized name) answers `Already in Contacts · Laura` with a door to open it, and writes nothing. The partner's adds land in a module the partner can see and keep using. Gym cases cover the duplicate, a near-name and the partner path.
 - **Depends on:** [HUB-93](#hub-93) (the same resolver; do both in one pass).
+- **Progress (2026-11-25, HUB-123):** the duplicate path is done: a normalized-name match answers `Already in Contacts · <name>` and writes nothing (Gym `report-hub-95`); an uncategorized match also asks **Category?** with a [Details] door. Still open: the partner path and the near-name case.
 - **Reading guide:** Copy the `loadPlaces` / `matchPlace` pattern from `resolvers/places.ts`. Audience rule (Kitchen KIT-26, owner 2026-10-05): shared unless explicitly private, so ERA-created catalogue rows take `is_public = true`.
 
 ### HUB-96
@@ -3063,6 +3081,8 @@ The remaining retained defects, decisions and enhancements are indexed below and
 - ✅ 2026-10-12 — ERA composer mic/send are one WhatsApp-style button: mic when empty, Send when text → [record](<../_Archive/Shipped/Hub & ERA.md#2026-10-12--era-composer-micsend-are-one-whatsapp-style-button-mic-when-empty>)
 - ✅ 2026-10-12 — **HUB-115** Polish ERA's top-layer motion while preserving functionality — [criteria](<Hub & ERA — Master Book.md#hub-115>)
 - ✅ 2026-11-21 — **HUB-118** Require host sign-in for Guest Portal bulk reads → [record](<../_Archive/Shipped/Hub & ERA.md#hub-118>)
+- ✅ 2026-11-25 — **HUB-123** Contacts file under a category from ERA and Catalogue → [record](<../_Archive/Shipped/Hub & ERA.md#hub-123>)
+- ✅ 2026-11-25 — **HUB-93** ERA gets "Add Racha as a Contact" right → [record](<../_Archive/Shipped/Hub & ERA.md#hub-93>)
 
 ## Delivery session log
 

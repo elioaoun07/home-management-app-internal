@@ -43,7 +43,7 @@ const verdictReview = (states: Record<string, "met" | "missed" | "unclear"> = {}
   };
 const passingReview = verdictReview();
 async function fixture(risk = false, red = false, failFirst = false, executor = "claude",
-  options: Pick<Parameters<typeof createLocalLane>[0], "run" | "limits" | "checks" | "session" | "prepareDependencies" | "reviewSession"> = {}) {
+  options: Pick<Parameters<typeof createLocalLane>[0], "run" | "limits" | "checks" | "session" | "prepareDependencies" | "reviewSession" | "lintStaged"> = {}) {
   const parent = temp(), root = join(parent, "repo"), remote = join(parent, "origin.git");
   mkdirSync(root); git(root, "init", "-b", "main"); git(root, "config", "user.email", "fixture@example.invalid"); git(root, "config", "user.name", "Fixture");
   git(parent, "init", "--bare", remote); git(root, "remote", "add", "origin", remote);
@@ -323,7 +323,85 @@ describe("DLV-159 supervisor Git limits", () => {
     const started = await f.lane.start(f.input);
     await f.lane.wait(started.run_id!);
     expect(await f.lane.detail(started.run_id!)).toMatchObject({ phase: "failed", error: "git commit: fixture hook rejected\n",
-      failure: { code: "commit-hook", step: "Seal", detail: "git commit: fixture hook rejected" } });
+      failure: { code: "commit-hook", step: "Seal", detail: "fixture hook rejected" } });
+  }, 60_000);
+  // DLV-175 (HUB-93 live run): the hook ran ESLint with zero warnings allowed on a file the
+  // builder touched; the recorded detail had shown the test totals instead of the warning.
+  const LINT_REFUSAL = String.raw`const fs=require('node:fs');
+    if(fs.existsSync('lint-fixed.txt')) process.exit(0);
+    process.stderr.write('Running unit tests...\n Test Files  3 passed (3)\n      Tests  9 passed (9)\nRunning ESLint on staged files...\n');
+    process.stderr.write('C:\\fixture\\src\\WebCatalogue.tsx\n  354:9  warning  \'handleToggleFavorite\' is assigned a value but never used  no-unused-vars\n\n');
+    process.stderr.write('\u2716 1 problem (0 errors, 1 warning)\n\nESLint found too many warnings (maximum: 0).\nESLint errors \u2014 fix before committing.\n');
+    process.exitCode=2;`;
+  /** The first call builds; the Seal fix turn (a fresh session, never a resume) runs `fix`. */
+  const resumable = (fix: (workspace: string) => void, seen: { instruction: string; resume?: unknown }[] = []) =>
+    async ({ request }: { request: { instruction: string; workspace: { root: string }; resume?: unknown } }) => {
+      seen.push({ instruction: request.instruction, resume: request.resume });
+      if (request.instruction.includes("refused by the repository pre-commit hook")) fix(request.workspace.root);
+      else {
+        put(request.workspace.root, "greeting.txt", "after\n");
+        put(request.workspace.root, ".delivery-handover.json", JSON.stringify({ summary: "Changed greeting", scenarios: [{ id: "greeting", title: "Greeting", required: true, steps: [{ action: "Read greeting", expected: "after" }] }] }));
+      }
+      return { status: "finished", observations: { nativeOutcome: "succeeded" }, executionRef: { native_ref: "fixture-session" } };
+    };
+  it("gives the builder one fix turn when the hook refuses the commit, then seals", async () => {
+    const seen: { instruction: string; resume?: unknown }[] = [];
+    const f = await fixture(false, false, false, "claude", { session: resumable(workspace => put(workspace, "lint-fixed.txt", "fixed\n"), seen) as never });
+    hook(f.root, LINT_REFUSAL);
+    const started = await f.lane.start(f.input);
+    await f.lane.wait(started.run_id!);
+    const view = await f.lane.detail(started.run_id!);
+    expect(view.phase).toBe("uat-ready");
+    expect(seen).toHaveLength(2);
+    expect(seen[0].instruction).toContain("ESLint with zero warnings allowed on every file you change");
+    // A finished session's home is gone, so the fix turn starts fresh on the same worktree.
+    expect(seen[1].resume).toBeUndefined();
+    expect(seen[1].instruction).toContain("This worktree holds the finished candidate for DLV-900");
+    expect(seen[1].instruction).toContain("refused by the repository pre-commit hook at lint");
+    expect(seen[1].instruction).toContain("354:9  warning  'handleToggleFavorite'");
+    const rows = view.activity.map((row: { summary: string }) => row.summary.split("\n")[0]);
+    expect(rows).toEqual(expect.arrayContaining(["Seal refused at lint", "Seal fix turn finished"]));
+    expect(git(view.workspace, "show", "--name-only", "--format=", "HEAD")).toContain("lint-fixed.txt");
+  }, 60_000);
+  it("catches the hook's lint rule before the long hook runs and fixes it first", async () => {
+    const seen: { instruction: string; resume?: unknown }[] = [];
+    let lints = 0;
+    const lintStaged = async (workspace: string) => (lints++, existsSync(join(workspace, "lint-fixed.txt"))
+      ? null : { stage: "lint", detail: "src/WebCatalogue.tsx\n  374:9  warning  'handleToggleFavorite' is assigned a value but never used" });
+    const f = await fixture(false, false, false, "claude", { lintStaged, session: resumable(workspace => put(workspace, "lint-fixed.txt", "fixed\n"), seen) as never });
+    hook(f.root, LINT_REFUSAL);
+    const started = await f.lane.start(f.input);
+    await f.lane.wait(started.run_id!);
+    const view = await f.lane.detail(started.run_id!);
+    expect(view.phase).toBe("uat-ready");
+    expect(lints).toBe(2);
+    expect(seen).toHaveLength(2);
+    expect(seen[1].instruction).toContain("374:9  warning  'handleToggleFavorite'");
+    const rows = view.activity.map((row: { summary: string }) => row.summary.split("\n")[0]);
+    // The fix came before the first commit attempt, so the hook ran once and passed.
+    expect(rows.indexOf("Seal refused at lint")).toBeLessThan(rows.indexOf("Committing candidate"));
+    expect(rows.filter((row: string) => row === "Committing candidate")).toHaveLength(1);
+  }, 60_000);
+  it("fails Seal with the lint lines when the fix turn leaves the warning", async () => {
+    const lintStaged = async () => ({ stage: "lint", detail: "src/WebCatalogue.tsx\n  374:9  warning  unused" });
+    const f = await fixture(false, false, false, "claude", { lintStaged, session: resumable(() => {}) as never });
+    const started = await f.lane.start(f.input);
+    await f.lane.wait(started.run_id!);
+    const view = await f.lane.detail(started.run_id!);
+    expect(view).toMatchObject({ phase: "failed", failure: { code: "commit-hook", step: "Seal", stage: "lint", detail: "src/WebCatalogue.tsx\n  374:9  warning  unused" } });
+    expect(view.activity.some((row: { summary: string }) => row.summary === "Committing candidate")).toBe(false);
+  }, 60_000);
+  it("records the refusing hook step and its own lines when the fix turn does not help", async () => {
+    const f = await fixture(false, false, false, "claude", { session: resumable(() => {}) as never });
+    hook(f.root, LINT_REFUSAL);
+    const started = await f.lane.start(f.input);
+    await f.lane.wait(started.run_id!);
+    const view = await f.lane.detail(started.run_id!);
+    expect(view.phase).toBe("failed");
+    expect(view.failure).toMatchObject({ code: "commit-hook", step: "Seal", stage: "lint" });
+    expect(view.failure!.detail).toContain("354:9  warning  'handleToggleFavorite' is assigned a value but never used");
+    expect(view.failure!.detail).toContain("ESLint found too many warnings (maximum: 0).");
+    expect(view.failure!.detail).not.toContain("Test Files");
   }, 60_000);
   it("keeps archived Ship and Undo unable to change the checkout", async () => {
     const f = await fixture();
@@ -1275,6 +1353,38 @@ describe("DLV-167 Merge into the main checkout", () => {
   }, 60_000);
 });
 
+describe("DLV-176 Merge by hand", () => {
+  it("shows your side of a colliding file and merges it three-way, keeping both", async () => {
+    const f = await built();
+    accept(f.root, f.view.handover!);
+    expect((await f.lane.detail(f.id)).canMergeByHand).toBe(false);
+    await expect(f.lane.mergeByHand(f.id)).rejects.toThrow("Nothing collides");
+    put(f.root, "greeting.txt", "owner edit\n");
+    put(f.root, "scratch.txt", "wip\n");
+    const before = await f.lane.detail(f.id);
+    expect(before).toMatchObject({ canMerge: false, canMergeByHand: true });
+    const request = (fields: Record<string, string>) => routeLocal({
+      method: "GET", path: "/api/delivery/v2/local/comparison", query: new URLSearchParams({ id: f.id, head: before.head!, ...fields }),
+      loopbackPeer: true,
+    }, { kind: "browser" }, { local: f.lane });
+    expect((await request({ against: "checkout", path: "greeting.txt" }))?.json).toMatchObject({ head: "checkout", patch: expect.stringContaining("-before\n+owner edit") });
+    expect((await request({ against: "checkout" }))?.status).toBe(409);
+    expect((await request({ against: "checkout", path: "scratch.txt" }))?.status).toBe(409);
+    const head = git(f.root, "rev-parse", "HEAD");
+    const view = await f.lane.mergeByHand(f.id);
+    expect(readFileSync(join(f.root, "greeting.txt"), "utf8"))
+      .toBe("<<<<<<< your repo\nowner edit\n=======\nafter\n>>>>>>> DLV-900 session\n");
+    expect(readFileSync(join(f.root, "scratch.txt"), "utf8")).toBe("wip\n");
+    expect(git(f.root, "rev-parse", "HEAD")).toBe(head);
+    expect(view).toMatchObject({ phase: "merged", applied: { by_hand: [{ path: "greeting.txt", conflicts: 1 }] } });
+    expect(view.publication).toMatchObject({ action: "commit", reason: "Merged by hand. Resolve, then commit in your repo." });
+    const archive = join(f.root, PM, "_Archive/Shipped/Delivery.md");
+    expect(readFileSync(join(f.root, PM, "Delivery/Delivery — Master Book.md"), "utf8") + (existsSync(archive) ? readFileSync(archive, "utf8") : ""))
+      .toMatch(/\*\*UAT:\*\* passed /u);
+    expect(view.activity.map((row: { summary: string | null }) => row.summary)).toContain("Owner merged 1 file into the main checkout by hand · 1 to resolve");
+  }, 60_000);
+});
+
 describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
   type Session = { request: { instruction: string; workspace: { root: string } } };
   const passChecks = async () => ["typecheck", "lint", "test", "pm:lint"].map(name => ({ name, started_at: "", finished_at: "", exit: 0, stdout: "", stderr: "", error: null }));
@@ -1345,7 +1455,8 @@ describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
     expect(reviews).toHaveLength(2);
     expect(instructions[1]).toContain("revision 1 of 2 of DLV-900");
     expect(instructions[1]).toContain("[missed] (Acceptance) changed greeting");
-    expect(instructions[1]).toContain("Owner notes:\nSay it twice.");
+    expect(instructions[1]).toContain("Owner notes (they are also checked as criteria):\nSay it twice.");
+    expect(criterionIds(reviews[1].instruction)).toEqual(["outcome", "a1", "note1", "uat"]);
     expect(instructions[1]).toContain("Implement only DLV-900");
     expect(revised.revisions).toMatchObject([{ n: 1, state: "sealed", from_head: paused.head, to_head: revised.head, note: "Say it twice.",
       findings: [{ id: "a1", state: "missed" }] }]);
@@ -1389,8 +1500,8 @@ describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
     await f.lane.requestChanges(id, paused.head!);
     await f.lane.wait(id);
     const view: LocalRunView = await f.lane.detail(id);
-    expect(view).toMatchObject({ phase: "acceptance-paused", head: paused.head, revisions_used: 1, canRequestChanges: true, revision: null,
-      acceptance: { state: "paused" } });
+    expect(view).toMatchObject({ phase: "acceptance-paused", head: paused.head, revisions_used: 0, canRequestChanges: true, canReuseAttempt: true,
+      revision: null, acceptance: { state: "paused" } });
     expect(view.checks.every(check => check.exit === 0)).toBe(true);
     expect(git(view.workspace, "rev-parse", "HEAD")).toBe(paused.head);
     expect(git(view.workspace, "status", "--porcelain", "--untracked-files=all")).toBe("");
@@ -1398,6 +1509,42 @@ describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
     expect(readFileSync(join(f.root, view.revisions![0].attempt_patch!), "utf8")).toContain("after, broken");
     expect(f.store.getRun(id).lifecycle).toBe("ACTIVE");
   }, 90_000);
+
+  it("retries a failed revision without counting it, reusing its kept changes and carrying the owner's note as a criterion", async () => {
+    let call = 0;
+    const instructions: string[] = [], reviews: ReviewRequest["request"][] = [], started: string[] = [];
+    const f = await fixture(false, false, false, "claude", {
+      checks: async () => { const results = await passChecks(); if (++call === 2) results[2] = { ...results[2], exit: 1, stdout: "revision broke a test" }; return results; },
+      session: (async ({ request }: Session) => {
+        started.push(readFileSync(join(request.workspace.root, "greeting.txt"), "utf8").trim());
+        const value = ["after", "after, broken", "after, fixed"][Math.min(instructions.length, 2)];
+        instructions.push(request.instruction);
+        put(request.workspace.root, "greeting.txt", value + "\n");
+        put(request.workspace.root, ".delivery-handover.json", handover(value));
+        return { status: "finished", observations: { nativeOutcome: "succeeded" } };
+      }) as never,
+      reviewSession: verdictReview({ a1: "missed" }, reviews) as never });
+    const { id, view: paused } = await launch(f);
+    await f.lane.requestChanges(id, paused.head!, "Make it louder.");
+    await f.lane.wait(id);
+    const failed: LocalRunView = await f.lane.detail(id);
+    expect(failed).toMatchObject({ revisions_used: 0, canReuseAttempt: true, revisions: [{ n: 1, ordinal: 1, state: "failed" }] });
+    const routed = await routeLocal({ method: "POST", path: "/api/delivery/v2/local", loopbackPeer: true,
+      body: { action: "request-changes", run_id: id, expected_head: paused.head, note: "Make it louder.", reuse_attempt: "true" } }, { kind: "browser" }, { local: f.lane });
+    expect(routed).toMatchObject({ status: 200, json: { ok: true } });
+    await f.lane.wait(id);
+    const view: LocalRunView = await f.lane.detail(id);
+    // The retry started from the failed attempt's changes, applied and uncommitted.
+    expect(started).toEqual(["before", "after", "after, broken"]);
+    expect(instructions[2]).toContain("revision 1 of 2 of DLV-900");
+    expect(instructions[2]).toContain("An earlier attempt at this revision failed at Verify");
+    expect(instructions[2]).toContain("Its changes are applied in this worktree, uncommitted.");
+    expect(view).toMatchObject({ phase: "acceptance-paused", revisions_used: 1, canReuseAttempt: false,
+      revisions: [{ n: 1, state: "failed" }, { n: 2, ordinal: 1, state: "sealed", after: { n: 1, reused: true } }] });
+    expect(git(view.workspace, "log", "-1", "--format=%s")).toBe("Revise DLV-900 (revision 1)");
+    expect(criterionIds(reviews.at(-1)!.instruction)).toEqual(["outcome", "a1", "note2", "uat"]);
+    expect(reviews.at(-1)!.instruction).toContain("[note2] (Owner revision note) Make it louder.");
+  }, 120_000);
 
   it("lets the owner check again only when the reviewer gave no verdict", async () => {
     let broken = true;
@@ -1420,16 +1567,19 @@ describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
       "const args = process.argv.slice(2);",
       'const out = args.find(arg => arg.startsWith("--outputFile=")).slice(13);',
       'const spec = JSON.parse(readFileSync(args[1], "utf8"));',
+      'const pattern = new RegExp(args[args.indexOf("-t") + 1]);',
+      'const fullName = [spec.suite, spec.title].filter(Boolean).join(" ");',
       'const actual = readFileSync(spec.file || "greeting.txt", "utf8").trim();',
       "const passed = actual === spec.expect;",
       "const message = \"AssertionError: expected '\" + actual + \"' to be '\" + spec.expect + \"'\";",
-      'writeFileSync(out, JSON.stringify({ testResults: [{ name: resolve(args[1]), assertionResults: [{ fullName: spec.name, title: spec.name, status: passed ? "passed" : "failed", failureMessages: passed ? [] : [message] }] }] }));',
+      'const status = !pattern.test(fullName) ? "skipped" : passed ? "passed" : "failed";',
+      'writeFileSync(out, JSON.stringify({ testResults: [{ name: resolve(args[1]), assertionResults: [{ fullName, title: spec.title, status, failureMessages: status === "failed" ? [message] : [] }] }] }));',
       "process.exitCode = passed ? 0 : 1;",
     ].join("\n");
     async function bug(spec: Record<string, string>, expected: string, seen: string[] = []) {
       const test = "tests/greeting.test.ts";
       const f = await fixture(false, false, false, "claude", { checks: passChecks,
-        session: writer(["after"], seen, { regression: [{ test, name: spec.name, expected_failure: expected }] }, { [test]: JSON.stringify(spec) }) as never,
+        session: writer(["after"], seen, { regression: [{ test, name: spec.declared ?? spec.title, expected_failure: expected }] }, { [test]: JSON.stringify(spec) }) as never,
         prepareDependencies: async (workspace: string) => {
           put(workspace, "node_modules/.pnpm/lock.yaml", readFileSync(join(workspace, "pnpm-lock.yaml"), "utf8"));
           put(workspace, "node_modules/vitest/vitest.mjs", FAKE_VITEST);
@@ -1443,7 +1593,8 @@ describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
     const proof = (view: LocalRunView) => view.acceptance!.criteria.find(entry => entry.id === "regression1");
     it("is met when the test fails on the base for the declared reason and passes on the candidate", async () => {
       const seen: string[] = [];
-      const { view } = await bug({ name: "greeting reads after", expect: "after" }, "expected 'before' to be 'after'", seen);
+      // Declared the way Vitest prints it; -t and the report join the names with spaces.
+      const { view } = await bug({ suite: "greeting", title: "reads after", declared: "greeting > reads after", expect: "after" }, "expected 'before' to be 'after'", seen);
       expect(seen[0]).toContain('"regression":[{"test"');
       expect(proof(view)).toMatchObject({ state: "met", by: "supervisor" });
       expect(proof(view)!.evidence[0]).toContain("Base: failed — AssertionError: expected 'before' to be 'after'");
@@ -1451,12 +1602,12 @@ describe("DLV-175 Acceptance Check, Request changes and Stop", () => {
       expect(git(view.workspace, "status", "--porcelain", "--untracked-files=all")).toBe("");
     }, 60_000);
     it("is missed when the test already passes before the fix", async () => {
-      const { view } = await bug({ name: "instructions exist", expect: "Fixture instructions", file: "CLAUDE.md" }, "expected");
+      const { view } = await bug({ title: "instructions exist", expect: "Fixture instructions", file: "CLAUDE.md" }, "expected");
       expect(proof(view)).toMatchObject({ state: "missed", evidence: ["Passes before the fix, so it does not prove the bug fixed", expect.any(String), expect.any(String)] });
       expect(view).toMatchObject({ phase: "acceptance-paused", handover: null });
     }, 60_000);
     it("is unclear when the base fails for another reason", async () => {
-      const { view } = await bug({ name: "greeting reads after", expect: "after" }, "expected 'nothing' to be 'after'");
+      const { view } = await bug({ title: "greeting reads after", expect: "after" }, "expected 'nothing' to be 'after'");
       expect(proof(view)).toMatchObject({ state: "unclear", evidence: ["Failed on the base for a different reason", expect.any(String), expect.any(String)] });
       expect(view.phase).toBe("acceptance-paused");
     }, 60_000);

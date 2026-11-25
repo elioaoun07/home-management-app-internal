@@ -18,7 +18,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useCreateItem, useUpdateItem } from "@/features/catalogue/hooks";
+import {
+  useCatalogueCategories,
+  useCreateItem,
+  useUpdateItem,
+} from "@/features/catalogue/hooks";
 import { catalogueKeys } from "@/features/catalogue/queryKeys";
 import { useHouseholdMembers } from "@/hooks/useHouseholdMembers";
 import { useThemeClasses } from "@/hooks/useThemeClasses";
@@ -67,6 +71,8 @@ interface Props {
   categoryId?: string;
   editingItem: CatalogueItem | null;
   isPlaces?: boolean;
+  /** HUB-93 — a new item opens with this name (ERA's ?newContact= link). */
+  initialName?: string;
 }
 
 const STATUS_OPTIONS: CatalogueItemStatus[] = [
@@ -76,6 +82,9 @@ const STATUS_OPTIONS: CatalogueItemStatus[] = [
   "paused",
   "cancelled",
 ];
+
+/** Select value for "no category" (Radix Select rejects an empty value). */
+const NO_CATEGORY = "none";
 
 const PRIORITY_OPTIONS: CataloguePriority[] = [
   "low",
@@ -869,12 +878,17 @@ export default function CatalogueItemDialog({
   categoryId,
   editingItem,
   isPlaces = false,
+  initialName,
 }: Props) {
   const themeClasses = useThemeClasses();
   const createItem = useCreateItem();
   const updateItem = useUpdateItem();
   const qc = useQueryClient();
   const { data: householdData } = useHouseholdMembers();
+  // HUB-123 — the item's category is editable here (move between categories).
+  const { data: moduleCategories = [] } = useCatalogueCategories(
+    moduleId || undefined,
+  );
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -891,6 +905,7 @@ export default function CatalogueItemDialog({
   const [frequency, setFrequency] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [categoryChoice, setCategoryChoice] = useState(NO_CATEGORY);
   const [progressCurrent, setProgressCurrent] = useState("");
   const [progressTarget, setProgressTarget] = useState("");
   const [progressUnit, setProgressUnit] = useState("");
@@ -961,6 +976,7 @@ export default function CatalogueItemDialog({
         setProgressCurrent(editingItem.progress_current?.toString() || "");
         setProgressTarget(editingItem.progress_target?.toString() || "");
         setProgressUnit(editingItem.progress_unit || "");
+        setCategoryChoice(editingItem.category_id ?? NO_CATEGORY);
         // Load custom fields from metadata_json
         const metadata = editingItem.metadata_json || {};
         const loadedFields: Record<string, string | boolean> = {};
@@ -976,7 +992,7 @@ export default function CatalogueItemDialog({
         setCustomFields(loadedFields);
         setBelongsTo((metadata.belongs_to_user_id as string) || "");
       } else {
-        setName("");
+        setName(initialName ?? "");
         setDescription("");
         setStatus("active");
         setPriority("normal");
@@ -986,6 +1002,7 @@ export default function CatalogueItemDialog({
         setProgressCurrent("");
         setProgressTarget("");
         setProgressUnit("");
+        setCategoryChoice(categoryId ?? NO_CATEGORY);
         setCustomFields({});
         setBelongsTo(householdData?.currentUserId || "");
       }
@@ -994,7 +1011,14 @@ export default function CatalogueItemDialog({
       setCompressedSize("");
       setComboboxOpen({});
     }
-  }, [open, editingItem, config.customFields, householdData?.currentUserId]);
+  }, [
+    open,
+    editingItem,
+    categoryId,
+    config.customFields,
+    householdData?.currentUserId,
+    initialName,
+  ]);
 
   const handleAddTag = () => {
     const tag = tagInput.trim().toLowerCase();
@@ -1132,6 +1156,9 @@ export default function CatalogueItemDialog({
               ? customFields.notes.trim() || null
               : null,
         }),
+        ...(categoryChoice !== (editingItem.category_id ?? NO_CATEGORY) && {
+          category_id: categoryChoice === NO_CATEGORY ? null : categoryChoice,
+        }),
         ...(config.showDescription && { description: description.trim() || null }),
         ...(config.showStatus && { status }),
         ...(config.showPriority && { priority }),
@@ -1155,7 +1182,8 @@ export default function CatalogueItemDialog({
     } else {
       const createData: CreateItemInput = {
         module_id: moduleId,
-        category_id: categoryId,
+        category_id:
+          categoryChoice === NO_CATEGORY ? undefined : categoryChoice,
         ...data,
       };
       createItem.mutate(createData, {
@@ -1419,6 +1447,32 @@ export default function CatalogueItemDialog({
               autoFocus
             />
           </div>
+
+          {/* Category — move the item between this module's categories */}
+          {moduleCategories.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-white/70">Category</Label>
+              <Select value={categoryChoice} onValueChange={setCategoryChoice}>
+                <SelectTrigger
+                  className={cn(themeClasses.inputBg, "border-white/10 text-white")}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  className={cn(themeClasses.modalBg, themeClasses.border)}
+                >
+                  <SelectItem value={NO_CATEGORY} className="text-white">
+                    None
+                  </SelectItem>
+                  {moduleCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="text-white">
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Description - Conditional */}
           {config.showDescription && (

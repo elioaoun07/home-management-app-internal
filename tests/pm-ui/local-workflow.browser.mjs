@@ -146,15 +146,18 @@ try {
     await page.getByRole("button", { name: "Sign off" }).click();
     await workflow.getByRole("button", { name: "Merge", exact: true }).click();
     await workflow.getByText('git add -- "a file"', { exact: false }).waitFor();
+    if (mode === "on") await page.locator('.owner-room-station[data-station="commit"][aria-current="step"]').waitFor();
     await page.reload();
     await workflow.getByRole("button", { name: "Commit", exact: true }).click();
     await workflow.getByRole("button", { name: "Use internal/main" }).click();
     await workflow.getByText("delete refs/heads/delivery/R123 abcdef", { exact: false }).last().waitFor();
     await workflow.getByText("git push --force-with-lease internal main").waitFor();
+    if (mode === "on") await page.locator('.owner-room-station[data-station="push"][aria-current="step"]').waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await workflow.getByRole("button", { name: "Push", exact: true }).click();
     await workflow.getByRole("heading", { name: "Clean up", exact: true }).waitFor();
     await workflow.getByText("Complete", { exact: true }).waitFor();
+    if (mode === "on") assert.equal(await page.locator('.owner-room-station[aria-current="step"]').count(), 0);
     assert.deepEqual(actions, ["result", "signoff", "merge", "commit", "configure-push", "push"]);
     assert.deepEqual(unknownWrites, []);
     assert.deepEqual(errors, []);

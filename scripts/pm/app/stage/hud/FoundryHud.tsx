@@ -4,7 +4,7 @@ import type { LocalRunView } from "../../LocalDelivery";
 import type { LocalActivityEvent } from "../../localRunActivityModel";
 import type { AttentionItem } from "../../localRunAttention";
 import { clock as formatClock } from "../../localRunLiveness";
-import { displayTitle } from "../../localRunModel";
+import { attemptLabel, displayTitle } from "../../localRunModel";
 import type { LocalScene, LocalTimeline } from "../../localRunScene";
 import { localBoardGame, localStageGame } from "../game";
 import { zoneEvidence, type ZoneBoardState } from "../zoneModel";
@@ -172,6 +172,7 @@ export const FoundryHud = memo(function FoundryHud({
       <TopBar
         id={snapshot.run.work.id}
         title={displayTitle(snapshot.run)}
+        attempt={attemptLabel(snapshot.run)}
         zones={zones}
         line={board.line}
         turn={board.turn}

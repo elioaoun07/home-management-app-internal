@@ -43,6 +43,7 @@ tags:
   - PATCH returns `inverse`, so the toast's **Undo is real** (it used to only refetch). Delete-Undo restores the **same row** through `/api/recycle-bin/restore`; it used to re-create a copy with a new ID.
   - The app runs with or without the migration: the revision check is skipped while the column is absent.
   - *(IMPLEMENTED 2026-10-04 — migration `2026-10-04_catalogue-revision.sql` applied by owner 2026-10-04)*
+- **Move an item between categories** (HUB-123): the Add/Edit item dialog (`CatalogueItemDialog`) has a **Category** select (None + the module's categories) whenever the module has categories. Edit sends `category_id` only when it changed (the PATCH route checks the category belongs to the item's module); Undo restores the previous one; the item and category caches (counts) refresh. ERA files contacts through the same route. *(IMPLEMENTED 2026-11-25)*
 - **ERA module roles:** `settings_json.era_role` is unique per user (`catalogue_modules_era_role_uidx`). A duplicate module create returns **409**. ERA's Places bootstrap re-reads on 409 instead of failing.
 
 ## Open points (2026-10-04)

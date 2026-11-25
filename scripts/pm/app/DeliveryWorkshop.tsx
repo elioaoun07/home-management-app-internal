@@ -1,16 +1,14 @@
 import {
   useLayoutEffect,
   useMemo,
+  useState,
   type ReactNode,
   type RefObject,
 } from "react";
-import { FoundryHud, type FoundryHudProps } from "./stage/hud/FoundryHud";
+import { FoundryHud, ZoneChip, type FoundryHudProps } from "./stage/hud/FoundryHud";
 import {
   ART,
   BOARD,
-  LAMPS,
-  READOUTS,
-  TIMING,
   ZONE_BY_ID,
   type ZoneId,
 } from "./stage/config";
@@ -20,7 +18,8 @@ import "./stage/foundry.css";
 import { BOARD_HUD_STYLE } from "./stage/hud/layout";
 import { StageReadouts } from "./stage/StageReadouts";
 import { zoneEvidence } from "./stage/zoneModel";
-import { boardPoint } from "./stage/board";
+import { BoardFloorMarks } from "./stage/BoardFloorMarks";
+import { RoomStepReadout } from "./RoomStepReadout";
 
 export type WorkshopStation = "source" | "forge" | "lab" | "review" | "launch";
 interface WorkshopProps extends FoundryHudProps {
@@ -31,6 +30,7 @@ interface WorkshopProps extends FoundryHudProps {
   onZone: (zone: ZoneId) => void;
   seat?: ReactNode;
   seated?: boolean;
+  cursorMissing?: boolean;
   children?: ReactNode;
 }
 export function DeliveryWorkshop({
@@ -41,15 +41,18 @@ export function DeliveryWorkshop({
   onZone,
   seat,
   seated = false,
+  cursorMissing = false,
   children,
   ...hud
 }: WorkshopProps) {
   const { snapshot, state = "live", replay = false, attention = [] } = hud;
-  const chip = positions.find((position) => position.id === staging.zone);
   const zones = useMemo(
-    () => hud.zones ?? zoneEvidence(snapshot, null, attention),
-    [hud.zones, snapshot, attention],
+    () => hud.zones ?? zoneEvidence(snapshot, null, attention, cursorMissing),
+    [hud.zones, snapshot, attention, cursorMissing],
   );
+  const currentId = cursorMissing ? null : zones.currentZone;
+  const current = currentId ? ZONE_BY_ID[currentId] : null;
+  const [focusedPad, setFocusedPad] = useState<ZoneId | null>(null);
   useLayoutEffect(() => {
     const root = stageRef.current;
     if (!root) return;
@@ -93,9 +96,12 @@ export function DeliveryWorkshop({
       <div className="board-region">
         {seat}
         {!seated && <>
+        {current && <RoomStepReadout number={current.number} total={zones.total}
+          label={current.label[0] + current.label.slice(1).toLowerCase()} replay={replay} />}
         <div className="board-world">
           <div className="board-camera">
             <canvas data-layer="static" aria-hidden="true" />
+            <BoardFloorMarks current={currentId} focused={focusedPad} attention={attention} />
             <canvas data-layer="state" aria-hidden="true" />
             <canvas
               data-layer="motion"
@@ -117,36 +123,14 @@ export function DeliveryWorkshop({
               const w = zone.pad.width,
                 d = zone.pad.depth,
                 o = ART.label.offsetY;
-              const points = `${d},${o} ${w + d},${o + w / 2} ${w},${o + (w + d) / 2} 0,${o + d / 2}`;
               const clipPath = `polygon(${d}px ${o}px,${w + d}px ${o + w / 2}px,${w}px ${o + (w + d) / 2}px,0px ${o + d / 2}px)`;
-              const sx = zone.pad.x + ART.stripe.inset,
-                sy = zone.pad.y + d - ART.stripe.front,
-                sw = w - ART.stripe.inset * 2;
-              const stripe = [
-                [sx, sy],
-                [sx + sw, sy],
-                [sx + sw, sy + ART.stripe.depth],
-                [sx, sy + ART.stripe.depth],
-              ]
-                .map(([x, y]) => {
-                  const p = boardPoint(
-                    x,
-                    y,
-                    BOARD.pad.raise + ART.stripe.height,
-                  );
-                  return `${p.x - position.x},${p.y - position.y}`;
-                })
-                .join(" ");
-              const owner = attention.some(
-                (item) =>
-                  item.zone === zone.id &&
-                  item.level === "act" &&
-                  item.state === "open",
-              );
               return (
                 <div
                   key={zone.id}
                   className="board-zone-target"
+                  data-current={zone.id === currentId || undefined}
+                  onFocus={event => setFocusedPad(event.target.matches(":focus-visible") ? zone.id : null)}
+                  onBlur={() => setFocusedPad(null)}
                   style={{
                     left: position.x,
                     top: position.y,
@@ -170,6 +154,7 @@ export function DeliveryWorkshop({
                   <button
                     className="board-zone-name"
                     data-zone={zone.id}
+                    aria-current={zone.id === currentId ? "step" : undefined}
                     data-row={zone.pad.y < BOARD.front[0] ? "rear" : "front"}
                     data-state={
                       zones.zones.find((item) => item.id === zone.id)?.status
@@ -180,30 +165,9 @@ export function DeliveryWorkshop({
                       top: position.height - ART.label.offsetY,
                     }}
                   >
+                    {zone.id === currentId && <i className="room-step-signal" aria-hidden="true" />}
                     {String(zone.number).padStart(2, "0")} {zone.label}
                   </button>
-                  <svg
-                    className="board-zone-focus"
-                    viewBox={`0 0 ${position.width} ${position.height}`}
-                    aria-hidden="true"
-                  >
-                    <polygon
-                      points={points}
-                      strokeWidth={READOUTS.focusWidth}
-                    />
-                  </svg>
-                  {owner && (
-                    <svg
-                      className="board-zone-attention"
-                      style={{
-                        animationDuration: `${TIMING.attentionPulse}ms`,
-                      }}
-                      viewBox={`0 0 ${position.width} ${position.height}`}
-                      aria-hidden="true"
-                    >
-                      <polygon points={stripe} fill={LAMPS.owner} />
-                    </svg>
-                  )}
                 </div>
               );
             })}
@@ -216,18 +180,6 @@ export function DeliveryWorkshop({
               tempo={hud.tempo ?? 1}
               worldOnly
             />
-            {chip && staging.label && (
-              <output
-                className="board-zone-chip foundry-command-chip"
-                data-zone={staging.zone ?? undefined}
-                data-row={ZONE_BY_ID[chip.id].pad.y < BOARD.front[0] ? "rear" : "front"}
-                title={staging.label}
-                tabIndex={0}
-                style={{ left: chip.chipX, top: chip.chipY }}
-              >
-                {staging.label}
-              </output>
-            )}
             <div className="workshop-presence" aria-hidden="true" />
           </div>
         </div>
@@ -236,6 +188,8 @@ export function DeliveryWorkshop({
           state={state}
           replay={replay}
           zones={zones}
+          activity={staging.zone && staging.label
+            ? <ZoneChip zone={staging.zone} label={staging.label} /> : undefined}
         />
         <div className="board-state-overlay" aria-hidden="true" />
         </>}

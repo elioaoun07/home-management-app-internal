@@ -308,7 +308,9 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
   const canAnimate = () => !state.paused && !state.quiet && !motion.matches;
   // The topic collector and vault read the same recording on both floors.
   // The agent floor also carries the SDK machines' fault cable.
-  const roomAlive = () => canAnimate() && (!state.lighting.failed || (floor === "ai" && area === "room" && !!state.lighting.faultZone));
+  const roomAlive = () => canAnimate() && (!state.lighting.failed || (area === "room" && (
+    floor === "ai" ? !!state.lighting.faultZone : !!state.owner?.current && (!state.replay || state.playing)
+  )));
   function paintSignal(signal: Signal) {
     if (!ride && area === "room" && canAnimate() && visible && !document.hidden) {
       if (floor === "owner") illumination.pulseOwner(ownerStationForZone(signal.zone), performance.now());
@@ -448,7 +450,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       }
       if (cached && still?.valid) {
         const w = renderer.domElement.width, h = renderer.domElement.height;
-        const region = damage(camera, w, h, sphere.orb.position, area === "core" ? .96 : 2.06, area === "room" ? activePath ?? noPath : noPath)
+        const region = damage(camera, w, h, sphere.orb.position, area === "core" ? .96 : 2.06, area === "room" ? activePath ?? noPath : noPath, illumination.activeDesk)
           ?? { x: 0, y: 0, width: w, height: h };
         if (region.width && region.height) {
           const bottom = h - region.y - region.height;
@@ -483,7 +485,7 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
     wasMoving = motionFrame;
     if (renderNeeded || motionFrame || illumination.flying || transition || ride) schedule();
     else if (roomAlive()) {
-      const delay = state.lighting.failed ? room.faultCable.nextWake(now / 1000) : 0;
+      const delay = floor === "ai" && state.lighting.failed ? room.faultCable.nextWake(now / 1000) : 0;
       if (delay === 0) schedule();
       else if (Number.isFinite(delay)) {
         last = 0;
@@ -712,7 +714,6 @@ export function createWorld(host: HTMLElement, input: WorldControls, initial: Wo
       pose = { ...pose, ...(station?.arrival ?? liftThreshold) };
       const target = zone === "lift" ? entranceMarker : owner ? room.ownerMarkers.get(owner.id) : room.markers.get(zone);
       if (target) standLook(target);
-      if (owner && canAnimate()) illumination.pulseOwner(owner.id, performance.now());
       clear(); transition = null; invalidate();
       host.focus({ preventScroll: true });
     },

@@ -56,6 +56,7 @@ export const StageReadouts = memo(function StageReadouts({
   state,
   replay,
   zones,
+  activity,
   attention = NO_ATTENTION,
   tempo = 1,
   worldOnly = false,
@@ -64,6 +65,7 @@ export const StageReadouts = memo(function StageReadouts({
   state: string;
   replay: boolean;
   zones: ZoneBoardState;
+  activity?: ReactNode;
   attention?: readonly BoardAttentionFact[];
   tempo?: StageTempo;
   worldOnly?: boolean;
@@ -131,6 +133,7 @@ export const StageReadouts = memo(function StageReadouts({
             })}
           </time>
         )}
+        {activity}
       </div>
       <div className="board-readout-row board-check-row">
         {LOCAL_CHECKS.map((name, i) => {

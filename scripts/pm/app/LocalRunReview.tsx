@@ -5,7 +5,7 @@ import { LocalActions, type LocalAct, type LocalRunView } from "./LocalDelivery"
 import { useGameLayer } from "./GameLayer";
 import { LocalRunGame } from "./LocalRunGame";
 import { LocalChat } from "./LocalChat";
-import { displayTitle, newAttemptHref } from "./localRunModel";
+import { attemptLabel, displayTitle, newAttemptHref } from "./localRunModel";
 import { OwnerWorkspace } from "./OwnerWorkspace";
 import { LocalRunConsole, type Tool } from "./LocalRunConsole";
 import "./local-run.css";
@@ -67,7 +67,7 @@ export function LocalRunReview({
         <div>
           <span className="eyebrow">
             {run.work.campaign ? `${run.work.campaign} · ` : ""}
-            {run.work.id} · Local
+            {run.work.id} · Local{attemptLabel(run) ? " · " + attemptLabel(run) : ""}
           </span>
           <h1>{title}</h1>
         </div>

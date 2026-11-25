@@ -14,7 +14,12 @@ export function localBoardActionAllowed(
   if (action === "recheck" || action === "discard") return true;
   if (action === "commit" || action === "push")
     return run.publication?.action === action && !!run.publication.token && !run.publication.reason;
+  if (action === "merge-by-hand") return run.phase === "uat-ready" && !run.merge_pending && !!run.canMergeByHand;
   if (action === "merge") return (run.phase === "uat-ready" || !!run.merge_pending) && !!run.canMerge;
+  // DLV-175: the server's own admission flags for a paused Acceptance Check.
+  if (action === "request-changes") return run.phase === "acceptance-paused" && !!run.canRequestChanges;
+  if (action === "stop") return run.phase === "acceptance-paused" && !!run.canStop;
+  if (action === "check-acceptance") return !!run.canRecheckAcceptance;
   return action === "cancel" && ["preparing", "building", "checking", "accepting"].includes(run.phase);
 }
 export function attentionActionAllowed(

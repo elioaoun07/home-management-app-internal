@@ -1,7 +1,7 @@
 // DLV-175. Pure Acceptance Check rules; replay-only, no provider or Git calls.
 import { describe, expect, it } from "vitest";
 import { acceptanceCriteria, decideAcceptance, findingsOf, isBugItem, parseVerdict, regressionDeclarations, regressionVerdict,
-  revisionPreamble, testOutcome, UAT_CRITERION } from "../../scripts/delivery-v2/local-acceptance.mjs";
+  revisionPreamble, testOutcome, UAT_CRITERION, vitestNamePattern } from "../../scripts/delivery-v2/local-acceptance.mjs";
 
 const HUB_93 = {
   id: "HUB-93", title: "ERA gets \"Add Racha as a Contact\" right",
@@ -95,6 +95,9 @@ describe("fails before, passes after — only for declared regression tests of b
       { fullName: "contacts other", title: "other", status: "skipped", failureMessages: [] }] }] };
     expect(testOutcome(report, "tests/era-gym/contacts.test.ts", "HUB-93 opens the form")).toMatchObject({ status: "failed", message: "AssertionError: expected 'done' to be 'form'" });
     expect(testOutcome(report, "tests/era-gym/contacts.test.ts", "other").status).toBe("missing");
+    // Vitest prints "suite > test" but reports and filters the space-joined name.
+    expect(testOutcome(report, "tests/era-gym/contacts.test.ts", "contacts > HUB-93 opens the form").status).toBe("failed");
+    expect(vitestNamePattern("routeWrite (era-wire adapter template) > Add contact opens")).toBe(String.raw`routeWrite \(era-wire adapter template\) Add contact opens`);
     expect(testOutcome(null, "tests/a.test.ts", "x").status).toBe("missing");
   });
 });
@@ -106,5 +109,5 @@ it("a revision instruction carries the findings, the owner's notes and the origi
   expect(text).toContain("6350b28d2058");
   expect(text).toContain("within the item's original scope");
   expect(text).toContain("[missed] (Owner comment) the form should fire");
-  expect(text).toContain("Owner notes:\nOpen the Contact form prefilled.");
+  expect(text).toContain("Owner notes (they are also checked as criteria):\nOpen the Contact form prefilled.");
 });

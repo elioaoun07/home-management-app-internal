@@ -10,6 +10,8 @@ From your seat, ERA works across the bench. The wheel is on your left, the casse
 
 ## Find a step and read its output
 
+In **Explore 3D**, a ring on the floor and a downward pointer mark the current workstation in both the AI room and the Owner room. They pulse during Live and playing Replay. **Low motion**, the system’s reduced-motion preference and a paused replay hold the markers still. Opening a different station keeps the markers on the workflow step.
+
 ERA’s collector turns while you observe a healthy recording, including when the replay slider rests on one event. The activity and station power still follow that event. **Low motion** holds the collector still. At a failed frame the glass cracks and the mechanism powers down. When the run identifies the failed step, **Inspect break** takes you to its torn cable. Rewind before the failure to restore the clear globe and intact cable.
 
 **Native detail** locks walking to the same resolution as the stationary view. Walk enables it by default with hardware graphics. On software graphics, turning it on also keeps identical edge smoothing through starts and stops. Larger windows take longer to draw at that setting. Walk remembers the choice on this browser.

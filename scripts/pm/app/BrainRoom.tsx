@@ -29,7 +29,7 @@ const safePref = (key: string, value?: string) => {
 
 export function BrainRoom({
   view, onView, onBoard, scene, timeline, health, lighting, replay, playing, question, reading, inspected,
-  onZone, onEvidence, onQuestion, floor, owner, onFloor, onStation, currentStation, inspectedStation,
+  onZone, onEvidence, onQuestion, floor, owner, onFloor, onStation, currentZone, inspectedStation, quiet, onQuietChange,
 }: {
   view: View; onView: (view: View) => void; onBoard: () => void;
   scene: LocalScene; timeline: LocalTimeline; health: LocalLiveness;
@@ -41,7 +41,8 @@ export function BrainRoom({
   floor: DeliveryRoom; owner: NonNullable<WorldState["owner"]>;
   onFloor: (floor: DeliveryRoom) => void;
   onStation: (id: OwnerStation, source: HTMLElement) => void;
-  currentStation: OwnerStation; inspectedStation: OwnerStation | null;
+  currentZone: ZoneId | null; inspectedStation: OwnerStation | null;
+  quiet: boolean; onQuietChange: (value: boolean) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null), api = useRef<WorldApi | null>(null);
   const controlsHelp = useId();
@@ -57,7 +58,6 @@ export function BrainRoom({
   const [nativePreference, setNativePreference] = useState(() => safePref("pm-room-native-motion"));
   const nativeMotion = nativePreference == null ? !software : nativePreference === "true";
   const [finish, setFinish] = useState<Finish>(() => safePref("pm-room-finish") === "illustrated" ? "illustrated" : "realistic");
-  const [quiet, setQuiet] = useState(() => safePref("pm-room-low-motion") === "true");
   const [opened, setOpened] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [answer, setAnswer] = useState<Answer | null>(null);
@@ -75,10 +75,10 @@ export function BrainRoom({
   const paused = opened || reading || load !== "ready";
   const hasPrevious = !!previous, hasNext = !!next;
   const worldState = useMemo<WorldState>(() => ({
-    view, floor, owner, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting,
+    view, floor, owner, currentZone, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting,
     signal: openQuestionId ? { id: "owner-question:" + openQuestionId, zone: "handover", kind: "question" } : visibleSignal,
     core: [hasPrevious, cursor !== null, hasNext],
-  }), [view, floor, owner, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting, openQuestionId, visibleSignal, hasPrevious, hasNext]);
+  }), [view, floor, owner, currentZone, nativeMotion, finish, topic, paused, quiet, replay, playing, cursor, lighting, openQuestionId, visibleSignal, hasPrevious, hasNext]);
   const current = useRef({ state: worldState, controls: {} as WorldControls });
   current.current.state = worldState;
 
@@ -212,7 +212,7 @@ export function BrainRoom({
 
   return <><div className="era-brain" data-view={view} data-floor={displayedFloor} data-load={load} data-area={presence.area} data-finish={finish}
     data-core-state={lighting.failed ? "damaged" : "healthy"} data-fault-station={lighting.faultZone ?? undefined}
-    data-active-station={lighting.endpoint ?? undefined}>
+    data-active-station={(displayedFloor === "owner" ? owner.current : currentZone) ?? undefined}>
     <div ref={viewport} className="era-brain-viewport" tabIndex={0} role="region" aria-label="3D room"
       aria-describedby={controlsHelp}
       aria-keyshortcuts="W A S D Shift+W ArrowLeft ArrowRight ArrowUp ArrowDown E Q Escape" />
@@ -241,7 +241,7 @@ export function BrainRoom({
           const next = String(!nativeMotion);
           setNativePreference(next); safePref("pm-room-native-motion", next);
         }}>Native detail</button>}
-        <button type="button" aria-pressed={quiet} onClick={() => { setQuiet(!quiet); safePref("pm-room-low-motion", String(!quiet)); }}>Low motion</button>
+        <button type="button" aria-pressed={quiet} onClick={() => onQuietChange(!quiet)}>Low motion</button>
         <button type="button" onClick={onBoard}>Board</button>
       </div>
     </div>
@@ -332,7 +332,7 @@ export function BrainRoom({
   </div>
     {floor === "owner" && <nav className="room-steps owner-floor-steps" aria-label="Owner workstations">
       {OWNER_STATIONS.map(({ id, label }) => <button type="button" key={id} aria-pressed={id === inspectedStation}
-        aria-current={id === currentStation ? "step" : undefined} data-reached={owner.signals[id] === "done"}
+        aria-current={id === owner.current ? "step" : undefined} data-reached={owner.signals[id] === "done"}
         onClick={event => {
           if (view === "walk") api.current?.go(`owner:${id}`);
           onStation(id, event.currentTarget);

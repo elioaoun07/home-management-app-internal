@@ -7,6 +7,8 @@ import { Back } from "../../components";
 export interface TopBarProps extends SettingsMenuProps {
   id: string;
   title: string;
+  /** DLV-175: "Attempt 2 · Revision 1/2" when this is not the first try. */
+  attempt?: string | null;
   zones: ZoneBoardState;
   line: number;
   turn: string | null;
@@ -20,6 +22,7 @@ export interface TopBarProps extends SettingsMenuProps {
 export function TopBar({
   id,
   title,
+  attempt,
   zones,
   line,
   turn,
@@ -76,10 +79,11 @@ export function TopBar({
       </nav>
       <div className="board-title">
         <span className="run-game-tag">{id}</span>
+        {attempt && <span className="run-game-tag run-game-attempt">{attempt}</span>}
         <h1 title={title}>{title}</h1>
       </div>
       {roomSwitch}
-      <span className="board-line">LINE {line}/11</span>
+      <span className="board-line" title="Completed or skipped stations">{line}/11 complete</span>
       <div className="board-status">
         {turn && (
           <strong className="board-turn" data-owner={turn === "YOUR TURN"}>

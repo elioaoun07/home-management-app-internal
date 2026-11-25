@@ -33,7 +33,7 @@ import {
   resolveReminderReschedule,
   resolveScheduleForDay,
 } from "./resolvers/schedule";
-import { resolveAddContact } from "./resolvers/contacts";
+import { resolveAddContact, resolveMoveContact } from "./resolvers/contacts";
 import { resolveDraftEvent } from "./resolvers/events";
 import { resolveAddPlace } from "./resolvers/places";
 import { resolveAddShopping } from "./resolvers/shopping";
@@ -223,8 +223,12 @@ export async function resolveIntent(
     case "addShopping":
       return resolveAddShopping(intent.items, intent.groupHint, undefined, undefined, intent.target);
 
+    // HUB-123 — optionally filed under a category; a missing one is offered.
     case "addContact":
-      return resolveAddContact(intent.name);
+      return resolveAddContact(intent.name, intent.categoryHint, intent.rawText);
+
+    case "moveContact":
+      return resolveMoveContact(intent.name, intent.categoryHint, intent.rawText);
 
     // HUB-88 / HUB-94 — places and events.
     case "addPlace":

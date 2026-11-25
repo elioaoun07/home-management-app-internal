@@ -54,6 +54,7 @@ import { createDesktopLifecycle, deliveryRestartBlocker, validDesktopId } from "
 import { assertExpectedCheckbox, assertRestoreCurrent, guardUndo } from "./pm/write-guards.mjs";
 import { createBridge, createRollupsSnapshotBuilder } from "./pm/bridge.mjs";
 import { createDrivePublisher, readDeliveryFromStore, resolveDriveRoot } from "./pm/drive-publish.mjs";
+import { createServerCodeWatch } from "./pm/server-code.mjs";
 import { syncEraIssues } from "./pm/era-issues.mjs";
 import { syncUatFeedback } from "./pm/uat-feedback.mjs";
 import { listUat, readImportStatus } from "./delivery-v2/uat.mjs";
@@ -136,13 +137,15 @@ const drive = DRIVE_ROOT
         deliveryV2Ctx.hasStore()
           ? readDeliveryFromStore(deliveryV2Ctx.store, {
               requests: deliveryV2Ctx.stewardRequests(),
-              localSummaries: rows => deliveryV2Ctx.local.list(rows),
+              localSummaries: rows => deliveryV2Ctx.local.list(rows, { drive: true }),
             })
           : { available: false, reason: "no-store", runs: [], requests: [] },
       readRollups: () => createRollupsSnapshotBuilder({ PM_DIR }).buildRollupsSnapshot(),
       // Local UAT records, read without the supervisor; the mirror never writes them.
       readUat: () => listUat({ root: ROOT, importStatus: readImportStatus({ root: ROOT }) }).handovers,
       statePath: join(ROOT, ".pm", "drive-publish.json"),
+      // Whether this PM process predates its own server code on disk.
+      readServer: createServerCodeWatch({ root: ROOT }),
       log: console.log,
     })
   : null;

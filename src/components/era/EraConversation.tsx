@@ -145,6 +145,7 @@ function Thinking() {
         <span className="era-think-dot" />
         <span className="era-think-dot" />
         <span className="era-think-dot" />
+        <span className="ml-1.5 text-[13px] text-white/50">Working…</span>
       </div>
     </div>
   );

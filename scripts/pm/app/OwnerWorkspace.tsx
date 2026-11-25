@@ -13,7 +13,9 @@ import {
 import type { LocalAct, LocalRunView } from "./LocalDelivery";
 import { OwnerRoom } from "./OwnerRoom";
 import { OwnerStationDetail } from "./OwnerStationDetail";
+import { RoomStepReadout } from "./RoomStepReadout";
 import {
+  activeOwnerStation,
   currentOwnerStation,
   OWNER_STATIONS,
   ownerStationState,
@@ -82,6 +84,7 @@ export function OwnerWorkspace({
   patch,
   calm = false,
   readOnly = false,
+  cursorMissing = false,
   initialStation,
   onStationChange,
 }: {
@@ -91,14 +94,16 @@ export function OwnerWorkspace({
   patch: string | null;
   calm?: boolean;
   readOnly?: boolean;
+  cursorMissing?: boolean;
   initialStation?: OwnerStation;
   onStationChange?: (station?: OwnerStation) => void;
 }) {
-  const current = currentOwnerStation(run);
+  const current = cursorMissing ? null : activeOwnerStation(run);
   const [inspected, inspect] = useState<OwnerStation | undefined>(
     initialStation,
   );
-  const selected = inspected ?? current;
+  const followed = current ?? currentOwnerStation(run);
+  const selected = inspected ?? followed;
   const [readerOpen, setReaderOpen] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [displayedPatch, setDisplayedPatch] = useState<string | null>(null);
@@ -114,9 +119,10 @@ export function OwnerWorkspace({
   const position = OWNER_STATIONS.findIndex(
     (station) => station.id === selected,
   );
+  const currentIndex = OWNER_STATIONS.findIndex(station => station.id === current);
   const openStation = (station: OwnerStation) => {
-    inspect(station === current ? undefined : station);
-    onStationChange?.(station === current ? undefined : station);
+    inspect(station === followed ? undefined : station);
+    onStationChange?.(station === followed ? undefined : station);
     setReaderOpen(true);
     requestAnimationFrame(() => {
       const node = reader.current;
@@ -132,6 +138,8 @@ export function OwnerWorkspace({
       <OwnerRoom
         run={run}
         selected={selected}
+        current={current}
+        replay={readOnly}
         onSelect={openStation}
         blocked={expanded && readerOpen}
         patch={
@@ -168,6 +176,7 @@ export function OwnerWorkspace({
               type="button"
               key={id}
               aria-pressed={selected === id}
+              aria-current={current === id ? "step" : undefined}
               data-state={ownerStationState(run, id)}
               onClick={() => openStation(id)}
             >
@@ -196,9 +205,12 @@ export function OwnerWorkspace({
           }}
         >
           <header className="owner-inspector-toolbar">
-            <span>
-              Workstation {String(position + 1).padStart(2, "0")} / 06
-            </span>
+            {expanded && currentIndex >= 0 ? (
+              <RoomStepReadout number={currentIndex + 1} total={OWNER_STATIONS.length}
+                label={OWNER_STATIONS[currentIndex].label} replay={readOnly} />
+            ) : (
+              <span>Workstation {String(position + 1).padStart(2, "0")} / 06</span>
+            )}
             <button
               type="button"
               aria-label="Previous station"
@@ -243,7 +255,7 @@ export function OwnerWorkspace({
             station={selected}
             run={run}
             act={(action, evidence) => {
-              if (selected === current) inspect(undefined);
+              if (selected === followed) inspect(undefined);
               act(action, evidence);
             }}
             patch={patch}

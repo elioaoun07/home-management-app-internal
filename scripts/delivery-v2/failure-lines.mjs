@@ -10,6 +10,8 @@ export function decisiveLines(text) {
   };
   const fail = [], totals = [], other = [];
   const lintRow = /^\s*\d+:\d+\s+(?:error|warning)\b/u;
+  // `--max-warnings=0` (the commit hook) makes a warning as decisive as an error.
+  const decisiveLint = /too many warnings/u.test(lines.join("\n")) ? lintRow : /^\s*\d+:\d+\s+error\b/u;
   const lintFileBefore = index => {
     for (let i = index - 1; i >= 0; i--) {
       const line = lines[i];
@@ -22,7 +24,8 @@ export function decisiveLines(text) {
     if (/^\s*FAIL(?:\s|$)/u.test(line)) fail.push(index);
     else if (/^\s*(?:Test Files|Tests)\s+/u.test(line)) totals.push(index);
     else if (/\berror TS\d+\b/u.test(line) || /^\s*fatal:/u.test(line)) other.push([index]);
-    else if (/^\s*\d+:\d+\s+error\b/u.test(line)) {
+    else if (/ESLint found too many warnings/u.test(line)) other.push([index]);
+    else if (decisiveLint.test(line)) {
       const file = lintFileBefore(index);
       other.push(file === null ? [index] : [file, index]);
     }

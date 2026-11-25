@@ -20,10 +20,12 @@ const command = z.discriminatedUnion("action", [
   z.object({ action: z.literal("refresh"), run_id: runId, expected_base: revision, expected_head: revision }).strict(),
   z.object({ action: z.literal("review"), run_id: runId, expected_head: revision.optional() }),
   // DLV-175: the owner's decision after a paused Acceptance Check.
-  z.object({ action: z.literal("request-changes"), run_id: runId, expected_head: revision, note: z.string().max(4000).optional() }).strict(),
+  z.object({ action: z.literal("request-changes"), run_id: runId, expected_head: revision, note: z.string().max(4000).optional(), reuse_attempt: z.literal("true").optional() }).strict(),
   z.object({ action: z.literal("stop"), run_id: runId, expected_head: revision.optional() }).strict(),
   z.object({ action: z.literal("check-acceptance"), run_id: runId }).strict(),
   z.object({ action: z.enum(["ship", "undo", "cancel", "preview", "stop-preview", "merge"]), run_id: runId }),
+  // DLV-176: merge colliding files three-way into the owner's checkout.
+  z.object({ action: z.literal("merge-by-hand"), run_id: runId }).strict(),
 ]);
 /** @param {{method:string, path:string, query?:URLSearchParams|null, body?:any, loopbackPeer?:boolean}} request */
 export async function routeLocal({ method, path, query = null, body, loopbackPeer }, auth, ctx) {
@@ -48,7 +50,7 @@ export async function routeLocal({ method, path, query = null, body, loopbackPee
     }
     if (method === "GET" && path === "/api/delivery/v2/local/comparison") {
       const input = z.object({ id: runId, head: revision, path: z.string().min(1).max(4096).nullable(),
-        against: z.enum(["base", "repo"]), source: revision.nullable() }).safeParse({
+        against: z.enum(["base", "repo", "checkout"]), source: revision.nullable() }).safeParse({
         id: query?.get("id"), head: query?.get("head"), path: query?.get("path") ?? null,
         against: query?.get("against") ?? "base", source: query?.get("source") ?? null,
       });
@@ -64,9 +66,10 @@ export async function routeLocal({ method, path, query = null, body, loopbackPee
     else if (input.action === "commit" || input.action === "push") value = await ctx.local[input.action](input.run_id, input.preview_id);
     else if (input.action === "refresh") value = await ctx.local.refresh(input.run_id, input.expected_base, input.expected_head);
     else if (input.action === "review") value = await ctx.local.review(input.run_id, input.expected_head);
-    else if (input.action === "request-changes") value = await ctx.local.requestChanges(input.run_id, input.expected_head, input.note ?? "");
+    else if (input.action === "request-changes") value = await ctx.local.requestChanges(input.run_id, input.expected_head, input.note ?? "", input.reuse_attempt === "true");
     else if (input.action === "stop") value = await ctx.local.stop(input.run_id, input.expected_head ?? null);
     else if (input.action === "check-acceptance") value = await ctx.local.recheckAcceptance(input.run_id);
+    else if (input.action === "merge-by-hand") value = await ctx.local.mergeByHand(input.run_id);
     else if (input.action === "start" && ctx.store) {
       // Reuse Delivery's launch receipts: rejected Local starts must remain
       // observable on Bridge, and re-sending a UUID must not dispatch twice.

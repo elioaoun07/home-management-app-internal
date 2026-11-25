@@ -14,7 +14,8 @@ import { ZONE_BY_ID, type ZoneId } from "./stage/config";
 import type { ZoneBoardState } from "./stage/zoneModel";
 import { BrainRoom } from "./BrainRoom";
 import { OwnerStationDetail } from "./OwnerStationDetail";
-import { currentOwnerStation, ownerStationSignals, type OwnerStation } from "./ownerStations";
+import { activeOwnerStation, currentOwnerStation, OWNER_STATIONS, ownerStationSignals, type OwnerStation } from "./ownerStations";
+import { RoomStepReadout } from "./RoomStepReadout";
 import type { LocalAct, LocalRunView } from "./LocalDelivery";
 import type { DeliveryRoom } from "./OwnerWorkspace";
 import type { View } from "./brain/layout";
@@ -98,7 +99,7 @@ export function TransferRoom({
   onChanges: () => void;
   testSteps?: ReactNode;
   brain?: { view: View; onView: (view: View) => void; onBoard: () => void; blocked: boolean;
-    floor: DeliveryRoom; onFloor: (floor: DeliveryRoom) => void };
+    floor: DeliveryRoom; onFloor: (floor: DeliveryRoom) => void; quiet: boolean; onQuietChange: (value: boolean) => void };
   owner: { run: LocalRunView; act: LocalAct; busy: boolean; patch: string | null; station?: OwnerStation;
     onStation: (station: OwnerStation) => void };
 }) {
@@ -113,10 +114,11 @@ export function TransferRoom({
   const selectedStation = owner.station ?? currentStation;
   const inspecting = floor === "owner" && stationPanel === "open";
   const ownerFloor = useMemo(() => ({
+    current: cursorMissing ? null : activeOwnerStation(owner.run),
     selected: selectedStation,
     signals: ownerStationSignals(owner.run),
     patch: !replay && selectedStation === "merge" ? projection : null,
-  }), [owner.run, selectedStation, replay, projection]);
+  }), [owner.run, selectedStation, replay, projection, cursorMissing]);
   const [pins, setPins] = useState<readonly [RoomMark | null, RoomMark | null]>([null, null]);
   const [compare, setCompare] = useState(false);
   const [smallPane, setSmallPane] = useState<"A" | "B">("A");
@@ -146,6 +148,9 @@ export function TransferRoom({
   const selected = scene.latest;
   const selectedKind = selected?.kind ?? "event";
   const cassette = roomCassette(scene);
+  const currentZone = zones.currentZone;
+  const aiStep = currentZone ? ZONE_BY_ID[currentZone] : null;
+  const ownerStepIndex = OWNER_STATIONS.findIndex(station => station.id === ownerFloor.current);
   const previous = roomStepRow(timeline, selected?.id, !replay, -1);
   const next = roomStepRow(timeline, selected?.id, !replay, 1);
   const visible = useMemo(() => reader ? roomRows(scene, reader.zone) : [], [scene, reader]);
@@ -260,6 +265,11 @@ export function TransferRoom({
     >
       <div className="room-deck">
         <div className="room-now">
+          {active && (floor === "owner"
+            ? ownerStepIndex >= 0 && <RoomStepReadout number={ownerStepIndex + 1} total={OWNER_STATIONS.length}
+                label={OWNER_STATIONS[ownerStepIndex].label} replay={replay} />
+            : aiStep && <RoomStepReadout number={aiStep.number} total={zones.total}
+                label={zoneLabel(aiStep.id)} replay={replay} />)}
           <Radio size={14} aria-hidden="true" />
           <span className="room-kicker">{roomReplay ? "Replay" : "Now"}</span>
           <strong>{status}</strong>
@@ -271,7 +281,7 @@ export function TransferRoom({
           </>}
           {question && <button type="button" className="room-question" onClick={onQuestion}>Question</button>}
         </div>
-        {brain ? <BrainRoom key={scene.run.run_id} {...brain} owner={ownerFloor} currentStation={currentStation}
+        {brain ? <BrainRoom key={scene.run.run_id} {...brain} owner={ownerFloor} currentZone={currentZone}
           inspectedStation={inspecting ? selectedStation : null} onStation={inspectStation} scene={scene} timeline={timeline} health={currentHealth} lighting={lighting}
           replay={replay} playing={playing} question={question} reading={!!reader || compare || inspecting || brain.blocked}
           inspected={opened} onZone={openZone} onQuestion={onQuestion}
@@ -325,12 +335,12 @@ export function TransferRoom({
           {preview && <span className="room-preview" title={preview}>{preview}</span>}
         </div>}
         {floor !== "owner" && <nav className="room-steps" aria-label="Room steps">
-          <button type="button" onClick={(event) => openZone("brief", event.currentTarget)} aria-pressed={reader?.zone === "brief"}><BookOpen size={15} /> Plan</button>
+          <button type="button" onClick={(event) => openZone("brief", event.currentTarget)} aria-pressed={reader?.zone === "brief"} aria-current={currentZone === "brief" ? "step" : undefined}><BookOpen size={15} /> Plan</button>
           {roomSteps.map(({ label, zones: group }) => {
             const lit = group.some((zone) => zones.zones.some((fact) => fact.id === zone && fact.status !== "off" && fact.status !== "skipped"));
             const checked = group.some((zone) => zone === reader?.zone);
-            const powered = !!brain && group.some(zone => zone === lighting.endpoint);
-            return <button key={label} type="button" aria-pressed={checked} aria-current={powered ? "step" : undefined} data-reached={lit} onClick={(event) => openZone(group.find((zone) => zone === label.toLowerCase()) ?? group[0], event.currentTarget)}>{label}</button>;
+            const current = group.some(zone => zone === currentZone);
+            return <button key={label} type="button" aria-pressed={checked} aria-current={current ? "step" : undefined} data-reached={lit} onClick={(event) => openZone(group.find((zone) => zone === label.toLowerCase()) ?? group[0], event.currentTarget)}>{label}</button>;
           })}
           <button type="button" onClick={(event) => openZone("all", event.currentTarget)} aria-pressed={reader?.zone === "all"}>All actions</button>
         </nav>}

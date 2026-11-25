@@ -36,7 +36,7 @@ import type { StageTempo, ReplayMode } from "./stage/director";
 import type { View } from "./brain/layout";
 import "./local-run-game.css";
 import { Back } from "./components";
-import { displayTitle, newAttemptHref } from "./localRunModel";
+import { attemptLabel, displayTitle, newAttemptHref } from "./localRunModel";
 import { OwnerWorkspace, RoomSwitch, opensAtOwner, type DeliveryRoom } from "./OwnerWorkspace";
 import { currentOwnerStation, type OwnerStation } from "./ownerStations";
 
@@ -81,6 +81,15 @@ export function LocalRunGame({
   });
   const [visitedSeat, setVisitedSeat] = useState(arrivingFromLibrary || view === "seat");
   const [brainView, setBrainView] = useState<View | null>(arrivingFromLibrary ? "walk" : null);
+  const [quiet, setQuiet] = useState(() => {
+    try { return localStorage.getItem("pm-room-low-motion") === "true"; }
+    catch { return false; }
+  });
+  const changeQuiet = (value: boolean) => {
+    setQuiet(value);
+    try { localStorage.setItem("pm-room-low-motion", String(value)); }
+    catch { /* Keep the preference for this visit. */ }
+  };
   const inRoom = !!brainView || view === "seat";
   const consoleId = useId();
   const [wideReader, setWideReader] = useState(false);
@@ -153,8 +162,9 @@ export function LocalRunGame({
           ? { event: staging.event, stage: staging.beat }
           : null,
         attention,
+        cursorMissing,
       ),
-    [snapshot, staging.event, staging.beat, attention, inRoom],
+    [snapshot, staging.event, staging.beat, attention, inRoom, cursorMissing],
   );
   const replayAttention = useMemo(() => replay ? attention.map((item): AttentionItem =>
     item.action.run === "brief" || item.action.run === "summary"
@@ -320,6 +330,7 @@ export function LocalRunGame({
   useStageClock(stageRef, {
     timeline,
     snapshot,
+    cursorMissing,
     state: health.state,
     time: replayTime,
     playing: playing && !cursorMissing,
@@ -341,11 +352,12 @@ export function LocalRunGame({
   };
   const roomSwitch = <RoomSwitch room={room} onChange={enterRoom} />;
   if (room === "owner" && !brainView) {
-    return <div className="run-game board-game owner-game" data-phase={run.phase}>
+    return <div className="run-game board-game owner-game" data-phase={run.phase}
+      data-low-motion={quiet} data-liveness={replay ? health.state : realHealth.state}>
       <section ref={stageRef} className="owner-game-frame" aria-label="Owner room">
         <header className="owner-game-header">
           <Back fallback="/delivery" />
-          <div className="board-title"><span className="run-game-tag">{run.work.id}</span><h1 title={displayTitle(run)}>{displayTitle(run)}</h1></div>
+          <div className="board-title"><span className="run-game-tag">{run.work.id}</span>{attemptLabel(run) && <span className="run-game-tag run-game-attempt">{attemptLabel(run)}</span>}<h1 title={displayTitle(run)}>{displayTitle(run)}</h1></div>
           {roomSwitch}
           <button type="button" className="owner-view-switch" onClick={explore}>
             <Footprints size={16} />Explore 3D
@@ -355,14 +367,16 @@ export function LocalRunGame({
         </header>
         {realHealth.state === "link-down" && <button className="owner-reconnect" onClick={retry}><RotateCw size={14} />Reconnect</button>}
         <OwnerWorkspace run={ownerRun} busy={busy || realHealth.state === "link-down"} act={action}
-          patch={replay ? null : patch} readOnly={replay} initialStation={ownerStation} onStationChange={setOwnerStation} />
+          patch={replay ? null : patch} readOnly={replay} cursorMissing={cursorMissing}
+          initialStation={ownerStation} onStationChange={setOwnerStation} />
       </section>
     </div>;
   }
   return (
-    <div className="run-game board-game" data-phase={run.phase}>
+    <div className="run-game board-game" data-phase={run.phase} data-low-motion={quiet}>
       <DeliveryWorkshop
         stageRef={stageRef}
+        cursorMissing={cursorMissing}
         roomSwitch={roomSwitch}
         positions={positions}
         staging={staging}
@@ -371,7 +385,7 @@ export function LocalRunGame({
         seat={visitedSeat && <TransferRoom
           active={inRoom}
           brain={brainView ? { view: brainView, onView: setBrainView, onBoard: showBoard, blocked: consoleOpen,
-            floor: room, onFloor: enterRoom } : undefined}
+            floor: room, onFloor: enterRoom, quiet, onQuietChange: changeQuiet } : undefined}
           owner={{ run: ownerRun, busy: busy || realHealth.state === "link-down", act: action, patch: replay ? null : patch,
             station: ownerStation, onStation: id => setOwnerStation(id === currentOwnerStation(ownerRun) ? undefined : id) }}
           timeline={timeline}

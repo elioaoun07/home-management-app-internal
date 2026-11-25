@@ -1,6 +1,7 @@
 ﻿import { ART, BUDGET, ZONE_BY_ID } from "./config";
 import { beatZone, zoneMachine, ZONE_ART } from "./board";
-import { BOARD, ZONES, type ZoneGroup } from "./config";
+import { BOARD, type ZoneGroup } from "./config";
+import { blit, paintByDepth, type ScenePiece } from "./boardScene";
 import type { MachineEvidence } from "./machineEvidence";
 import { drawEra, OPERATOR_BOUNDS, type EraSprites, type EraPose } from "./actors/era";
 import { drawBuild } from "./actors/build";
@@ -26,9 +27,8 @@ interface Assets {
   ownerGlow: HTMLCanvasElement;
   smoke: HTMLCanvasElement;
   era: EraSprites;
-  foreground: HTMLCanvasElement;
-  parts: Partial<Record<ZoneId, Sprite>>;
-  offParts?: Partial<Record<ZoneId, Sprite>>;
+  scenery: readonly ScenePiece[];
+  padLights: Record<ZoneId, Sprite>;
   dimPalette?: StagePalette;
   glows?: Partial<Record<ZoneGroup, HTMLCanvasElement>>;
   evidence?: MachineEvidence;
@@ -98,7 +98,7 @@ export function createMotionPainter(
       frame: BoardMotionFrame,
       dt: number,
     ) {
-      const { facts, palette, glow, ownerGlow, smoke, era, parts, build } =
+      const { facts, palette, glow, ownerGlow, smoke, era, build } =
         assets;
       const state = facts.state.toLowerCase().replace(/[\s-]/gu, "");
       const unavailable = state === "linkdown" || state === "signallost";
@@ -106,202 +106,159 @@ export function createMotionPainter(
       const settled = frame.settled || frame.reducedMotion;
       const selectedZone = (settled || !frame.beat) && facts.snapshot.phase === "building"
         ? zoneForEvent(facts.snapshot.latest ?? null) : null;
-      const active = selectedZone ?? beatZone(frame, facts),
-        machine = zoneMachine(active);
-      const reached = assets.evidence?.reached[active] ?? true;
-      const movingPart = (reached ? parts[active] : assets.offParts?.[active]) ?? parts[active];
-      const groupGlow = assets.glows?.[ZONE_BY_ID[active].group] ?? glow;
-      const staticFrame = settled || unavailable,
-        step = staticFrame ? 0 : dt;
-      const worker = movement.worker(
-        facts,
-        !composed && !frame.beat ? { ...frame, settled: true } : frame,
-        step,
-      );
-      const carrier = movement.build(
-        facts,
-        frame,
-        settled ? 10 : step,
-      );
+      const active = selectedZone ?? beatZone(frame, facts);
+      const staticFrame = !!settled || unavailable;
+      const step = staticFrame ? 0 : dt;
+      const worker = movement.worker(facts, !composed && !frame.beat ? { ...frame, settled: true } : frame, step);
+      const carrier = movement.build(facts, frame, settled ? 10 : step);
       const capsule = capsulePoint(facts, frame, carrier.point);
-      composed = true;
-      if (!unavailable && !terminal &&
-        (selectedZone || facts.activeZone || frame.beat || frame.ceremony)) {
-        const pad = ZONE_BY_ID[active].pad, width = pad.width + pad.depth;
-        const point = project(pad.x + pad.width / 2, pad.y + pad.depth / 2, BOARD.pad.raise);
-        motion.globalAlpha = padPoolAlpha(frame.elapsed, !!staticFrame);
-        motion.drawImage(groupGlow, point.x - width / 2, point.y - width / 4, width, width / 2);
-        motion.globalAlpha = 1;
-      }
-      if (build && !unavailable)
-        drawBuild(motion, build, capsule.x, capsule.y);
-      if (
-        frame.beat?.action === "edit" &&
-        ["deliver", "remember"].includes(frame.beat.stage)
-      ) {
-        motion.globalAlpha = (1 - frame.beat.progress) * 0.25;
-        motion.drawImage(
-          glow,
-          capsule.x - 25,
-          capsule.y - 38,
-          50,
-          50,
-        );
-        motion.globalAlpha = 1;
-      }
       const pose = operatorPose(facts, frame, movement, worker, state);
-      const frontStation = ZONE_BY_ID[active].pad.y >= BOARD.front[0];
-      const drawWorker = () => drawEra(motion, era, worker.x, worker.y, frame.elapsed, pose, movement.feet, c => {
-        const b = OPERATOR_BOUNDS, x = worker.x + b.x, y = worker.y + b.y;
-        const dpr = assets.foreground.width / BOARD.bounds.width;
-        c.drawImage(assets.foreground, (x - BOARD.bounds.x) * dpr, (y - BOARD.bounds.y) * dpr,
-          b.width * dpr, b.height * dpr, x, y, b.width, b.height);
-        for (const zone of ZONES) {
-          if (zone.pad.y < BOARD.front[0] || (zone.id === active && !unavailable)) continue;
-          const part = (assets.evidence?.reached[zone.id] ? parts : assets.offParts)?.[zone.id];
-          const pos = zoneMachine(zone.id);
-          if (part && Math.abs(pos.x - worker.x) < 185)
-            c.drawImage(part.image, pos.x + part.x, pos.y + part.y, part.width, part.height);
-        }
-        if (build && carrier.ground.y > movement.footing.y && Math.abs(capsule.x - worker.x) < 80)
-          drawBuild(c, build, capsule.x, capsule.y);
-      });
-      if (frontStation) drawWorker();
+      composed = true;
       let particles = 0;
+      const occupied: Omit<Sprite, "image">[] = [];
+      function cover(x: number, y: number, width: number, height: number) {
+        occupied.push({ x, y, width, height });
+      }
+      const currentZone = facts.currentZone === undefined ? facts.activeZone : facts.currentZone;
+      if (!unavailable && !terminal && currentZone) {
+        motion.globalAlpha = padPoolAlpha(frame.elapsed, staticFrame);
+        blit(motion, assets.padLights[currentZone]);
+        occupied.push(assets.padLights[currentZone]);
+        motion.globalAlpha = 1;
+      }
+      const moving: { depth: number; paint: () => void }[] = [{
+        depth: movement.footing.x + movement.footing.y,
+        paint: () => {
+          drawEra(motion, era, worker.x, worker.y, frame.elapsed, pose, movement.feet);
+          const b = OPERATOR_BOUNDS;
+          cover(worker.x + b.x, worker.y + b.y, b.width, b.height);
+        },
+      }];
+      if (build) moving.push({ depth: carrier.ground.x + carrier.ground.y, paint: () => {
+        drawBuild(motion, build, capsule.x, capsule.y);
+        cover(capsule.x + build.x, capsule.y + build.y, build.width, build.height);
+        if (!unavailable && frame.beat?.action === "edit" && ["deliver", "remember"].includes(frame.beat.stage)) {
+          motion.globalAlpha = (1 - frame.beat.progress) * .25;
+          motion.drawImage(glow, capsule.x - 25, capsule.y - 38, 50, 50);
+        }
+        if (!staticFrame && (carrier.moving || capsule.y !== carrier.point.y)) {
+          particles++;
+          motion.globalAlpha = .55;
+          motion.drawImage(glow, capsule.x - 15, capsule.y - 6, 30, 12);
+        }
+        motion.globalAlpha = 1;
+      } });
+      const beat = frame.beat;
+      const pulseZones = new Set<ZoneId>();
       if (!staticFrame) {
-        const art = {
-          palette: !reached && assets.dimPalette ? assets.dimPalette : palette,
-          zone: active,
-          facts,
-          frame,
-          part: movingPart,
-          glow: groupGlow,
-          evidence: assets.evidence,
-        };
-        motion.save();
-        motion.translate(machine.x, machine.y);
-        if (state === "failed" && movingPart) {
-          const p = movingPart;
-          motion.translate(5, 8);
-          motion.rotate(0.12);
-          motion.drawImage(p.image, p.x, p.y, p.width, p.height);
-        } else if (facts.activeZone || frame.beat || frame.ceremony)
-          ZONE_ART[active].motion(motion, art);
-        else if (movingPart) {
-          const p = movingPart;
-          motion.drawImage(p.image, p.x, p.y, p.width, p.height);
-        }
-        motion.restore();
-        const pulseZones = new Set<ZoneId>();
         for (const pulse of frame.beats ?? [])
-          if (pulse.id !== frame.beat?.id)
-            pulseZones.add(beatZone({ ...frame, beat: pulse }, facts));
-        for (const zone of pulseZones) {
-          const point = zoneMachine(zone);
-          motion.globalAlpha = 0.4;
-          motion.drawImage(glow, point.x - 10, point.y - 45, 20, 20);
-        }
-        particles += pulseZones.size;
-        motion.globalAlpha = 1;
-        const beat = frame.beat;
+          if (pulse.id !== beat?.id) pulseZones.add(beatZone({ ...frame, beat: pulse }, facts));
+        let transfer: Vec2 | undefined;
         if (beat?.stage === "think") {
+          const from = { x: ZONE_BY_ID.think.machine.x, y: 96 };
+          transfer = { x: from.x + (movement.footing.x - from.x) * beat.progress,
+            y: from.y + (movement.footing.y - from.y) * beat.progress };
+        } else if (beat?.action === "read" && beat.stage === "deliver")
+          transfer = { x: ZONE_BY_ID.explore.machine.x + BOARD.column * beat.progress, y: 96 };
+        if (transfer) {
+          const point = project(transfer.x, transfer.y, 2);
+          moving.push({ depth: transfer.x + transfer.y, paint: () => {
+            particles++;
+            motion.drawImage(glow, point.x - 4, point.y - 4, 8, 8);
+            cover(point.x - 4, point.y - 4, 8, 8);
+          } });
+        }
+      } else fx.clear();
+      const sparkKey = !staticFrame && beat?.stage === "work" && pose.gesture === "edit" && pose.extension === 1
+        ? beat.id : "";
+      if (sparkKey && sparkKey !== lastSpark && pose.target)
+        fx.emit(worker.x + pose.target.x, worker.y + pose.target.y, 24, Math.min(80, movement.cap));
+      lastSpark = sparkKey;
+
+      function paintPiece(piece: ScenePiece) {
+        if (piece.kind !== "part") {
+          // Its full-resolution colour is already on the state canvas. Remove
+          // only the pixels it covers from actors and moving parts behind it.
+          const mask = piece.sprite;
+          if (occupied.some(r => r.x < mask.x + mask.width && r.x + r.width > mask.x &&
+            r.y < mask.y + mask.height && r.y + r.height > mask.y)) {
+            motion.globalCompositeOperation = "destination-out";
+            blit(motion, mask);
+            motion.globalCompositeOperation = "source-over";
+          }
+          if (piece.kind === "lamp" && !staticFrame) {
+            const zone = ZONE_BY_ID[piece.zone];
+            const status = facts.zones.find(fact => fact.id === zone.id)?.status;
+            if (status === "active" || status === "needs-you") {
+              const lamp = ART.lamp, at = project(zone.machine.x + lamp.x, zone.machine.y + lamp.y, 6 + lamp.post);
+              motion.globalAlpha = .25 + Math.sin(frame.elapsed * 3) * .1;
+              motion.drawImage(status === "needs-you" ? ownerGlow : (assets.glows?.[zone.group] ?? glow),
+                at.x - 12, at.y - 12, 24, 24);
+              cover(at.x - 12, at.y - 12, 24, 24);
+              motion.globalAlpha = 1;
+            }
+          }
+          return;
+        }
+        const { zone, point, sprite } = piece;
+        if (sprite) cover(point.x + sprite.x, point.y + sprite.y, sprite.width, sprite.height);
+        if (zone === active || (zone === "verify" && assets.evidence?.runningCheck != null)) {
+          motion.save();
+          motion.translate(point.x, point.y);
+          const reached = assets.evidence?.reached[zone] ?? true;
+          const art = { palette: !reached && assets.dimPalette ? assets.dimPalette : palette, zone,
+            facts, frame, part: sprite, glow: assets.glows?.[ZONE_BY_ID[zone].group] ?? glow, evidence: assets.evidence };
+          if (zone === active && !staticFrame && state === "failed" && sprite) {
+            motion.translate(5, 8);
+            motion.rotate(.12);
+            blit(motion, sprite);
+          } else if (zone === active && !staticFrame && (facts.activeZone || beat || frame.ceremony)) {
+            ZONE_ART[zone].motion(motion, art);
+          } else if (zone === "verify" && assets.evidence?.runningCheck != null) {
+            ZONE_ART.verify.motion(motion, { ...art, frame: { ...frame, reducedMotion: true } });
+          } else if (sprite) blit(motion, sprite);
+          motion.restore();
+          // Animated heads, scanning beams and the active check can leave their
+          // resting envelope. Include the full travel of this assembly.
+          if ((!staticFrame && (beat || frame.ceremony || zone === "test" || state === "failed")) ||
+            (zone === "verify" && assets.evidence?.runningCheck != null))
+            cover(point.x - 160, point.y - 180, 410, 300);
+        } else if (sprite) {
+          motion.drawImage(sprite.image, point.x + sprite.x, point.y + sprite.y, sprite.width, sprite.height);
+        }
+        if (pulseZones.has(zone)) {
+          motion.globalAlpha = .4;
+          motion.drawImage(glow, point.x - 10, point.y - 45, 20, 20);
+          cover(point.x - 10, point.y - 45, 20, 20);
+          motion.globalAlpha = 1;
           particles++;
-          const origin = project(ZONE_BY_ID.think.machine.x, 96, 2);
-          const q = beat.progress;
-          motion.drawImage(
-            glow,
-            origin.x + (worker.x - origin.x) * q - 4,
-            origin.y + (worker.y - origin.y) * q - 4,
-            8,
-            8,
-          );
-        } else if (beat?.action === "read" && beat.stage === "deliver") {
-          particles++;
-          const chip = project(320 + 128 * beat.progress, 96, 2);
-          motion.drawImage(glow, chip.x - 4, chip.y - 4, 8, 8);
         }
-        for (const zone of facts.zones) {
-          if (zone.status !== "active" && zone.status !== "needs-you") continue;
-          const m = ZONE_BY_ID[zone.id].machine,
-            l = project(m.x + ART.lamp.x, m.y + ART.lamp.y, 6 + ART.lamp.post);
-          motion.globalAlpha = 0.25 + Math.sin(frame.elapsed * 3) * 0.1;
-          motion.drawImage(
-            zone.status === "needs-you" ? ownerGlow : (assets.glows?.[ZONE_BY_ID[zone.id].group] ?? glow),
-            l.x - 12,
-            l.y - 12,
-            24,
-            24,
-          );
+        if (!staticFrame && zone === "build") {
+          const sparks = fx.draw(motion, glow, step, Math.min(80, movement.cap - particles));
+          if (sparks) cover(point.x - 90, point.y - 110, 180, 160);
+          particles += sparks;
         }
-        motion.globalAlpha = 1;
-        for (let i = 0; i < BUDGET.dust / 2; i++) {
-          const x =
-              ((i * 137 + frame.elapsed * ((i % 3) + 1) * 2) %
-                ART.dust.rangeX) -
-              260,
-            y = ((i * 83) % ART.dust.rangeY) + 20;
-          motion.globalAlpha = 0.085;
-          motion.drawImage(glow, x, y, 7, 7);
-        }
-        motion.globalAlpha = 1;
-        particles += BUDGET.dust / 2;
-        if (state === "failed") {
+        if (!staticFrame && zone === active && state === "failed") {
           for (let i = 0; i < BUDGET.smoke; i++) {
-            const age = (frame.elapsed + i * 0.17) % ART.smoke.life;
-            motion.globalAlpha = (1 - age / ART.smoke.life) * 0.22;
-            motion.drawImage(
-              smoke,
-              machine.x + (i % 3) * 6,
-              machine.y - 24 - age * ART.smoke.speed,
-              14 + age * 6,
-              14 + age * 6,
-            );
+            const age = (frame.elapsed + i * .17) % ART.smoke.life;
+            motion.globalAlpha = (1 - age / ART.smoke.life) * .22;
+            motion.drawImage(smoke, point.x + (i % 3) * 6, point.y - 24 - age * ART.smoke.speed,
+              14 + age * 6, 14 + age * 6);
           }
           motion.globalAlpha = 1;
           particles += BUDGET.smoke;
         }
-        const sparkKey = frame.beat?.stage === "work" && pose.gesture === "edit" && pose.extension === 1
-          ? frame.beat.id : "";
-        if (sparkKey && sparkKey !== lastSpark && pose.target) {
-          fx.emit(
-            worker.x + pose.target.x,
-            worker.y + pose.target.y,
-            24,
-            Math.min(80, movement.cap - particles),
-          );
-        }
-        lastSpark = sparkKey;
-        particles += fx.draw(
-          motion,
-          glow,
-          step,
-          Math.min(80, movement.cap - particles),
-        );
-        if (carrier.moving || capsule.y !== carrier.point.y) {
-          particles++;
-          motion.globalAlpha = 0.55;
-          motion.drawImage(
-            glow,
-            capsule.x - 15,
-            capsule.y - 6,
-            30,
-            12,
-          );
-          motion.globalAlpha = 1;
-        }
-      } else {
-        fx.clear();
-        const part = movingPart;
-        if (part && !unavailable)
-          motion.drawImage(
-            part.image,
-            machine.x + part.x,
-            machine.y + part.y,
-            part.width,
-            part.height,
-          );
       }
-      if (!frontStation) drawWorker();
+      paintByDepth(assets.scenery, moving, paintPiece, piece => piece.paint());
+      if (!staticFrame) {
+        for (let i = 0; i < BUDGET.dust / 2; i++) {
+          const x = (i * 137 + frame.elapsed * ((i % 3) + 1) * 2) % ART.dust.rangeX - 260;
+          motion.globalAlpha = .085;
+          motion.drawImage(glow, x, (i * 83) % ART.dust.rangeY + 20, 7, 7);
+        }
+        motion.globalAlpha = 1;
+        particles += BUDGET.dust / 2;
+      }
 
       return particles;
     },

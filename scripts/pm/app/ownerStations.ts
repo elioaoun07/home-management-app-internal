@@ -57,8 +57,9 @@ export function ownerStationSignals(run: WorkflowRun): Record<OwnerStation, Owne
   return Object.fromEntries(OWNER_STATIONS.map(({ id }) => [id, ownerStationState(run, id)])) as Record<OwnerStation, OwnerStationState>;
 }
 
-export function currentOwnerStation(run: WorkflowRun): OwnerStation {
-  if (run.cleaned_at) return "cleanup";
+/** The board only marks a station when there is an owner step to take or resolve. */
+export function activeOwnerStation(run: WorkflowRun): OwnerStation | null {
+  if (run.cleaned_at || run.phase === "cleaned" || run.phase === "discarded") return null;
   if (
     run.merge_pending ||
     run.phase.startsWith("refresh") ||
@@ -70,11 +71,16 @@ export function currentOwnerStation(run: WorkflowRun): OwnerStation {
   if (run.phase === "push-pending" || run.phase === "revert-push-pending")
     return "push";
   if (run.publication) return run.publication.action;
-  if (["failed", "cancelled", "stopped", "discarded", "reverted"].includes(run.phase))
+  if (["failed", "cancelled", "stopped", "reverted"].includes(run.phase))
     return "cleanup";
   return (
     OWNER_STATIONS.find(({ id }) =>
       ["current", "stopped"].includes(ownerStationState(run, id)),
-    )?.id ?? "test"
+    )?.id ?? null
   );
+}
+
+export function currentOwnerStation(run: WorkflowRun): OwnerStation {
+  return activeOwnerStation(run) ??
+    (run.cleaned_at || run.phase === "discarded" || run.phase === "cleaned" ? "cleanup" : "test");
 }

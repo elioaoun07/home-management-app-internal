@@ -7,10 +7,9 @@ import {
   ZONE_BY_ID,
   type ZoneId,
 } from "../../../scripts/pm/app/stage/config";
-import {
-  ZONE_ART,
-  drawState,
-} from "../../../scripts/pm/app/stage/board";
+import { ZONE_ART } from "../../../scripts/pm/app/stage/board";
+import { blit, buildBoardScene, paintByDepth, paintGroundFacts, type ScenePiece } from "../../../scripts/pm/app/stage/boardScene";
+import { floorShadow } from "../../../scripts/pm/app/stage/zones/shared";
 import { bakeBoardAssets, bakePartFacts } from "../../../scripts/pm/app/stage/boardAssets";
 import { machineEvidence } from "../../../scripts/pm/app/stage/machineEvidence";
 import { project } from "../../../scripts/pm/app/stage/iso";
@@ -193,6 +192,16 @@ export async function renderGallery(request: Request) {
   let orbDpr = 1;
   let orbTones = p.zones.build;
   let tones = p.hull;
+  const fixture = (piece: ScenePiece) => {
+    if (piece.kind !== "part") { blit(c, piece.sprite); return; }
+    if (!piece.sprite) return;
+    c.save();
+    c.translate(piece.point.x, piece.point.y);
+    if (piece.zone === "verify" && evidence.runningCheck != null)
+      ZONE_ART.verify.motion(c, { zone: "verify", facts, frame, palette: p, evidence, part: piece.sprite });
+    else blit(c, piece.sprite);
+    c.restore();
+  };
   try {
   if (request.mode === "zone") {
     const id = request.id!;
@@ -200,18 +209,19 @@ export async function renderGallery(request: Request) {
     const palette = evidence.reached[id] ? p : assets.dimPalette;
     tones = palette.hull;
     c.translate(180, 220);
-    const body = assets.bodies[id][evidence.reached[id] ? "reached" : "off"];
-    c.drawImage(body.image, body.x, body.y, body.width, body.height);
-    const part = evidence.reached[id] ? parts[id] : assets.offParts[id];
+    floorShadow(c, { palette, zone: id });
+    const machine = ZONE_BY_ID[id].machine, pos = project(machine.x, machine.y);
+    c.translate(-pos.x, -pos.y);
+    for (const piece of buildBoardScene(p, facts, parts, assets, evidence, new Map()))
+      if (piece.zone === id) fixture(piece);
+    const part = parts[id];
     if (part) {
       partImage = part.image;
-      c.drawImage(part.image, part.x, part.y, part.width, part.height);
       if (id === "think") {
         orbDpr = part.image.width / part.width;
         orbTones = palette.zones.build;
       }
     }
-    if (!part?.stateBaked) ZONE_ART[id].state(c, { palette, zone: id, facts, frame, part, evidence });
     bodyImages.push({ image: assets.bodies[id].reached.image, tones: p.hull },
       { image: assets.bodies[id].off.image, tones: assets.dimPalette.hull });
     for (const value of [assets.parts[id], assets.offParts[id]])
@@ -221,10 +231,12 @@ export async function renderGallery(request: Request) {
     const assets = bakeBoardAssets(p);
     const parts = bakePartFacts(assets, p, facts, evidence);
     c.drawImage(assets.image, BOARD.bounds.x, BOARD.bounds.y, BOARD.bounds.width, BOARD.bounds.height);
-    drawState(c, p, facts, parts, { assets, evidence });
+    paintGroundFacts(c, p, facts);
+    const scenery = buildBoardScene(p, facts, parts, assets, evidence, new Map());
     const stop = ZONE_BY_ID[zones.buildZone].buildStop ?? BOARD.main,
       at = project(stop.x, stop.y);
-    drawBuild(c, bakeBuild(snapshot, p), at.x, at.y);
+    const cargo = bakeBuild(snapshot, p);
+    paintByDepth(scenery, [{ depth: stop.x + stop.y }], fixture, () => drawBuild(c, cargo, at.x, at.y));
   } else if (request.mode === "era") {
     drawEra(c, bakeEra(p), width / 2, height - 15, 0, {
       gesture: "edit",

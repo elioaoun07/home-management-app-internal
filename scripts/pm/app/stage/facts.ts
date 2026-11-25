@@ -1,5 +1,11 @@
 import type { BoardFacts } from "./types";
 import type { LocalRunView } from "../LocalDelivery";
+import { ART } from "./config";
+
+// One bead per visible event. Only edits have a distinct bead colour.
+export function thinkBeadKey(snapshot: BoardFacts["snapshot"]) {
+  return snapshot.events.slice(-ART.orb.beads).map(event => event.kind === "edit" ? "1" : "0").join("");
+}
 
 export function boardRetry(run: Pick<LocalRunView, "branch" | "work">) {
   const prefix = `delivery/${run.work.id}-`;
@@ -15,9 +21,11 @@ export function boardFactKey(f: BoardFacts) {
     f.snapshot.run.base,
     f.snapshot.run.handover?.handover_id,
     f.snapshot.latest?.id,
+    thinkBeadKey(f.snapshot),
     f.snapshot.nodeCount,
     f.snapshot.objectiveCount,
     f.snapshot.objectivesAccepted,
+    f.currentZone,
     f.activeZone,
     f.buildZone,
     f.buildGate,

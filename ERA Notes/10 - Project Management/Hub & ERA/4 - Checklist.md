@@ -19,7 +19,6 @@ Reports filed from the ERA chat arrive under **ERA reports** in Now automaticall
 **ERA reports**
 
 - [ ] **HUB-87** ERA handles "Add Mop Chores today" — [criteria](<Hub & ERA — Master Book.md#hub-87>) _(friction - S)_
-- [ ] **HUB-93** ERA gets "Add Racha as a Contact" right — [criteria](<Hub & ERA — Master Book.md#hub-93>) _(blocker - S)_
 - [ ] **HUB-117** ERA handles "Location for Women's night is Kobeize" — [criteria](<Hub & ERA — Master Book.md#hub-117>) _(friction - S)_
 
 ## Next

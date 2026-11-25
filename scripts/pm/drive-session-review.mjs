@@ -81,16 +81,42 @@ function renderReview(run, diff, env) {
   const evidence = run.evidence;
   const lines = [`# ${run.work_id} · ${run.title}`, "", `Run ${run.run_id}`, `Recorded phase: ${run.phase}`,
     `Run updated: ${run.updated_at}`, `Base: ${evidence.base || "pending"}`, `Candidate: ${evidence.head || "pending"}`];
+  if (evidence.attempt && evidence.attempt.of > 1) lines.push(`Attempt ${evidence.attempt.n} of ${evidence.attempt.of} for ${run.work_id}`);
+  if (run.attention) lines.push(`Now: ${run.attention.state} · ${run.attention.reason}${run.attention.since ? " · since " + run.attention.since : ""}`);
   for (const blocker of run.blockers) lines.push(`Blocker: ${blocker.kind} · ${blocker.ref}`);
   for (const action of run.ownerActions) lines.push(`Owner action: ${action.label}`);
+  // DLV-175: the owner's revisions, including one that failed and was rolled back.
+  const revisions = evidence.revisions;
+  if (revisions?.history?.length) {
+    lines.push("", "## Revisions", "", `${revisions.used} of ${revisions.limit} used${revisions.active ? ` · revision ${revisions.history.find(entry => entry.n === revisions.active)?.ordinal ?? revisions.active} in progress` : ""}. A failed or cancelled revision is not counted.`);
+    for (const entry of revisions.history) {
+      lines.push(`- Revision ${entry.ordinal}${entry.n !== entry.ordinal ? ` (request ${entry.n})` : ""} · ${entry.state} · requested ${entry.requested_at || "?"}${entry.finished_at ? " · ended " + entry.finished_at : ""}` +
+        `${entry.from_head ? " · from " + entry.from_head.slice(0, 12) : ""}${entry.to_head ? " → " + entry.to_head.slice(0, 12) : ""}${entry.reused_attempt_of ? " · reused the changes of request " + entry.reused_attempt_of : ""}`);
+      if (entry.failure) lines.push(`  - Failed at ${entry.failure.step}${entry.failure.stage ? " (" + entry.failure.stage + ")" : ""} · ${entry.failure.code}: ${entry.failure.detail}`);
+      if (entry.findings.length) lines.push(`  - Findings it addressed: ${entry.findings.join(", ")}`);
+      if (entry.note) lines.push(`  - Owner note: ${entry.note}`);
+    }
+  }
+  if (evidence.failure) lines.push("", "## Failure", "", `${evidence.failure.step}${evidence.failure.stage ? " (" + evidence.failure.stage + ")" : ""} · ${evidence.failure.code}: ${evidence.failure.detail}`);
+  if (evidence.events?.length) {
+    lines.push("", "## Recent supervisor events", "");
+    for (const entry of evidence.events) lines.push(`- ${entry.at} · ${entry.text}`);
+  }
   lines.push("", "## Recorded host checks", "");
   for (const check of evidence.checks || []) lines.push(`- ${check.name} · ${check.state}${Number.isInteger(check.exit) ? " · exit " + check.exit : ""}`);
   if (!evidence.checks?.length) lines.push("No completed check receipts recorded.");
   // bindLocalUat has matched the ready handover to this run, item and source revision.
   // DLV-175: the reviewer's verdict is evidence for the owner, never a sign-off.
   if (evidence.acceptance) {
-    lines.push("", "## Acceptance check", "", `${evidence.acceptance.state}${evidence.acceptance.error ? " · " + evidence.acceptance.error : ""}`);
-    for (const entry of evidence.acceptance.criteria) lines.push(`- ${entry.state} · ${entry.source} · ${entry.text}${entry.evidence.length ? " — " + entry.evidence.join(" · ") : ""}`);
+    const a = evidence.acceptance;
+    lines.push("", "## Acceptance check", "", `${a.state}${a.counts ? ` · ${a.counts.met} met · ${a.counts.missed} missed · ${a.counts.unclear} unclear` : ""}` +
+      `${a.head ? " · candidate " + a.head.slice(0, 12) : ""}${a.checked_at ? " · checked " + a.checked_at : ""}${a.error ? " · " + a.error : ""}`);
+    if (a.findings?.length) {
+      lines.push("", "Not met (these stopped Handover):");
+      for (const entry of a.findings) lines.push(`- ${entry.state} · ${entry.source} · ${entry.text}${entry.evidence.length ? " — " + entry.evidence.join(" · ") : ""}`);
+      lines.push("", "All criteria:");
+    }
+    for (const entry of a.criteria) lines.push(`- ${entry.state} · ${entry.source} · ${entry.text}${entry.evidence.length ? " — " + entry.evidence.join(" · ") : ""}`);
   }
   lines.push("", "## Owner UAT", "", evidence.uat && /^uat-[\da-f]{12}$/u.test(evidence.handover_id)
     ? `[Frozen handover r${evidence.uat.revision}](../02%20-%20Delivery%20Status/UAT/${evidence.handover_id}.md) · ${evidence.uat.state}`

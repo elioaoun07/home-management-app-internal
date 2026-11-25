@@ -23,6 +23,16 @@ const SWITCHED_FACE = [
   "{face}, coming up.",
 ] as const;
 
+/**
+ * HUB-123 — a keyword echo ("…in Catalogue…") is not a request to switch and
+ * writes nothing. "Over to Brain." read as a hand-off still in progress.
+ * Slots: {face}
+ */
+const NOTHING_DONE = [
+  "Nothing done — {face} can't do that from here yet.",
+  "Nothing changed. {face} can't do that from here yet.",
+] as const;
+
 /** Slots: {amount} */
 const DRAFTING = [
   "Drafting {amount}…",
@@ -127,7 +137,7 @@ const SPEECH_ACT_HOLD = [
 export function formatReply(intent: Intent): string {
   switch (intent.kind) {
     case "switchFace":
-      return say(SWITCHED_FACE, { face: getFace(intent.face).label });
+      return say(intent.explicit ? SWITCHED_FACE : NOTHING_DONE, { face: getFace(intent.face).label });
     case "draftTransaction":
       return say(DRAFTING, {
         amount: typeof intent.amount === "number" ? money(intent.amount) : "that",
@@ -189,6 +199,7 @@ export function formatReply(intent: Intent): string {
       return "Okay.";
     case "addShopping":
     case "addContact":
+    case "moveContact":
     case "addPlace":
     case "draftEvent":
       return "Adding that.";

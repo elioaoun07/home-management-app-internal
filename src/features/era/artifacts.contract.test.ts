@@ -10,7 +10,12 @@ import { resolveMemorySave } from "./intents/resolvers/brain";
 import { executeRecordDebt, executeTransfer, resolveConfirmDraft, resolveDraftTransaction } from "./intents/resolvers/budget";
 import { executeCoverRecurring } from "./intents/resolvers/budgetFamilies";
 import { resolveAssignMeal } from "./intents/resolvers/chef";
-import { resolveAddContact } from "./intents/resolvers/contacts";
+import {
+  answerContactCategory,
+  answerContactNewCategory,
+  resolveAddContact,
+  resolveMoveContact,
+} from "./intents/resolvers/contacts";
 import { answerEventLocation, answerPlaceSave, resolveDraftEvent } from "./intents/resolvers/events";
 import { resolveAddPlace } from "./intents/resolvers/places";
 import {
@@ -49,6 +54,9 @@ const ID = {
   payment: u(12),
   group: u(13),
   placesModule: u(14),
+  racha: u(15),
+  category: u(16),
+  newCategory: u(17),
 };
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -96,7 +104,13 @@ function json(body: unknown, status = 200): Response {
 function route(url: string, method: string, body: unknown): Response {
   if (url === "/api/catalogue/modules" && method === "POST") return json({ id: ID.placesModule }, 201);
   if (url === "/api/catalogue/modules") return json([{ id: ID.module, type: "contacts" }]);
+  if (url === `/api/catalogue/items?module_id=${ID.module}`) return json([{ id: ID.racha, name: "Racha", category_id: null }]);
   if (url.startsWith("/api/catalogue/items?module_id=")) return json([]);
+  if (url.startsWith("/api/catalogue/categories?module_id=")) return json([{ id: ID.category, name: "Friends" }]);
+  if (url === "/api/catalogue/categories" && method === "POST")
+    return json({ id: ID.newCategory, name: (body as { name: string }).name }, 201);
+  if (url.startsWith("/api/catalogue/categories/") && method === "DELETE") return json(null, 204);
+  if (url.startsWith("/api/catalogue/items/") && method === "PATCH") return json({ id: url.split("/").pop(), inverse: {} });
   if (url === `/api/items/${ID.item}` && method === "PATCH") return json({ item: { id: ID.item } });
   if (url === "/api/catalogue/items" && method === "POST") return json({ id: ID.contact }, 201);
   if (url.startsWith("/api/hub/threads")) return json({ threads: [{ id: ID.thread, purpose: "shopping", is_private: false }] });
@@ -156,12 +170,39 @@ const submitDraft = async (): Promise<EraBudgetSubmitResult> =>
     parsed: { amount: 12, categoryName: "Coffee" },
   }) as unknown as EraBudgetSubmitResult;
 
+const contactSlot = (capability: "contact.category" | "contact.newCategory") => ({
+  kind: "slot" as const,
+  capability,
+  slot: "category",
+  question: "",
+  options: [],
+  args: { contactId: ID.racha, name: "Racha", previousCategoryId: null, category: "Family" },
+  rawText: "",
+  createdAt: 0,
+});
+
 type Row = [name: string, run: () => Promise<{ artifacts?: EraArtifact[] }>, entity: string, action: string, id?: string];
 
 const WRITES: Row[] = [
   ["native reminder helper", () => resolveScheduleCapture({ kind: "reminder", title: "Call", date: "2026-10-13", time: "17:00", priority: "normal", location: "", alert: "none" }), "reminder", "created", ID.item],
   ["native event helper", () => resolveScheduleCapture({ kind: "event", title: "Dinner", date: "2026-10-13", time: "17:00", endDate: "2026-10-13", endTime: "18:00", priority: "normal", location: "", alert: "15" }), "event", "created", ID.item],
-  ["contact.create", () => resolveAddContact("Laura"), "contact", "created", ID.contact],
+  ["contact.create (category)", () => resolveAddContact("Laura", "Friends"), "contact", "created", ID.contact],
+  ["contact.update", () => resolveMoveContact("Racha", "Friends", "move Racha contact to Friends"), "contact", "updated", ID.racha],
+  [
+    "contact.category",
+    () =>
+      answerContactCategory(contactSlot("contact.category"), "Friends", `cat:${ID.category}`) as Promise<{ artifacts?: EraArtifact[] }>,
+    "contact",
+    "updated",
+    ID.racha,
+  ],
+  [
+    "contact.newCategory",
+    () => answerContactNewCategory(contactSlot("contact.newCategory"), "Create", "create") as Promise<{ artifacts?: EraArtifact[] }>,
+    "catalogue_category",
+    "created",
+    ID.newCategory,
+  ],
   ["place.create", () => resolveAddPlace("Kobeize"), "place", "created", ID.contact],
   [
     "event.create",
@@ -300,7 +341,7 @@ describe("recordEraArtifacts", () => {
     recordEraArtifacts([]);
     recordEraArtifacts(undefined);
     expect(calls.filter((c) => c.url === "/api/era/actions")).toHaveLength(0);
-    const r = await resolveAddContact("Laura");
+    const r = await resolveAddContact("Laura", "Friends");
     recordEraArtifacts(r.artifacts);
     await vi.waitFor(() => expect(calls.filter((c) => c.url === "/api/era/actions")).toHaveLength(1));
     const post = calls.find((c) => c.url === "/api/era/actions")!;
@@ -311,9 +352,40 @@ describe("recordEraArtifacts", () => {
 
 describe("routeWrite (era-wire adapter template)", () => {
   it("Undo calls the route's own inverse once per tap", async () => {
-    const r = await resolveAddContact("Laura");
-    expect(r.text).toBe("Added · Laura");
+    const r = await resolveAddContact("Laura", "Friends");
+    expect(r.text).toBe("Added · Laura · Friends");
     expect(await r.undo!()).toBe(true);
     expect(calls.at(-1)).toMatchObject({ url: `/api/catalogue/items/${ID.contact}`, method: "DELETE" });
+  });
+
+  it("HUB-123 — creating a missing category files the contact; Undo puts it back and archives the category", async () => {
+    const r = await answerContactNewCategory(
+      { kind: "slot", capability: "contact.newCategory", slot: "create", question: "", options: [], args: { contactId: ID.racha, name: "Racha", previousCategoryId: null, category: "Family" }, rawText: "", createdAt: 0 },
+      "Create",
+      "create",
+    );
+    if ("unmatched" in r) throw new Error("unmatched");
+    expect(r.text).toBe("Racha → Family");
+    expect(calls.find((c) => c.url === "/api/catalogue/categories" && c.method === "POST")?.body).toEqual({ module_id: ID.module, name: "Family" });
+    expect(calls.find((c) => c.method === "PATCH")).toMatchObject({ url: `/api/catalogue/items/${ID.racha}`, body: { category_id: ID.newCategory } });
+    expect(await r.undo!()).toBe(true);
+    expect(calls.slice(-2)).toMatchObject([
+      { url: `/api/catalogue/items/${ID.racha}`, method: "PATCH", body: { category_id: null } },
+      { url: `/api/catalogue/categories/${ID.newCategory}`, method: "DELETE" },
+    ]);
+  });
+
+  it("HUB-93 — a plain add opens the prefilled form and saves nothing", async () => {
+    const before = calls.length;
+    const r = await resolveAddContact("Dr Karam & Sons");
+    expect(calls.slice(before).filter((c) => c.method !== "GET")).toEqual([]);
+    expect(r.navigate).toBe("/catalogue?newContact=Dr%20Karam%20%26%20Sons");
+    expect(r.artifacts).toBeUndefined();
+  });
+
+  it("HUB-123 — a contact named twice is reused, never duplicated", async () => {
+    const r = await resolveAddContact("racha");
+    expect(r.text).toBe("Already in Contacts · Racha");
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
   });
 });

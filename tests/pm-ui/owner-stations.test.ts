@@ -2,10 +2,31 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { OwnerStationDetail } from "../../scripts/pm/app/OwnerStationDetail";
-import { OWNER_STATIONS, currentOwnerStation, ownerStationState } from "../../scripts/pm/app/ownerStations";
+import { OwnerRoom } from "../../scripts/pm/app/OwnerRoom";
+import { OWNER_STATIONS, activeOwnerStation, currentOwnerStation, ownerStationState } from "../../scripts/pm/app/ownerStations";
 import { boardRun, handover } from "./local-board-fixtures";
 
 describe("Owner workstations", () => {
+  it("marks the workflow step while another station is being inspected", () => {
+    const run = boardRun({ phase: "uat-ready", head: "candidate", risk: { required: true, flagged: [] }, handover: handover(true) });
+    const html = renderToStaticMarkup(createElement(OwnerRoom, {
+      run, current: activeOwnerStation(run), selected: "merge", onSelect: vi.fn(),
+    }));
+    const buttons = html.match(/<button\b[^>]*>/gu) ?? [];
+    const current = buttons.filter(button => button.includes('aria-current="step"'));
+    expect(current).toHaveLength(1);
+    expect(current[0]).toContain('data-station="review"');
+    expect(buttons.find(button => button.includes('aria-pressed="true"'))).toContain('data-station="merge"');
+  });
+
+  it("leaves the board unmarked before handover and after the owner finishes", () => {
+    expect(activeOwnerStation(boardRun())).toBeNull();
+    expect(activeOwnerStation(boardRun({ phase: "cleaned", cleaned_at: "now" }))).toBeNull();
+    expect(activeOwnerStation(boardRun({ phase: "discarded" }))).toBeNull();
+    expect(activeOwnerStation(boardRun({ phase: "refresh-conflict" }))).toBe("merge");
+    expect(activeOwnerStation(boardRun({ phase: "acceptance-paused" }))).toBe("test");
+  });
+
   it("keeps a legacy merge inspectable without inventing a commit or push", () => {
     const run = boardRun({ phase: "merged", applied: { at: "now", files: ["example.ts"], main_head: "base", pm_error: null },
       publication: { action: "commit", token: null, reason: "No verified file list", files: [], commands: [] } });

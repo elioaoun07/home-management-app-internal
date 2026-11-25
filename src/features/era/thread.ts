@@ -146,6 +146,8 @@ export function isMissedReply(reply: ThreadMessage, request: ThreadMessage | nul
   if (status === "failed" || status === "uncertain") return true;
   const p = reply.intent_payload ?? {};
   if (reply.intent_kind === "unknown") return true;
+  // HUB-123 — a keyword echo that switched nothing ("Nothing done — …").
+  if (reply.intent_kind === "switchFace") return p.explicit !== true;
   if (reply.intent_kind === "clarify") return p.reason !== "speechAct";
   if (reply.intent_kind === AI_ANSWER_KIND) {
     return p.aiKind === "prose" && MISS_KINDS.has(request?.intent_kind ?? "");

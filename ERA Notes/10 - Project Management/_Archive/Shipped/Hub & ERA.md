@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-21
+updated: 2026-11-25
 type: archive
 status: superseded
 owner: Elio
@@ -596,5 +596,13 @@ Item plans use the [execution-plan convention](<../../_Conventions.md#9-item-exe
 ### HUB-118
 
 - ✅ 2026-11-21 — **HUB-118** Require host sign-in for Guest Portal bulk reads — [criteria](<../../Hub & ERA/Hub & ERA — Master Book.md#hub-118>) (Implementation: public guest drinks/allergies routes no longer accept all; host view GET /api/guest-portal/admin/orders (401/403/404/200 incl. household partner) read via service role after ownership check; /g/drinks-admin uses only it. Replay tests: bulkReads.test.ts (red before fix, green after), admin/orders/route.test.ts; typecheck + eslint clean; dev-server curl anonymous -> 401/400. Owner UAT + guest_drinks RLS migration run pending.)
+
+### HUB-123
+
+- ✅ 2026-11-25 — **HUB-123** Contacts file under a category from ERA and Catalogue; the thread clears the starter pills — [criteria](<../../Hub & ERA/Hub & ERA — Master Book.md#hub-123>) (Gym report-hub-123..-i + report-hub-95 red→green, known misses unchanged (20); contract rows contact.create(category)/update/category/newCategory + Undo; 785 ERA tests pass; typecheck clean; local read-only check: thread clears pills, Catalogue Category select renders)
+
+### HUB-93
+
+- ✅ 2026-11-25 — **HUB-93** ERA gets "Add Racha as a Contact" right — [criteria](<../../Hub & ERA/Hub & ERA — Master Book.md#hub-93>) (Plain add of a new contact opens the prefilled Catalogue form (Open door, nothing saved); ported from Local candidate 5dcada5e into the HUB-123 work; Gym report-hub-89/-b/-c/-93 handed_off; ERA + Gym suites pass. UAT pending.)
 
 ## State log

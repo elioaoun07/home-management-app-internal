@@ -7,6 +7,8 @@ export interface LocalFailureRecord {
   code: "install" | "secrets" | "native-error" | "no-change" | "commit-hook" | "commit-timeout" | "checks" | "handover" | "cancelled";
   step: string;
   detail: string;
+  /** The commit-hook step that refused the commit, when known. */
+  stage?: string;
 }
 
 interface FailureRun {

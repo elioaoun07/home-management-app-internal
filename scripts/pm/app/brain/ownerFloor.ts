@@ -152,7 +152,7 @@ export function makeOwnerFloor(stock: Stock, fit: ReturnType<typeof workstationK
     for (const [id, lamp] of lamps) {
       const signal = owner?.signals[id] ?? "pending";
       lamp.emissive.set(signalColors[signal]);
-      lamp.emissiveIntensity = owner?.selected === id ? 1.3 : signal === "current" ? .9 : signal === "done" ? .45 : .12;
+      lamp.emissiveIntensity = owner?.current === id ? 1.3 : signal === "done" ? .45 : .12;
     }
     project(owner?.selected === "merge" ? owner.patch : null, compact, aspect);
   }

@@ -7,7 +7,8 @@
 import type { EraPendingSlot, Intent } from "../types";
 import { rootIntentRouter } from "./index";
 
-export const FREE_TEXT_SLOTS: ReadonlySet<EraPendingSlot["capability"]> = new Set(["event.when", "event.location"]);
+// HUB-123 — "Category?" also takes a typed category name.
+export const FREE_TEXT_SLOTS: ReadonlySet<EraPendingSlot["capability"]> = new Set(["event.when", "event.location", "contact.category"]);
 
 const NOT_A_REQUEST: ReadonlySet<Intent["kind"]> = new Set(["clarify", "unknown", "greeting", "switchFace"]);
 

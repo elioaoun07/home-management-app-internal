@@ -13,8 +13,9 @@ import { makeJobRequest } from "./adapters/adapter.mjs";
 import { parseWorkItems } from "./work-ref.mjs";
 import { idSection } from "../pm/shared/work-id.mjs";
 import { bindDirect, freezeHandover, validateContent, viewOne } from "./uat.mjs";
-import { REGRESSION_INSTRUCTION, REVISION_LIMIT, UAT_CRITERION, acceptanceCriteria, acceptanceInstruction, decideAcceptance,
-  findingsOf, isBugItem, parseVerdict, regressionDeclarations, regressionVerdict, revisionPreamble, runRegressions } from "./local-acceptance.mjs";
+import { REGRESSION_INSTRUCTION, REVISION_LIMIT, SEAL_INSTRUCTION, UAT_CRITERION, acceptanceCriteria, acceptanceInstruction, decideAcceptance,
+  findingsOf, isBugItem, noteCriteria, parseVerdict, regressionDeclarations, regressionVerdict, revisionPreamble, revisionSpent, revisionsUsed,
+  runRegressions, sealRepairPrompt } from "./local-acceptance.mjs";
 import { applyCopy, createPublication, obstructedCopyPath, prepareCopy } from "./local-publication.mjs";
 import { localMessageBodies, normalizeAnswers, normalizeMessage, normalizeQuestion, projectQuestions, readLedger, resumePrompt, writeLedger } from "./local-questions.mjs";
 import { createPreviews } from "./local-preview.mjs";
@@ -40,6 +41,13 @@ const HOOK_STAGES = new Map([
   ["Running unit tests...", "tests"],
   ["Running ESLint on staged files...", "lint"],
 ]);
+/** The hook step that refused a commit, and that step's own output (Git runs hooks on stderr). */
+export function sealRefusal(text) {
+  const lines = String(text ?? "").replace(/^git commit: /u, "").split(/\r?\n/u);
+  let start = -1, stage = null;
+  lines.forEach((line, index) => { const found = HOOK_STAGES.get(line.trim()); if (found) { start = index; stage = found; } });
+  return { stage, detail: decisiveLines(lines.slice(start + 1).join("\n")) };
+}
 
 /** @param {{root:string, store:object|Function, run?:typeof runProcess,
  * session?:typeof nativeLocalSession, authenticate?:typeof localWorkerSubscription,
@@ -47,9 +55,11 @@ const HOOK_STAGES = new Map([
  * prepareDependencies?:((workspace:string)=>Promise<{status:number|null}>)|null,
  * baseBranch?:string, hasStore?:()=>boolean, catalog?:()=>object|null,
  * limits?:{hookMs?:number, pushMs?:number}, previews?:ReturnType<typeof createPreviews>|null,
- * reviewSession?:typeof nativeLocalSession}} options
- * `reviewSession` runs the read-only acceptance reviewer (DLV-175); it defaults to `session`. */
-export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession, reviewSession = session,
+ * reviewSession?:typeof nativeLocalSession,
+ * lintStaged?:((workspace:string)=>Promise<{stage:string, detail:string}|null>)|null}} options
+ * `reviewSession` runs the read-only acceptance reviewer (DLV-175); it defaults to `session`.
+ * `lintStaged` replaces the Seal lint pre-check (the hook's ESLint rule on staged files). */
+export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession, reviewSession = session, lintStaged = null,
   authenticate = localWorkerSubscription, dependencies = installedDependencies, checks = hostChecks,
   prepareDependencies = null, baseBranch = "main", hasStore = () => true, limits = {},
   catalog = () => { const loaded = loadExecutionPolicy({ root }); return loaded.ok ? loaded.policy.executors.catalog : null; },
@@ -311,11 +321,25 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     if (d.applied) return "merged";
     return d.phase;
   }
-  function list(selectedRows = null) {
+  /** Supervisor events only (no tool calls, agent text or chat), newest last, one line each. */
+  const supervisorEvents = id => s().listActivity(id, 400, true).filter(row => row.kind === "status")
+    .map(row => ({ at: row.at, text: String(row.summary ?? "").split(/\r?\n/u)[0].slice(0, 200) }))
+    .filter(row => row.text && !row.text.startsWith("[")).slice(-15);
+  /** `drive` adds what the Drive mirror's supervisor needs: attempt order and recent supervisor events. */
+  function list(selectedRows = null, { drive = false } = {}) {
     if (!hasStore()) return [];
+    const order = new Map(), totals = new Map();
+    if (drive) for (const row of [...s().listRuns()].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))) {
+      const work = localRecord(row)?.work?.id;
+      if (!work) continue;
+      totals.set(work, (totals.get(work) || 0) + 1);
+      order.set(row.run_id, totals.get(work));
+    }
     return (selectedRows ?? s().listRuns()).filter(localRecord).map(row => {
       const d = localRecord(row);
       const active = tasks.has(row.run_id);
+      const facts = drive ? { attempt: { n: order.get(row.run_id) ?? 1, of: totals.get(d.work.id) ?? 1 },
+        events: row.lifecycle === "CLOSED" ? [] : supervisorEvents(row.run_id) } : {};
       // A parked session has no process by design; it is waiting, not interrupted.
       const parked = !!d.parked && !active && row.lifecycle !== "CLOSED";
       const interrupted = WORKING_PHASES.includes(d.phase) && !active && !parked;
@@ -325,7 +349,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         effort: d.settings.effort, ownerAction: interrupted ? "Interrupted" : asking ? "Question" : d.phase,
         ownerActionKind: asking ? "local-question" : row.lifecycle === "CLOSED" || active ? "none" : d.phase === "uat-ready" ? "local-review"
           : d.phase === "acceptance-paused" ? "local-acceptance" : "inspect-session", active,
-        created_at: row.created_at, updated_at: row.updated_at, resources: null, application: null, stage: visiblePhase(d), branch: d.branch };
+        created_at: row.created_at, updated_at: row.updated_at, resources: null, application: null, stage: visiblePhase(d), branch: d.branch, ...facts };
     });
   }
 
@@ -339,6 +363,31 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return { files, risk: classifyLocalDiff(files), patch: await git(data.workspace, "diff", "--no-ext-diff", "--no-textconv", data.base, head) };
   }
 
+  // DLV-176: the owner's side of a colliding file — run base → the file in the
+  // main checkout now, uncommitted edits included. Read-only.
+  async function checkoutSide(d, id, path) {
+    if (path === null) throw new Error("Pick a file");
+    const files = (await git(root, "--literal-pathspecs", "diff", "--no-renames", "--name-only", "-z", d.base, d.head, "--", path));
+    if (files !== path + "\0") throw new Error("File is outside the recorded change");
+    const diffArgs = ["--no-optional-locks", "--literal-pathspecs", "-c", "color.ui=false", "diff", "--no-ext-diff", "--no-textconv", "--no-renames"];
+    const options = { cwd: root, env: env(), timeout: 15_000, maxBuffer: 4 * 1024 * 1024 };
+    const tracked = (await run("git", ["--no-optional-locks", "ls-files", "--error-unmatch", "--", path], options)).status === 0;
+    const inBase = (await run("git", ["--no-optional-locks", "cat-file", "-e", d.base + ":" + path], options)).status === 0;
+    let result;
+    if (tracked || inBase) result = await run("git", [...diffArgs, d.base, "--", path], options);
+    else if (existsSync(join(root, path))) {
+      // Untracked in the checkout and absent at base: the whole file is the owner's.
+      const empty = join(root, ".delivery/local", id, "empty");
+      mkdirSync(dirname(empty), { recursive: true });
+      writeFileSync(empty, "");
+      result = await run("git", [...diffArgs, "--no-index", "--", empty, path], options);
+      if (result.status === 1) result = { ...result, status: 0 };
+    } else result = { status: 0, stdout: "" };
+    if (result.error?.code === "ENOBUFS") throw new Error("Comparison exceeds the 4 MB reader limit");
+    if (result.status !== 0 || result.error) throw new Error("Your checkout's file is unreadable");
+    return { base: d.base, head: "checkout", path, patch: result.stdout };
+  }
+
   // A station inspects immutable Git objects, even after a file-copy merge or
   // worktree removal. Opening it must never satisfy the owner's review gate.
   async function comparison(id, expectedHead, path = null, against = "base", expectedSource = null) {
@@ -346,6 +395,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const revision = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
     if (!revision.test(d.base) || !revision.test(d.head)) throw new Error("No recorded candidate comparison");
     if (expectedHead !== d.head) throw new Error("Candidate changed. Reopen the comparison.");
+    if (against === "checkout") return checkoutSide(d, id, path);
     const source = against === "repo" ? await git(root, "rev-parse", "HEAD") : d.base;
     if (expectedSource && expectedSource !== source) throw new Error("Repository HEAD changed. Reload the file list.");
     const args = ["--no-optional-locks", "--literal-pathspecs", "-c", "color.ui=false", "diff",
@@ -403,12 +453,14 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       ? await storage.cleanupCommands(d.workspace, d.branch).catch(() => []) : [];
     const window = s().listActivity(id, 201, true);
     // DLV-175: the owner's decision after a paused acceptance check.
-    const revisionLimit = d.revision_limit ?? REVISION_LIMIT, revisionsUsed = (d.revisions || []).length;
+    const revisionLimit = d.revision_limit ?? REVISION_LIMIT, used = revisionsUsed(d.revisions);
     const paused = d.phase === "acceptance-paused" && s().getRun(id)?.lifecycle !== "CLOSED" && !task;
     const acceptanceInterrupted = d.phase === "accepting" && !task && s().getRun(id)?.lifecycle !== "CLOSED";
+    const unfinished = lastUnfinished(d);
     return { ...d, phase: visiblePhase(d), publication: publicationPlan, run_id: id, current_head: head, clean, risk: changes.risk, patch: changes.patch,
-      revision_limit: revisionLimit, revisions_used: revisionsUsed,
-      canRequestChanges: paused && current && revisionsUsed < revisionLimit, canStop: paused,
+      revision_limit: revisionLimit, revisions_used: used, attempt: attemptOf(id, d),
+      canRequestChanges: paused && current && used < revisionLimit, canStop: paused,
+      canReuseAttempt: paused && current && used < revisionLimit && !!unfinished?.attempt_patch,
       canRecheckAcceptance: (paused && !!d.acceptance?.error) || acceptanceInterrupted,
       activity: localMessageBodies(window.slice(-200), observed), earlier_activity: window.length > 200, usage: observed?.usage || null,
       handover, questions: chat.questions, messages: chat.messages, parked, preview: apps.view(id), activeCommand: activeCommand(id), cancelCleanupCommands,
@@ -416,6 +468,9 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       canShip: false,
       mergePlan, canMerge: !!d.merge_pending || (d.phase === "uat-ready" && current && reviewed && signed && passed && !!mergePlan && !mergePlan.error && mergePlan.branch === baseBranch
         && mergePlan.files.length > 0 && mergePlan.conflicts.length === 0),
+      // DLV-176: the same gates, when files collide with the owner's checkout.
+      canMergeByHand: !d.merge_pending && d.phase === "uat-ready" && current && reviewed && signed && passed && !!mergePlan && !mergePlan.error
+        && mergePlan.branch === baseBranch && mergePlan.files.length > 0 && mergePlan.conflicts.length > 0,
       // A file-copy merge (DLV-167) has no merge commit to revert.
       canUndo: false, interrupted: WORKING_PHASES.includes(d.phase) && !task && !parked };
   }
@@ -492,6 +547,19 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
 
   const historyFile = (id, name) => join(root, ".delivery/local-history", id, name);
   const revisionOf = d => d.revision ? (d.revisions || []).find(entry => entry.n === d.revision) || null : null;
+  /** The newest revision when it ended without a candidate, started from the current one. */
+  const lastUnfinished = d => {
+    const last = (d.revisions || []).at(-1);
+    return last && !revisionSpent(last) && last.from_head === d.head ? last : null;
+  };
+  /** This run's place among Local runs of the same item: "attempt 2 of 2". */
+  function attemptOf(id, d) {
+    // A history-only store (no run listing) still opens the run as its own first attempt.
+    if (typeof s().listRuns !== "function") return { n: 1, of: 1 };
+    const runs = s().listRuns().filter(row => localRecord(row)?.work?.id === d.work.id)
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    return { n: Math.max(1, runs.findIndex(row => row.run_id === id) + 1), of: Math.max(1, runs.length) };
+  }
   /** Raw Git output (patches keep their bytes and final newline). */
   async function gitRaw(cwd, args, timeout = 60_000) {
     const out = await run("git", ["--no-optional-locks", ...args], { cwd, env: env(), timeout });
@@ -544,7 +612,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
 
   async function checkAcceptance(id, d, signal) {
     const head = d.head, started_at = at();
-    const criteria = [...acceptanceCriteria(d.work), UAT_CRITERION];
+    const criteria = [...acceptanceCriteria(d.work), ...noteCriteria(d.revisions), UAT_CRITERION];
     let content = null, draft;
     const handoverFile = join(d.workspace, HANDOVER_FILE);
     try {
@@ -648,31 +716,46 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     save(id, { ...d, phase: "acceptance-paused", head: from, checks: p.checks, risk: p.risk, acceptance: p.acceptance,
       reviewed_head: p.reviewed_head ?? null, reviewed_risk: p.reviewed_risk ?? null, native_ref: p.native_ref ?? null,
       revision: null, revisions, candidates, parked: null, error: null, failure: null, handover_id: null });
-    event(id, `Revision ${entry.n} ${state} · restored ${from.slice(0, 12)}`);
+    const where = cancelled ? "" : ` at ${failure?.step || "an unknown step"}${failure?.stage ? ` (${failure.stage})` : ""}`;
+    event(id, `Revision ${entry.ordinal ?? entry.n} ${state}${where} · restored ${from.slice(0, 12)} · not counted`);
     return true;
   }
 
   /** The owner's explicit request: one revision of the paused candidate, within the original scope.
-   * @param {string} id @param {string} expectedHead @param {string} [note] */
-  async function requestChanges(id, expectedHead, note = "") {
+   * A revision that ended without a candidate is not counted; `reuse` reapplies its kept changes.
+   * @param {string} id @param {string} expectedHead @param {string} [note] @param {boolean} [reuse] */
+  async function requestChanges(id, expectedHead, note = "", reuse = false) {
     return locked("request-changes", id, async () => {
       const d = dataOf(id), row = s().getRun(id);
       if (row.lifecycle === "CLOSED" || d.phase !== "acceptance-paused" || tasks.has(id)) throw new Error("Request changes needs a paused acceptance check");
       if (!expectedHead || d.head !== expectedHead) throw new Error("Candidate changed. Reload the run.");
-      const limit = d.revision_limit ?? REVISION_LIMIT, used = (d.revisions || []).length;
+      const limit = d.revision_limit ?? REVISION_LIMIT, used = revisionsUsed(d.revisions);
       if (used >= limit) throw new Error(`revision-limit-reached: ${used} of ${limit}`);
       const text = String(note ?? "").trim();
       if (text.length > 4000) throw new Error("Notes are limited to 4000 characters");
       const current = selected(d.work.file, d.work.id);
       if (current.brief !== d.work.brief || current.row !== d.work.row) throw new Error("Acceptance changed. Stop this run and start a new one.");
       if (await git(d.workspace, "rev-parse", "HEAD") !== d.head || await git(d.workspace, "status", "--porcelain", "--untracked-files=all")) throw new Error("candidate-changed");
-      const n = used + 1;
+      const unfinished = lastUnfinished(d);
+      if (reuse) {
+        if (!unfinished?.attempt_patch) throw new Error("No kept attempt to reuse");
+        try { await git(d.workspace, "apply", "--index", "--binary", "--whitespace=nowarn", join(root, unfinished.attempt_patch)); }
+        catch (error) {
+          await git(d.workspace, "reset", "--hard", d.head).catch(() => {});
+          await git(d.workspace, "clean", "-fd").catch(() => {});
+          throw new Error("The kept attempt no longer applies. Request changes without reusing it. " + String(error.message).slice(0, 200));
+        }
+      }
+      const n = (d.revisions || []).length + 1, ordinal = used + 1;
       const previous = { head: d.head, checks: (d.checks || []).map(check => ({ ...check, stdout: trimTail(check.stdout), stderr: trimTail(check.stderr) })),
         risk: d.risk ?? null, acceptance: d.acceptance ?? null, reviewed_head: d.reviewed_head ?? null, reviewed_risk: d.reviewed_risk ?? null, native_ref: d.native_ref ?? null };
-      const entry = { n, requested_at: at(), actor: "owner", from_head: d.head, note: text || null, findings: findingsOf(d.acceptance), state: "building", previous };
+      const after = unfinished ? { n: unfinished.n, ordinal: unfinished.ordinal ?? unfinished.n, step: unfinished.failure?.step ?? null, stage: unfinished.failure?.stage ?? null,
+        code: unfinished.failure?.code ?? unfinished.state, detail: String(unfinished.failure?.detail ?? "").slice(0, 2000), reused: !!reuse } : null;
+      const entry = { n, ordinal, requested_at: at(), actor: "owner", from_head: d.head, note: text || null, findings: findingsOf(d.acceptance), state: "building",
+        ...(after ? { after } : {}), previous };
       save(id, withCandidate({ ...d, revision_limit: limit, revision: n, revisions: [...(d.revisions || []), entry], phase: "building",
         native_ref: null, parked: null, error: null, failure: null, handover_id: null }, { outcome: "revision-requested", revision_requested: n }));
-      event(id, `Owner requested changes · revision ${n} of ${limit}`);
+      event(id, `Owner requested changes · revision ${ordinal} of ${limit}${after ? ` · after revision ${after.ordinal} ${unfinished.state}${reuse ? ", reusing its changes" : ""}` : ""}`);
       const controller = new AbortController();
       tasks.set(id, { controller, promise: null, send: null, accepting: true });
       tasks.get(id).promise = build(id, controller);
@@ -768,20 +851,79 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       GIT_CONFIG_KEY_2: "core.hooksPath", GIT_CONFIG_VALUE_2: hooks };
   }
 
+  const checkInstructionFor = d => d.settings.executor === "claude" && process.platform === "win32"
+    ? "You have no shell. The supervisor runs the checks after you finish."
+    : "Finish with checks.";
+  /** The worker's standing limits, for the build and for the Seal fix turn alike. */
+  const workerRules = d => `Implement only ${d.work.id}. Work only in this worktree. Never push, merge, read the main checkout's secrets or write any database. ` +
+    `Do not commit; the supervisor commits your work. Do not ship PM records; the owner ships. ${checkInstructionFor(d)}`;
+
   function instructionFor(d) {
-    const checkInstruction = d.settings.executor === "claude" && process.platform === "win32"
-      ? "You have no shell. The supervisor runs the checks after you finish."
-      : "Finish with checks.";
+    const checkInstruction = checkInstructionFor(d);
     // DLV-164/165. Claude asks with AskUserQuestion; Codex with the era_owner ask_owner tool.
     const askInstruction = d.settings.executor === "claude"
       ? " If you are blocked on a decision that is genuinely the owner's, ask with AskUserQuestion: put your recommended option first and end its label with \" (Recommended)\". Otherwise decide with sensible defaults and continue."
       : " If you are blocked on a decision that is genuinely the owner's, call the ask_owner tool: put your recommended option first and end its label with \" (Recommended)\", then end your turn. Otherwise decide with sensible defaults and continue.";
     const bug = isBugItem(d.work);
-    const instruction = `Implement only ${d.work.id}. Read CLAUDE.md and start-task; use the repository skills and hooks. Work only in this worktree. Never push, merge, read the main checkout's secrets or write any database. Do not commit; the supervisor commits your work. Do not ship PM records; the owner ships. ${checkInstruction}${askInstruction} The owner may message you while you work; follow those messages. Write .delivery-handover.json with the UAT schema {summary,scenarios:[{id,title,required:true,steps:[{action,expected}]}]}. An independent acceptance check compares your candidate and its UAT steps with every Outcome, Acceptance and Comment line below before the owner sees it.${bug ? REGRESSION_INSTRUCTION : ""}\n\n${d.work.brief}`;
+    const instruction = `Implement only ${d.work.id}. Read CLAUDE.md and start-task; use the repository skills and hooks. Work only in this worktree. Never push, merge, read the main checkout's secrets or write any database. Do not commit; the supervisor commits your work. Do not ship PM records; the owner ships. ${checkInstruction}${SEAL_INSTRUCTION}${askInstruction} The owner may message you while you work; follow those messages. Write .delivery-handover.json with the UAT schema {summary,scenarios:[{id,title,required:true,steps:[{action,expected}]}]}. An independent acceptance check compares your candidate and its UAT steps with every Outcome, Acceptance and Comment line below before the owner sees it.${bug ? REGRESSION_INSTRUCTION : ""}\n\n${d.work.brief}`;
     // DLV-175: a revision keeps the original instruction and scope, with the findings first.
     const revision = revisionOf(d);
-    return revision ? revisionPreamble({ work: d.work, n: revision.n, limit: d.revision_limit ?? REVISION_LIMIT, fromHead: revision.from_head,
-      findings: revision.findings, note: revision.note, regressionAsked: bug }) + instruction : instruction;
+    return revision ? revisionPreamble({ work: d.work, n: revision.ordinal ?? revision.n, limit: d.revision_limit ?? REVISION_LIMIT, fromHead: revision.from_head,
+      findings: revision.findings, note: revision.note, regressionAsked: bug, earlier: revision.after ?? null }) + instruction : instruction;
+  }
+
+  /** Native activity rows; ordinals restart per segment, so drop only repeats within one. */
+  const nativeActivity = id => {
+    let last = -1;
+    return value => {
+      if (Number.isInteger(value.seq) && value.seq <= last) return;
+      s().appendActivity(id, id, [{ ...value, seq: undefined }]);
+      if (Number.isInteger(value.seq)) last = value.seq;
+    };
+  };
+
+  /** The hook's own ESLint rule (staged .ts/.tsx, added, copied or modified; zero warnings), run
+   * before the long hook so a refusal costs seconds. Null when it passes or cannot judge. */
+  async function lintStagedFiles(workspace) {
+    if (!existsSync(join(workspace, "node_modules/eslint/package.json"))) return null;
+    const files = (await git(workspace, "diff", "--cached", "--name-only", "--diff-filter=ACM", "-z")).split("\0").filter(file => /\.tsx?$/u.test(file));
+    if (!files.length) return null;
+    // Through pnpm, exactly as the hook calls it: plugins resolve only from pnpm's layout.
+    let command;
+    try { command = pnpmCommand(); } catch { return null; }
+    const out = await run(command[0], [command[1], "eslint", "--max-warnings=0", "--", ...files], { cwd: workspace, env: env(), timeout: 5 * 60_000 });
+    if (out.status === 0 && !out.error) return null;
+    const text = [out.stdout, out.stderr].filter(Boolean).join("\n");
+    // Only a lint verdict counts; anything else is left to the hook itself.
+    return /^\s*\d+:\d+\s+(?:error|warning)\b/mu.test(text) ? { stage: "lint", detail: decisiveLines(text) } : null;
+  }
+  const sealLint = lintStaged || lintStagedFiles;
+
+  /** After the hook (or its lint rule) refuses the commit: one supervised fix turn in a fresh
+   * session on the same worktree. Part of Seal, not a revision, and never repeats. A finished
+   * native session cannot be resumed here: its credential home is already removed. */
+  async function repairSeal(id, refused, controller) {
+    const d = dataOf(id);
+    const childEnv = prepareHome(id, d);
+    try {
+      const request = makeJobRequest({ job_id: `${id}:seal`, run_id: id, backend_id: d.settings.backend_id, contract: { contract_id: id, revision: 1 },
+        grant: { grant_id: "local-owner", revision: 1 }, reservation: { unit: "tokens", basis: "subscription-advisory" },
+        workspace: { root: d.workspace, access: "write", backing: "git-worktree" }, settings: d.settings,
+        instruction: `${workerRules(d)}\n\n${sealRepairPrompt({ ...refused, work: d.work })}` });
+      s().updateJob(id, { status: "active", reservation_open: true });
+      event(id, "Seal fix turn started");
+      const result = await session({ request: { ...request, settings: d.settings }, env: childEnv,
+        signal: controller.signal, onActivity: nativeActivity(id), onQuestion: () => {}, onDelivered: () => {}, onChannel: () => {} });
+      const observations = accumulate(id, result.observations);
+      s().updateJob(id, { status: "finished", reservation_open: false, observations_json: observations, outcome: observations?.nativeOutcome });
+      if (controller.signal.aborted) throw new Error("cancelled");
+      if (result.status !== "finished" || observations?.nativeOutcome !== "succeeded")
+        throw new Error(`seal fix turn failed: ${String(observations?.error || observations?.nativeOutcome || result.status).slice(0, 300)}`);
+      event(id, "Seal fix turn finished");
+    } finally {
+      try { await storage.removeHome(id); } catch (error) { event(id, "Credential home cleanup pending: " + error.message); }
+    }
+    assertNoLocalSecrets(d.workspace);
   }
 
   /** `resumeWith` continues a parked session with the owner's answer/messages (DLV-165).
@@ -884,13 +1026,54 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       failure = null;
       if (await git(d.workspace, "status", "--porcelain", "--untracked-files=all")) {
         await buildGit(id, d.workspace, ["add", "--all"], 30_000);
-        event(id, "Committing candidate");
-        const seen = new Set();
+        const commitMessage = revising ? `Revise ${d.work.id} (revision ${revising.ordinal ?? revising.n})` : `Build ${d.work.id}`;
+        const commit = async () => {
+          event(id, "Committing candidate");
+          const seen = new Set();
+          failure = { code: "commit-hook", step: "Seal", detail: "" };
+          try {
+            await buildGit(id, d.workspace, ["commit", "-m", commitMessage], hookMs, line => {
+              const stage = HOOK_STAGES.get(line.trim());
+              if (stage && !seen.has(stage)) { seen.add(stage); event(id, `Hook: ${stage}`); }
+            });
+          } catch (error) {
+            // Record the refusing step and its own lines; a timeout keeps its own code.
+            if (!String(error.message).startsWith("git commit: timed out")) {
+              const refused = sealRefusal(error.message);
+              failure = { code: "commit-hook", step: "Seal", ...(refused.stage ? { stage: refused.stage } : {}), detail: refused.detail };
+              event(id, `Seal refused at ${refused.stage || "the commit hook"}\n${refused.detail}`);
+            }
+            throw error;
+          }
+        };
+        // One fix turn per Seal, for whichever refuses first: the fast lint pre-check or the hook.
+        let fixed = false;
+        const fixTurn = async refused => {
+          fixed = true;
+          if (controller.signal.aborted) throw new Error("cancelled");
+          await repairSeal(id, refused, controller);
+          await buildGit(id, d.workspace, ["add", "--all"], 30_000);
+        };
         failure = { code: "commit-hook", step: "Seal", detail: "" };
-        await buildGit(id, d.workspace, ["commit", "-m", revising ? `Revise ${d.work.id} (revision ${revising.n})` : `Build ${d.work.id}`], hookMs, line => {
-          const stage = HOOK_STAGES.get(line.trim());
-          if (stage && !seen.has(stage)) { seen.add(stage); event(id, `Hook: ${stage}`); }
-        });
+        event(id, "Seal pre-check: lint");
+        const early = await sealLint(d.workspace);
+        if (early) {
+          failure = { code: "commit-hook", step: "Seal", stage: early.stage, detail: early.detail };
+          event(id, `Seal refused at ${early.stage}\n${early.detail}`);
+          await fixTurn(early);
+          const again = await sealLint(d.workspace);
+          if (again) {
+            failure = { code: "commit-hook", step: "Seal", stage: again.stage, detail: again.detail };
+            event(id, `Seal still refused at ${again.stage} after the fix turn\n${again.detail}`);
+            throw new Error(`seal refused at ${again.stage} after the fix turn\n${again.detail}`);
+          }
+        }
+        try { await commit(); }
+        catch (error) {
+          if (fixed || failure?.code !== "commit-hook" || !failure.detail || controller.signal.aborted) throw error;
+          await fixTurn(failure);
+          await commit();
+        }
       }
       failure = null;
       const head = await git(d.workspace, "rev-parse", "HEAD");
@@ -1043,26 +1226,57 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     return detail(id);
   }
 
-  async function merge(id) {
+  // DLV-176: one colliding file, three-way. Lines only one side changed merge
+  // cleanly; lines both sides changed keep both, between conflict markers.
+  async function mergeText(d, id, path, ours, theirs) {
+    const shown = await run("git", ["--no-optional-locks", "cat-file", "blob", d.base + ":" + path],
+      { cwd: d.workspace, env: env(), timeout: 30_000, maxBuffer: 16 * 1024 * 1024 });
+    const base = shown.status === 0 && !shown.error ? shown.stdout : "";
+    const oursText = ours.toString("utf8"), theirsText = theirs.toString("utf8");
+    if ([oursText, theirsText, base].some(text => text.includes("\0"))) throw new Error("Binary file needs a manual merge: " + path);
+    const lf = text => text.replaceAll("\r\n", "\n");
+    const dir = join(root, ".delivery/local", id, "by-hand");
+    mkdirSync(dir, { recursive: true });
+    const inputs = [oursText, base, theirsText].map(text => { const file = join(dir, randomUUID()); writeFileSync(file, lf(text)); return file; });
+    try {
+      const out = await run("git", ["--no-optional-locks", "merge-file", "-p", "-L", "your repo", "-L", "base", "-L", d.work.id + " session", ...inputs],
+        { cwd: root, env: env(), timeout: 30_000, maxBuffer: 16 * 1024 * 1024 });
+      if (out.error || !Number.isInteger(out.status) || out.status < 0 || out.status > 127) throw new Error("Three-way merge failed: " + path);
+      const text = oursText.includes("\r\n") ? out.stdout.replaceAll("\n", "\r\n") : out.stdout;
+      return { bytes: Buffer.from(text, "utf8"), conflicts: out.status };
+    } finally {
+      for (const file of inputs) rmSync(file, { force: true });
+    }
+  }
+
+  async function merge(id, { byHand = false } = {}) {
     return locked("merge", id, async () => {
       let d = dataOf(id);
       if (d.applied) return detail(id);
       if (!d.merge_pending) {
         const view = await detail(id, { inspect: true });
         const plan = view.mergePlan;
-        if (plan?.conflicts?.length) throw new Error("changed-in-your-repo: " + plan.conflicts.map(c => c.path).join(", "));
-        if (plan && plan.branch !== baseBranch) throw new Error("checkout-" + baseBranch + "-first");
-        if (!view.canMerge) throw new Error(plan?.error || "merge-needs-passed-checks-sign-off-and-review");
+        if (byHand) {
+          if (!plan?.conflicts?.length) throw new Error("Nothing collides. Use Merge.");
+          if (!view.canMergeByHand) throw new Error(plan.error || "merge-needs-passed-checks-sign-off-and-review");
+        } else {
+          if (plan?.conflicts?.length) throw new Error("changed-in-your-repo: " + plan.conflicts.map(c => c.path).join(", "));
+          if (plan && plan.branch !== baseBranch) throw new Error("checkout-" + baseBranch + "-first");
+          if (!view.canMerge) throw new Error(plan?.error || "merge-needs-passed-checks-sign-off-and-review");
+        }
         const current = selected(d.work.file, d.work.id);
         if (current.brief !== d.work.brief || current.row !== d.work.row) throw new Error("Acceptance changed. Review the current item.");
-        const pending = await prepareCopy(root, d, plan, id, git);
+        const hand = byHand ? { paths: new Set(plan.conflicts.map(c => c.path)), merge: (path, ours, theirs) => mergeText(d, id, path, ours, theirs) } : null;
+        const pending = await prepareCopy(root, d, plan, id, git, hand);
         d = { ...d, merge_pending:pending }; save(id,d);
       }
       if (await git(root, "symbolic-ref", "--short", "HEAD") !== baseBranch || await git(root,"rev-parse","HEAD") !== d.merge_pending.main_head) throw new Error("Checkout moved during Merge");
       applyCopy(root, id, d.merge_pending);
       const applied = {...d.merge_pending, at:at(), pm_error:null};
       save(id,{...d,merge_pending:null,applied,phase:"merged"});
-      event(id, "Owner merged " + applied.files.length + " file" + (applied.files.length === 1 ? "" : "s") + " into the main checkout");
+      const marked = (applied.by_hand ?? []).filter(file => file.conflicts > 0).length;
+      event(id, "Owner merged " + applied.files.length + " file" + (applied.files.length === 1 ? "" : "s") + " into the main checkout"
+        + (applied.by_hand ? " by hand · " + marked + " to resolve" : ""));
       apps.stop(id);
       return detail(id);
     });
@@ -1125,7 +1339,8 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       return { ok: true };
     });
   }
-  return { readiness, startPlan, start, list, detail, comparison, refresh, review, preview, stopPreview, merge, ship, undo, cancel, answer, message,
+  return { readiness, startPlan, start, list, detail, comparison, refresh, review, preview, stopPreview, merge: id => merge(id),
+    mergeByHand: id => merge(id, { byHand: true }), ship, undo, cancel, answer, message,
     commit, push, pushSettings, configurePush, inspectPushDestination, requestChanges, stop: stopRun, recheckAcceptance,
     storage: options => storage.view(options), discard, cleanup,
     earlierActivity(id, before) {

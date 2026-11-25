@@ -13,6 +13,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { FaceKey, Intent } from "../types";
 import { useEraStore } from "../useEraStore";
+import { formatReply } from "../replyFormatter";
 import { rootIntentRouter } from "./index";
 
 interface RouteCase {
@@ -791,6 +792,51 @@ describe("rootIntentRouter", () => {
   ] as const)("HUB-97: %s", (text, expected) => {
     useEraStore.setState({ activeFaceKey: "budget" });
     expect(rootIntentRouter.parse(text)).toMatchObject({ kind: "addShopping", ...expected });
+  });
+
+  // HUB-123 — owner transcript 2026-11-25: a sentence naming a contact files
+  // it under a Catalogue category, whichever face is open; never a list edit.
+  it.each([
+    ["Move Racha Contact under Family Category", { kind: "moveContact", name: "Racha", categoryHint: "Family" }],
+    ["In Catalogue, move Racha Contact under Family Category", { kind: "moveContact", name: "Racha", categoryHint: "Family" }],
+    ["move contact Racha to the Friends category", { kind: "moveContact", name: "Racha", categoryHint: "Friends" }],
+    ["put Racha in my Family contacts", { kind: "moveContact", name: "Racha", categoryHint: "Family" }],
+    ["Add Racha as a Contact", { kind: "addContact", name: "Racha" }],
+    ["Add Laura as a contact under Friends", { kind: "addContact", name: "Laura", categoryHint: "Friends" }],
+    ["add Laura to my contacts in the Work category", { kind: "addContact", name: "Laura", categoryHint: "Work" }],
+    ["Add Laura as a family contact", { kind: "addContact", name: "Laura", categoryHint: "family" }],
+    ["add Laura to my work contacts", { kind: "addContact", name: "Laura", categoryHint: "work" }],
+  ] as const)("HUB-123: %s", (text, expected) => {
+    for (const face of ["budget", "chef", "schedule", "brain"] as const) {
+      useEraStore.setState({ activeFaceKey: face });
+      expect(rootIntentRouter.parse(text)).toMatchObject(expected);
+    }
+  });
+
+  it.each([
+    ["Add Laura as a new contact", { kind: "addContact", name: "Laura" }],
+    ["move salt under Spinneys group", { kind: "amendLast", targetHint: "salt" }],
+  ] as const)("HUB-123: %s keeps its meaning", (text, expected) => {
+    useEraStore.setState({ activeFaceKey: "chef" });
+    const intent = rootIntentRouter.parse(text);
+    expect(intent).toMatchObject(expected);
+    expect(intent).not.toHaveProperty("categoryHint");
+  });
+
+  it("HUB-123: only an asked-for switch is explicit; a keyword echo says nothing was done", () => {
+    useEraStore.setState({ activeFaceKey: "budget" });
+    const asked = rootIntentRouter.parse("open brain");
+    expect(asked).toMatchObject({ kind: "switchFace", face: "brain", explicit: true });
+    expect(formatReply(asked)).not.toMatch(/^Nothing/);
+    const echo = rootIntentRouter.parse("what's for dinner tonight");
+    expect(echo).toMatchObject({ kind: "switchFace", face: "chef" });
+    expect(echo).not.toHaveProperty("explicit");
+    expect(formatReply(echo)).toMatch(/^Nothing (done|changed)/);
+  });
+
+  it("HUB-123: a negated contact move writes nothing", () => {
+    useEraStore.setState({ activeFaceKey: "brain" });
+    expect(["clarify", "unknown"]).toContain(rootIntentRouter.parse("Don't move Racha contact to Family").kind);
   });
 
   it.each([

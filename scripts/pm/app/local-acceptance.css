@@ -102,3 +102,24 @@
   margin: 2px 0 0;
   color: var(--ink-muted);
 }
+.local-acceptance-failed {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--warning-ink);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.local-acceptance-failed strong {
+  font-size: 13px;
+  color: var(--warning-ink);
+}
+.local-acceptance-failed pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 11px;
+  color: var(--ink-muted);
+}

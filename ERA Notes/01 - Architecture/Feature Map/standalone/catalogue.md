@@ -39,6 +39,8 @@ A library of reusable templates — items, tasks, recipe ingredients, products. 
 ## Common edit scenarios
 
 - **"Edit catalogue item dialog"** → `src/components/web/CatalogueItemDialog.tsx` (per-module fields in `MODULE_FIELD_CONFIG`; Places uses `PLACES_FIELD_CONFIG`). Edits must go through `diffMetadata` — never send a whole `metadata_json`.
+- **"Move an item/contact to another category"** → the Category select in `src/components/web/CatalogueItemDialog.tsx` (`category_id` PATCH); ERA's equivalent is `src/features/era/intents/resolvers/contacts.ts`.
+- **"ERA opens the new-contact form"** → `/catalogue?newContact=<name>` read in `src/app/catalogue/page.tsx`; `WebCatalogue.tsx` opens `CatalogueItemDialog` once with `initialName` (HUB-93).
 - **"Change the picker shown in the item entry form"** → `src/components/items/CatalogueTemplatePicker.tsx`.
 - **"Catalogue → Chores section"** → `src/components/web/WebCatalogue.tsx` (`currentLevel === "chores"`); deep link `/catalogue?section=chores` read in `src/app/catalogue/page.tsx`.
 

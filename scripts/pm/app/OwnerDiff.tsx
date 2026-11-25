@@ -49,7 +49,7 @@ function diffRows(patch: string) {
   });
 }
 
-function PatchLines({ patch, wrap }: { patch: string; wrap: boolean }) {
+export function PatchLines({ patch, wrap }: { patch: string; wrap: boolean }) {
   const [page, setPage] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
   const rows = useMemo(() => diffRows(patch), [patch]);

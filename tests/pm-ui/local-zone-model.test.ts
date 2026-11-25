@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildTimeline, sceneAt } from "../../scripts/pm/app/localRunScene";
 import {
+  currentAiZone,
   zoneEvidence,
   zoneForEvent,
 } from "../../scripts/pm/app/stage/zoneModel";
@@ -21,6 +22,40 @@ const status = (facts: ReturnType<typeof evidence>, id: string) =>
   facts.zones.find((zone) => zone.id === id)!;
 
 describe("Eleven-zone evidence table", () => {
+  it("follows the recorded step through tied replay rows, an idle beat, and a closed run", () => {
+    const timeline = buildTimeline(boardRun({
+      phase: "cleaned",
+      activity: [
+        row(1, "status", "Native session started"),
+        row(2, "command", "Get-Content src/panel.ts", 2),
+        row(2, "edit", "src/panel.ts", 3),
+        row(2, "tool", "Another tool", 4),
+        row(3, "status", "Host checks started", 5),
+        row(4, "status", "Freezing handover", 6),
+        row(5, "status", "Ready for owner UAT", 7),
+        row(6, "status", "Owner shipped merge", 8),
+      ],
+    }));
+    expect(timeline.events.map(event => currentAiZone(sceneAt(timeline, Date.parse(event.at), event.id)))).toEqual([
+      "build", "explore", "build", "build", "verify", "handover", "test", null,
+    ]);
+  });
+  it("uses the workflow phase while waiting and does not highlight interrupted or terminal work", () => {
+    const step = (changes: Partial<LocalRunView>) => currentAiZone(sceneAt(buildTimeline(boardRun(changes)), epoch + 30_000));
+    expect(step({ phase: "acceptance-paused" })).toBe("verify");
+    expect(step({ phase: "uat-ready", canMerge: true })).toBe("ship");
+    expect(step({ phase: "push-pending" })).toBe("ship");
+    expect(step({ interrupted: true })).toBeNull();
+    expect(step({ phase: "failed" })).toBeNull();
+    expect(step({ phase: "pushed" })).toBeNull();
+  });
+  it("extinguishes the work lights and current station when a replay row is unavailable", () => {
+    const scene = sceneAt(buildTimeline(boardRun()), epoch - 1);
+    const board = zoneEvidence(scene, null, [], true);
+    expect(board.currentZone).toBeNull();
+    expect(board.activeZone).toBeNull();
+    expect(board.zones.some(zone => zone.status === "active")).toBe(false);
+  });
   it.each([
     "Installing dependencies",
     "Committing candidate",
@@ -171,6 +206,7 @@ describe("Eleven-zone evidence table", () => {
     expect(zoneEvidence(scene, { event, stage: "think" }).activeZone).toBe(
       "think",
     );
+    expect(status(zoneEvidence(scene, { event, stage: "think" }), "bench").status).toBe("active");
     expect(
       status(zoneEvidence(scene, { event, stage: "work" }), "verify").status,
     ).toBe("off");
@@ -273,7 +309,7 @@ describe("Eleven-zone evidence table", () => {
     expect(status(facts, "handover").status).toBe("off");
     expect(
       status(evidence(boardRun({ phase: "push-pending" })), "ship").status,
-    ).toBe("off");
+    ).toBe("active");
   });
   it.each([
     ["worktree dependencies unavailable", "setup"],

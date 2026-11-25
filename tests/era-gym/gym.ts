@@ -38,7 +38,7 @@ import {
   resolveAmend,
   resolveAmendByName,
 } from "@/features/era/intents/resolvers/amend";
-import { resolveAddContact } from "@/features/era/intents/resolvers/contacts";
+import { resolveAddContact, resolveMoveContact } from "@/features/era/intents/resolvers/contacts";
 import { resolveDraftEvent } from "@/features/era/intents/resolvers/events";
 import { resolveAddPlace } from "@/features/era/intents/resolvers/places";
 import { FREE_TEXT_SLOTS, isNewRequest } from "@/features/era/intents/freeTextAnswer";
@@ -235,6 +235,16 @@ const HOUSEHOLD_PLACES = [
   { id: "pl-church", name: "Church", tags: [] },
 ];
 
+/** HUB-123 — Catalogue → Contacts: Racha has no category yet; Family does not exist. */
+const HOUSEHOLD_CONTACTS = [
+  { id: "ct-racha", name: "Racha", category_id: null },
+  { id: "ct-maya", name: "Maya Haddad", category_id: "cat-work" },
+];
+const HOUSEHOLD_CONTACT_CATEGORIES = [
+  { id: "cat-friends", name: "Friends" },
+  { id: "cat-work", name: "Work" },
+];
+
 /** Fake `/api/accounts?own=true` for prepareTransfer. Install with vi.stubGlobal("fetch", gymFetch). */
 export async function gymFetch(
   input: RequestInfo | URL,
@@ -285,6 +295,14 @@ export async function gymFetch(
                     ]
                 : url === "/api/catalogue/items?module_id=mod-places"
                   ? HOUSEHOLD_PLACES
+                : url === "/api/catalogue/items?module_id=mod-contacts"
+                  ? HOUSEHOLD_CONTACTS
+                : url === "/api/catalogue/categories?module_id=mod-contacts"
+                  ? HOUSEHOLD_CONTACT_CATEGORIES
+                : url === "/api/catalogue/categories" && init?.method === "POST"
+                  ? { id: `cat-${++gymSeq}`, name: JSON.parse(String(init.body)).name }
+                : url.startsWith("/api/catalogue/items/") && init?.method === "PATCH"
+                  ? { id: url.slice("/api/catalogue/items/".length), inverse: {} }
                 : url === "/api/catalogue/items" && init?.method === "POST"
                   ? { id: `c-${++gymSeq}` }
                 : url === "/api/items" && init?.method === "POST"
@@ -417,12 +435,51 @@ export function fromEvent(r: SlotResult): PathResult {
   return { outcome: r.ok === false ? "honest_limit" : "answered", via };
 }
 
+/** HUB-123 — contacts: a create or a filing may come with one follow-up question. */
+export function fromContact(r: SlotResult): PathResult {
+  const via = "router" as const;
+  const m = r.metadata ?? {};
+  const pending = r.pending ?? undefined;
+  const category = typeof m.category === "string" ? { category: m.category } : {};
+  if (r.ok !== false && (m.contactAction === "created" || m.contactAction === "moved")) {
+    return {
+      outcome: "done",
+      tier: "act",
+      via,
+      pending,
+      effect: { cap: m.contactAction === "moved" ? "contact.update" : "contact.create", name: m.name, ...category },
+    };
+  }
+  // HUB-93 — a plain add opens the prefilled form; nothing is written.
+  if (r.ok !== false && m.contactAction === "form" && r.navigate) {
+    return { outcome: "handed_off", tier: "answer", via, effect: { cap: "contact.create", name: m.name } };
+  }
+  if (r.ok !== false && (m.contactAction === "exists" || m.contactAction === "kept")) {
+    return { outcome: "answered", via, pending };
+  }
+  if (r.pending) {
+    const args = r.pending.kind === "slot" ? r.pending.args : {};
+    return {
+      outcome: "needs_input",
+      via,
+      pending: r.pending,
+      effect: { cap: "contact.update", ...(typeof args.name === "string" ? { name: args.name } : {}) },
+    };
+  }
+  return { outcome: r.ok === false ? "honest_limit" : "answered", via };
+}
+
+const isContactResult = (r: { metadata?: Record<string, unknown>; pending?: EraPendingTurn | null }) =>
+  typeof r.metadata?.contactAction === "string" ||
+  (r.pending?.kind === "slot" && r.pending.capability.startsWith("contact."));
+
 /** HUB-84 — map an edit-contract result to a Gym result. */
 function mapAmend(
   r: Awaited<ReturnType<typeof resolveAmend>>,
   focus: FocusEntity | null,
 ): PathResult {
   const via = "router" as const;
+  if (isContactResult(r)) return fromContact(r);
   if (
     r.proposal?.kind === "native_action" &&
     r.proposal.action.type === "transfer"
@@ -601,15 +658,10 @@ export async function resolveRouted(
       return fromEvent(await resolveAddPlace(intent.name));
     case "draftEvent":
       return fromEvent(await resolveDraftEvent(intent));
-    case "addContact": {
-      const r = await resolveAddContact(intent.name);
-      return {
-        outcome: r.ok === false ? "honest_limit" : "done",
-        tier: "act",
-        via,
-        effect: { cap: "contact.create", name: intent.name },
-      };
-    }
+    case "addContact":
+      return fromContact(await resolveAddContact(intent.name, intent.categoryHint, text));
+    case "moveContact":
+      return fromContact(await resolveMoveContact(intent.name, intent.categoryHint, text));
     case "amendLast": {
       const focus = intent.focusId
         ? (useEraStore
@@ -1093,10 +1145,13 @@ export async function runCase(
       const isAmend: boolean =
         pendingSlot.capability === "amend.target" ||
         pendingSlot.capability === "shopping.group";
+      const isContact: boolean = pendingSlot.capability.startsWith("contact.");
       const answered = await resolvePendingSlot(pendingSlot, text);
       pendingSlot = null;
       if (!("unmatched" in answered)) {
-        const r: PathResult = isAmend
+        const r: PathResult = isContact
+          ? fromContact(answered as SlotResult)
+          : isAmend
           ? mapAmend(answered as never, {
               id: "x",
               type: "shopping",

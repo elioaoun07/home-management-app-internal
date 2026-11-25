@@ -32,7 +32,7 @@ export const ERA_REACH: ReachRow[] = [
   { module: "Meal Planning", route: "/meal-plan", label: "Meal plan", words: ["meal plan", "meals", "menu"], prefill: false, inline: ["meal.assign", "meal.gaps"], verified: true },
   { module: "Inventory", route: "/catalogue", label: "Inventory", words: ["inventory", "pantry", "stock"], prefill: false, inline: [], verified: false },
   { module: "Debts", route: "/expense", label: "Debts", words: ["debts", "who owes"], prefill: false, inline: ["debt.record"], verified: true, note: "Settle waits on BUD-68." },
-  { module: "Catalogue", route: "/catalogue", label: "Catalogue", words: ["catalogue", "catalog", "wishlist", "wish list"], prefill: false, inline: ["contact.create", "place.create"], verified: true, note: "Search waits on HUB-69 (KIT-20/22)." },
+  { module: "Catalogue", route: "/catalogue", label: "Catalogue", words: ["catalogue", "catalog", "wishlist", "wish list"], prefill: false, inline: ["contact.create", "contact.update", "place.create"], verified: true, note: "Search waits on HUB-69 (KIT-20/22)." },
   { module: "Future Purchases", route: "/dashboard", label: "Future purchases", words: ["future purchases", "planned purchases"], prefill: false, inline: ["purchases.read"], verified: false },
   { module: "Budget Allocation", route: "/dashboard", label: "Budget", words: ["budget allocation", "envelopes"], prefill: false, inline: ["spend.month"], verified: true },
   { module: "Preferences (LBP, theme)", route: "/settings", label: "Settings", words: ["settings", "preferences", "theme"], prefill: false, inline: [], verified: false },

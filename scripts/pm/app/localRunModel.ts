@@ -41,6 +41,20 @@ export function newAttemptHref(run: Pick<LocalRunView, "phase" | "run_id" | "wor
   return `#/deliver/${encodeURIComponent(run.work.campaign)}/${encodeURIComponent(run.work.id)}?from=${encodeURIComponent(`/delivery/run/${run.run_id}`)}`;
 }
 
+/** DLV-175: which try this is — the item's nth Local run, and the owner's revision within it.
+ * Null on a first run with no revisions, so a first try shows nothing extra. */
+export function attemptLabel(run: Pick<LocalRunView, "attempt" | "revision" | "revisions" | "revision_limit">): string | null {
+  const parts: string[] = [];
+  if (run.attempt && run.attempt.n > 1) parts.push(`Attempt ${run.attempt.n}`);
+  const revisions = run.revisions ?? [], limit = run.revision_limit ?? 2;
+  const active = run.revision ? revisions.find((entry) => entry.n === run.revision) : undefined;
+  const last = revisions.at(-1);
+  if (active) parts.push(`Revision ${active.ordinal ?? active.n}/${limit}`);
+  else if (last && (last.state === "failed" || last.state === "cancelled")) parts.push(`Revision ${last.ordinal ?? last.n} ${last.state}`);
+  else if (last) parts.push(`Revision ${last.ordinal ?? last.n}/${limit}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
 /** Old file-copy receipts used phase "shipped" before Commit and Push existed. */
 export function localRunLabel(run: Pick<WorkflowRun, "phase" | "pushed" | "cleaned_at" | "committed" | "applied" | "interrupted" | "merge" | "merge_pending" | "mergePlan" | "canMerge" | "handover" | "risk" | "reviewed_head" | "head">): string {
   if (run.pushed) return run.cleaned_at ? "Pushed · Cleaned" : "Pushed";

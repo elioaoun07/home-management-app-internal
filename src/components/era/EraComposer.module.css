@@ -528,9 +528,11 @@
   right: 12px;
   border-radius: 12px;
 }
+/* --era-starters-height: the starter pills above the bar (CommandBar). */
 .stage {
   bottom: calc(
-    var(--era-composer-height, 112px) + var(--era-composer-bottom, 80px) + 12px
+    var(--era-composer-height, 112px) + var(--era-composer-bottom, 80px) +
+      var(--era-starters-height, 0px) + 12px
   );
 }
 .floating {
@@ -540,20 +542,25 @@
   padding-bottom: 148px;
 }
 .panel {
-  bottom: calc(var(--era-composer-height, 112px) + 32px);
+  bottom: calc(
+    var(--era-composer-height, 112px) + var(--era-starters-height, 0px) + 32px
+  );
 }
 @media (min-width: 768px) {
   .stage {
     bottom: calc(
       var(--era-composer-height, 112px) + var(--era-composer-bottom, 20px) +
-        12px
+        var(--era-starters-height, 0px) + 12px
     );
   }
   .floating {
     bottom: var(--era-composer-bottom, 20px);
   }
   .dashboard {
-    padding-bottom: calc(var(--era-composer-height, 112px) + 32px);
+    padding-bottom: calc(
+      var(--era-composer-height, 112px) + var(--era-starters-height, 0px) +
+        32px
+    );
   }
 }
 .rows {

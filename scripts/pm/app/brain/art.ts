@@ -428,13 +428,13 @@ export function makeRoom(refresh: () => void, software = false) {
     for (const s of ownerStations3D) {
       const { bay, wash } = bayCircuits.get(s.bay)!;
       const lamp = ownerFloor.lamps.get(s.id)!;
-      const selected = owner?.selected === s.id;
+      const active = owner?.current === s.id;
       bay.emissive.copy(lamp.emissive);
-      bay.emissiveIntensity = selected ? .90 : .11;
+      bay.emissiveIntensity = active ? .90 : .11;
       wash.color.copy(lamp.emissive);
-      wash.visible = selected;
-      wash.opacity = selected ? .20 : 0;
-      if (selected) ownerLight = { source: ownerMarkers.get(s.id)!, color: lamp.emissive };
+      wash.visible = active;
+      wash.opacity = active ? .20 : 0;
+      if (active) ownerLight = { source: ownerMarkers.get(s.id)!, color: lamp.emissive };
     }
     seatBranch.emissiveIntensity = .09;
   }

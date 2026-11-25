@@ -239,7 +239,7 @@ The beat, backlog policy, replay modes and tempo control stay exactly as `direct
 | Agent's own check | BENCH | The probe taps; a neutral pulse. No pass or fail is claimed |
 
 - **Think stage of every beat:** the THINK orb pulses and one light dot runs along the floor conduit to ERA. That dot is the decision.
-- **Zone chip:** a single DOM chip above the active machine carrying the real label (`READ route.ts`). It is positioned when the beat starts, not every frame.
+- The current station has a lit front edge on its pad. ERA, the cargo and the machines can pass in front of that edge. The command for the active beat (e.g. `READ route.ts`) appears in the readout below the board.
 - **Belt:** baked chevrons. A light pulse runs only along the segment the build is travelling.
 
 **Ambient life** — few, and cheap. All of it stops at link-down.

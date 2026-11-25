@@ -48,6 +48,8 @@ import { rootIntentRouter } from "./intentRouter";
 import { resolveIntent, type ResolveResult } from "./intents/resolveIntent";
 import { resolvePendingReminderAnswer } from "./intents/resolvers/schedule";
 import { recordEraArtifacts } from "./recordArtifacts";
+import { ERA_ARTIFACT_ENTITIES } from "@/lib/era/artifacts";
+import { catalogueKeys } from "@/features/catalogue/queryKeys";
 import { classifyMiss, type MissClassification } from "./missTracking";
 import { useEraTemplates } from "./templates/useEraTemplates";
 import { useEraLexicon } from "./useEraLexicon";
@@ -299,7 +301,9 @@ export function useEraTurn() {
             kind: "slotAnswer",
             face: (pending as EraPendingSlot).capability.startsWith("transfer")
               ? "budget"
-              : "schedule",
+              : (pending as EraPendingSlot).capability.startsWith("contact")
+                ? "brain"
+                : "schedule",
             capability: (pending as EraPendingSlot).capability,
             rawText: text,
           }
@@ -475,6 +479,22 @@ export function useEraTurn() {
       }
       // Every write's adapter returned its artifacts — one call, no per-feature mapping.
       if (!answer) recordEraArtifacts(artifacts, queryClient);
+      // HUB-123 — a Catalogue write (contact, place, category) and its Undo
+      // show on the Catalogue page without waiting for its cache to expire.
+      if (artifacts?.some((a) => ERA_ARTIFACT_ENTITIES[a.entity]?.module === "catalogue")) {
+        const refreshCatalogue = () => queryClient.invalidateQueries({ queryKey: catalogueKeys.all });
+        refreshCatalogue();
+        if (resolution.undo) {
+          const inverse = resolution.undo;
+          resolution.undo = async () => {
+            try {
+              return await inverse();
+            } finally {
+              refreshCatalogue();
+            }
+          };
+        }
+      }
       if (currentChat)
         pushFocusFromResult(
           intent,

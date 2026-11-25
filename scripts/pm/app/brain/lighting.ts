@@ -7,6 +7,7 @@ import type { RoomLighting } from "./protocol";
 
 /** The room depicts the same cursor-filtered facts as the evidence reader. */
 export function roomLighting(scene: LocalScene, zones: ZoneBoardState, health: Pick<LocalLiveness, "active" | "state">, question: boolean): RoomLighting {
+  const { currentZone } = zones;
   const marks: Partial<Record<ZoneId, "reached" | "skipped" | "fault">> = {};
   const failed = scene.phase === "failed";
   const faultZone = failed ? zones.zones.find(zone => zone.status === "fault")?.id ?? null : null;
@@ -32,24 +33,13 @@ export function roomLighting(scene: LocalScene, zones: ZoneBoardState, health: P
   let endpoint: RoomLighting["endpoint"] = null;
   let energy = .23;
   if (owner) {
-    endpoint = question ? "seat" : ready ? "test" : null;
+    endpoint = question && currentZone ? "seat" : currentZone;
     energy = .51;
   } else if (working) {
-    if (scene.phase === "building") {
-      for (let i = scene.events.length - 1; i >= 0; i--) {
-        const zone = roomZone(scene.events[i]);
-        if (zone === "explore" || zone === "think" || zone === "build" || zone === "bench" || zone === "seal") {
-          endpoint = zone;
-          break;
-        }
-      }
-      energy = 1;
-    } else {
-      endpoint = zones.activeZone;
-      energy = scene.phase === "checking" ? .82 : .37;
-    }
+    endpoint = currentZone;
+    energy = scene.phase === "building" ? 1 : currentZone === "verify" ? .82 : .37;
   } else if (ship === "pending") {
-    endpoint = "ship";
+    endpoint = currentZone;
     energy = .43;
   }
   return { failed, faultZone, endpoint, marks, checks, energy: failed ? 0 : energy, working, owner, ship };

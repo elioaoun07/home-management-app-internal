@@ -24,6 +24,7 @@ export interface StagingUi {
   gap: string | null;
 }
 interface Input extends PlaybackInput {
+  cursorMissing?: boolean;
   attention: readonly AttentionItem[];
   streak: number | null;
   cleanIncrement: CleanShipIncrement | null;
@@ -235,7 +236,7 @@ export function useStageClock(
         root.toggleAttribute("data-seat-paused", mute);
         return;
       }
-      const zones = zoneEvidence(c.snapshot, sample.beat, c.attention);
+      const zones = zoneEvidence(c.snapshot, sample.beat, c.attention, c.cursorMissing);
       const changedCameraRow = cameraRow !== c.snapshot.latest?.id;
       cameraRow = c.snapshot.latest?.id;
       const cameraEvent = sample.beat?.event ?? (changedCameraRow || c.time !== null ? c.snapshot.latest : null);
@@ -279,6 +280,7 @@ export function useStageClock(
         state: c.state,
         zones: zones.zones,
         attention: c.attention,
+        currentZone: zones.currentZone,
         activeZone: zones.activeZone,
         buildZone: zones.buildZone,
         buildGate: c.snapshot.seals.filter((seal) => seal.state !== "pending")

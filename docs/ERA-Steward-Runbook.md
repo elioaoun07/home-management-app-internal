@@ -26,6 +26,24 @@ In PM, open the chosen item, select **Local**, press **Start** once and copy the
 
 **Prove the notification once.** After Steward acknowledges the exact run, leave the chat. At the next genuine blocker, owner question or UAT-ready transition, look for a private notification while the chat is idle. Compare its run ID, transition and evidence timestamp with PM. Record the receipt time to judge whether the delay works for you. Dot supports ongoing responsibilities and wake-ups, but delivery timing depends on the product, permissions and Drive freshness. The documented event triggers cover Gmail, Slack and GitHub. A fixed recurring ChatGPT task can run at most once per hour. There is no standing schedule in this procedure. If the background read or phone notification cannot be demonstrated, ask **“Check my run now”** when needed and use PM directly for timely decisions. [Personalize your Dot](https://learn.chatgpt.com/training/walkthroughs/personalize-your-dot) · [Tasks and memory](https://learn.chatgpt.com/docs/dots/tasks-and-memory) · [Scheduled tasks](https://help.openai.com/en/articles/10291617-scheduled-tasks-in-chatgpt)
 
+### Pauses, acceptance findings and revisions (25 November 2026)
+
+`status.json` now leads with `attention`: one entry per run that is not closed, with `state` (`working`, `waiting-owner` or `blocked`), `reason`, `since` and the next owner `action`. `paused` is true when any run waits on the owner or is blocked. `status.md` shows the same as **Now** at the top. For each Local run, `evidence` adds:
+
+| Field | What it tells Steward |
+| --- | --- |
+| `acceptance.findings` | Only the criteria that stopped Handover (`missed` or `unclear`), with evidence. `acceptance.criteria` keeps the full list, including owner revision notes as `note<n>` criteria. |
+| `revisions` | Each owner revision: note, state, and for a failed one the step, hook stage and decisive lines. A failed or cancelled revision is not counted against the limit; the earlier candidate is restored. |
+| `attempt` | This run's place among the item's Local runs, such as attempt 2 of 2. |
+| `events` | The last supervisor events, one line each, newest last. Tool calls, agent text and chat are never included. |
+| `server.restart_needed` | PM runs server code older than the checkout, so a fix may not be loaded yet. Tell the owner to restart PM at a break. |
+
+The review document repeats these under **Now**, **Revisions**, **Acceptance check** and **Recent supervisor events**.
+
+**Paste into an existing supervision chat** to use them:
+
+> Read `attention` and `paused` in `02 - Delivery Status/status.json` first. For my run, alert me once on each change of `attention.state` or `attention.reason`. On an acceptance pause, list each item in `evidence.acceptance.findings` with its evidence. On a failed revision, give its step, stage and failure detail from `evidence.revisions`. If `server.restart_needed` is true, tell me once that PM must be restarted.
+
 ### What a pre-UAT review must contain
 
 | Read | What Steward should give you |

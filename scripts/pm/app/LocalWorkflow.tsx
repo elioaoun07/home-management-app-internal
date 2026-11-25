@@ -4,6 +4,7 @@ import type { LocalAct } from "./LocalDelivery";
 import { read } from "./api";
 import { ErrorNotice } from "./components";
 import { SetupDeliveryPush } from "./SetupDeliveryPush";
+import { CollisionSides } from "./CollisionSides";
 import { localRunLabel, localRunStages, type WorkflowRun } from "./localRunModel";
 import { pmKeys } from "./state";
 import { needsManualCommit, type OwnerStation } from "./ownerStations";
@@ -46,6 +47,7 @@ export function LocalActions({ run, busy, act, station, reviewAvailable = false,
   onSelectStation?: (station: OwnerStation) => void;
 }) {
   const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [recheckedAt, setRecheckedAt] = useState<string | null>(null);
   const at = (id: OwnerStation | "session") => !station || station === id;
   const publication = run.publication;
   const needsDestination = publication?.action === "push" && (
@@ -68,6 +70,8 @@ export function LocalActions({ run, busy, act, station, reviewAvailable = false,
     stopped || inConflict || !!run.pushed || run.phase === "refresh-failed" || run.phase === "uat-ready" || publishedLocally
   );
   const cleanLabel = run.pushed ? "Clean up" : publishedLocally ? "Discard worktree" : "Discard";
+  // DLV-176: files merged by hand that still need the owner's eye.
+  const toResolve = (run.applied?.by_hand ?? []).filter(file => file.conflicts > 0 || file.kept);
   return <section className="local-workflow" aria-label="Session actions">
     {!station && <><LocalSteps run={run} /><h3 aria-live="polite">{localRunLabel(run)}</h3></>}
     <div className="gate-actions">
@@ -76,6 +80,13 @@ export function LocalActions({ run, busy, act, station, reviewAvailable = false,
       {at("merge") && inConflict && <div className="merge-note merge-alert" role="alert"><strong>Changed files</strong><ul>
         {(conflicts.length ? conflicts.map(file => ({ path: file.path, dirty: file.uncommitted })) : (run.refresh?.conflicts ?? []).map(path => ({ path, dirty: false }))).map(file =>
           <li key={file.path}><code>{file.path}</code>{file.dirty && " · uncommitted"}</li>)}</ul></div>}
+      {at("merge") && inConflict && !!conflicts.length && run.run_id && run.base && run.head &&
+        <CollisionSides runId={run.run_id} base={run.base} head={run.head} label={(run.work?.id ?? "This") + " session"}
+          paths={conflicts.map(file => file.path)} />}
+      {at("merge") && !!run.canMergeByHand && <button className="primary" disabled={busy} onClick={() => act("merge-by-hand")}
+        title="Both sides kept; overlaps get conflict markers">Merge by hand</button>}
+      {(at("merge") || at("commit")) && !!toResolve.length && <div className="merge-note" role="status"><strong>Resolve in your editor</strong><ul>
+        {toResolve.map(file => <li key={file.path}><code>{file.path}</code>{file.kept ? " · kept yours" : " · " + file.conflicts + " conflict" + (file.conflicts === 1 ? "" : "s")}</li>)}</ul></div>}
       {at("merge") && offBranch && <p className="merge-note merge-alert">Switch to {plan?.expected}</p>}
       {at("merge") && plan?.error && <p className="merge-note merge-alert">{plan.error}</p>}
       {at("merge") && run.applied?.pm_error && <p className="merge-note merge-alert">PM update · {run.applied.pm_error}</p>}
@@ -101,7 +112,8 @@ export function LocalActions({ run, busy, act, station, reviewAvailable = false,
           {plan?.refreshCommands?.length === 0 ? "Retry checks" : "Refresh"}
         </button></div>}
       {at("merge") && (inConflict || offBranch || run.phase === "refresh-failed" || (run.phase === "uat-ready" && !run.canMerge && !testReady && !needsReview)) &&
-        <button className="secondary" disabled={busy} onClick={() => act("recheck")}>Recheck</button>}
+        <><button className="secondary" disabled={busy} onClick={() => { act("recheck"); setRecheckedAt(new Date().toLocaleTimeString()); }}>Recheck</button>
+          {recheckedAt && <small role="status">Checked {recheckedAt}</small>}</>}
       {at("session") && ["preparing", "building", "checking", "accepting"].includes(run.phase) && <>
         {!!run.cancelCleanupCommands?.length && <details><summary>Cancel commands</summary>
           <GitCommands commands={run.cancelCleanupCommands} /><small>Delete {run.branch} at its archived commit.</small>

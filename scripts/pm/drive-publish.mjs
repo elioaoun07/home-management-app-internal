@@ -348,11 +348,26 @@ export function renderHandoverMarkdown(view) {
   return lines.join("\n");
 }
 
-/** @param {{delivery:any, rollups:any, publish:any, now:string, uat?:any}} input */
-export function buildStatus({ delivery, rollups, publish, now, uat = null }) {
+/** Every run that is not closed: working, waiting for the owner, or blocked, and since when. */
+function attentionList(delivery) {
+  if (!delivery.available && !delivery.stale) return null;
+  const rank = { blocked: 0, "waiting-owner": 1, working: 2, idle: 3 };
+  return delivery.runs.filter((run) => run.attention && run.attention.state !== "closed")
+    .map((run) => ({ run_id: run.run_id, work_id: run.work_id, ...run.attention }))
+    .sort((a, b) => (rank[a.state] ?? 9) - (rank[b.state] ?? 9) || String(b.since).localeCompare(String(a.since)));
+}
+
+/** @param {{delivery:any, rollups:any, publish:any, now:string, uat?:any, server?:any}} input */
+export function buildStatus({ delivery, rollups, publish, now, uat = null, server = null }) {
+  const attention = attentionList(delivery);
   return {
     schema: STATUS_SCHEMA,
     generatedAt: now,
+    // A supervisor reads this first: null = unknown, [] = nothing running or waiting.
+    attention,
+    paused: attention ? attention.some((entry) => entry.state === "waiting-owner" || entry.state === "blocked") : null,
+    // The PM process that wrote this file; restart_needed means its server code is older than the checkout.
+    server,
     delivery,
     uat,
     // null = unknown (store unreadable and nothing earlier to fall back on); [] = confirmed none
@@ -369,11 +384,36 @@ export function buildStatus({ delivery, rollups, publish, now, uat = null }) {
 
 const cell = (value) => String(value ?? "").replace(/\|/gu, "/").replace(/\r?\n/gu, " ");
 
+const STATE_LABEL = { blocked: "Blocked", "waiting-owner": "Waiting for the owner", working: "Working", idle: "Idle" };
+/** The "## Now" section: what PM is doing or waiting on, per run, with the reason and evidence. */
+function renderNow(status, lines) {
+  lines.push("## Now", "");
+  const server = status.server;
+  if (server) lines.push(`- PM process ${server.pid} started ${server.started_at}${server.restart_needed ? ` · **restart needed**: ${cell(server.changed_file || "server code")} changed after start, so newer fixes are not running` : ""}`);
+  if (!status.attention) lines.push("- Run state unknown.");
+  else if (!status.attention.length) lines.push("- Nothing is running or waiting.");
+  const runs = new Map((status.delivery.runs || []).map((run) => [run.run_id, run]));
+  for (const entry of status.attention || []) {
+    const run = runs.get(entry.run_id), evidence = run?.evidence || {};
+    const attempt = evidence.attempt && evidence.attempt.of > 1 ? ` · attempt ${evidence.attempt.n} of ${evidence.attempt.of}` : "";
+    lines.push(`- **${STATE_LABEL[entry.state] || entry.state}** · ${cell(entry.work_id)}${attempt} · ${cell(entry.reason)} · since ${entry.since || "unknown"}${entry.action ? " · next: " + cell(entry.action) : ""} · run ${entry.run_id}`);
+    for (const finding of evidence.acceptance?.state === "paused" ? evidence.acceptance.findings || [] : [])
+      lines.push(`  - ${finding.state} · ${cell(finding.source)} · ${cell(finding.text).slice(0, 200)}${finding.evidence.length ? " — " + finding.evidence.map(cell).join(" · ") : ""}`);
+    const last = evidence.revisions?.history?.at(-1);
+    if (last?.failure) lines.push(`  - Revision ${last.ordinal} failed at ${cell(last.failure.step)}${last.failure.stage ? " (" + cell(last.failure.stage) + ")" : ""}: ${cell(last.failure.detail)}`);
+    if (last?.note) lines.push(`  - Owner note (revision ${last.ordinal}): ${cell(last.note).slice(0, 300)}`);
+    const event = evidence.events?.at(-1);
+    if (event) lines.push(`  - Latest event ${event.at}: ${cell(event.text)}`);
+  }
+  lines.push("");
+}
+
 export function renderStatusMarkdown(status, changedAt) {
   const d = status.delivery;
   const lines = ["# ERA delivery status", "", `Updated ${status.generatedAt} · changed ${changedAt}`, ""];
   if (!d.available) lines.push(`Delivery store unavailable: ${cell(d.reason)}`, "");
   else if (d.stale) lines.push(`Delivery data is stale (last read ${cell(d.staleSince)}): ${cell(d.staleReason)}`, "");
+  renderNow(status, lines);
   lines.push("## Pending owner actions", "");
   if (!status.pendingOwnerActions) lines.push("Unknown.");
   else if (!status.pendingOwnerActions.length) lines.push("None.");
@@ -424,7 +464,7 @@ const ROOT_README = [
   "One-way mirror of the repository's PM. The repository is authoritative.",
   "",
   "- 01 - PM Documentation: read-only copies. A Drive edit is overwritten on the next publish; the edited copy is kept in 03 - Steward Proposals/Drive edits.",
-  "- 02 - Delivery Status: status.json and status.md. Stale if Updated is older than 10 minutes.",
+  "- 02 - Delivery Status: status.json and status.md. Stale if Updated is older than 10 minutes. Read attention (or the Now section) first: every run that is working, waiting for the owner or blocked, with the reason and since when. server.restart_needed means PM runs code older than the checkout.",
   "- 03 - Steward Proposals: write recommendations here. Nothing in this folder is read back automatically.",
   "- 04 - ERA Notes: read-only copy of the whole ERA Notes vault, same folders. Same overwrite rule as 01. Anything under an _Archive folder is history, not current state.",
   "- 05 - Session Review: temporary Local session reports with recorded checks, sealed changes and matching owner UAT. Check the run and candidate against 02 before using a report.",
@@ -452,14 +492,14 @@ const withIdleTimeout = (start, ms, label) => {
 /**
  * @param {{
  *   root:string, pmDir:string, docsDir?:string|null, driveRoot:string,
- *   readDelivery:()=>any, readRollups?:()=>any,
+ *   readDelivery:()=>any, readRollups?:()=>any, readServer?:()=>any,
  *   fsp?:typeof nodeFsp, now?:()=>string, statePath?:string|null,
  *   timeoutMs?:number, debounceMs?:number, retryMs?:number[], log?:(line:string)=>void, env?:Record<string,string|undefined>,
  * }} options
  */
 export function createDrivePublisher(options) {
   const {
-    pmDir, docsDir = null, vaultDir = null, driveRoot, readDelivery, readRollups = () => null, readUat = () => null,
+    pmDir, docsDir = null, vaultDir = null, driveRoot, readDelivery, readRollups = () => null, readUat = () => null, readServer = () => null,
     fsp = nodeFsp, now = () => new Date().toISOString(), statePath = null,
     timeoutMs = 30_000, debounceMs = 1_500, retryMs = [30_000, 60_000, 120_000, 300_000], log = () => {}, env = process.env,
   } = options;
@@ -663,7 +703,9 @@ export function createDrivePublisher(options) {
       await syncSessionReviews({ delivery, dryRun, write, result, progress });
       if (!dryRun && delivery.available && !delivery.stale) state.lastDelivery = { at: now(), delivery };
       const at = now();
-      const next = buildStatus({ delivery, rollups, publish: { documents, ...(vaultDir ? { vaultFiles: vaultCount } : {}), skipped, driveEdits }, now: at, uat });
+      let server = null;
+      try { server = readServer(); } catch { server = null; }
+      const next = buildStatus({ delivery, rollups, publish: { documents, ...(vaultDir ? { vaultFiles: vaultCount } : {}), skipped, driveEdits }, now: at, uat, server });
       const hash = sha(JSON.stringify({ ...next, generatedAt: undefined })); // the clock alone is not a change
       const changed = hash !== state.statusHash;
       const beat = !state.statusWrittenAt || Date.parse(at) - Date.parse(state.statusWrittenAt) >= HEARTBEAT_MS;

@@ -107,12 +107,15 @@ export function createIllumination(scene: T.Scene, room: Room) {
   const sparkMaterial = new T.MeshBasicMaterial({ color: "#d6fbff", toneMapped: false });
   const spark = new T.Mesh(new T.SphereGeometry(.068, 12, 8), sparkMaterial);
   spark.visible = false;
-  const halo = new T.Mesh(new T.RingGeometry(.70, .747, 64), new T.MeshBasicMaterial({
-    color: colors.owner, transparent: true, opacity: 0, toneMapped: false, depthWrite: false, blending: T.AdditiveBlending,
+  const halo = new T.Mesh(new T.RingGeometry(.82, .875, 64), new T.MeshBasicMaterial({
+    transparent: true, toneMapped: false, depthWrite: false, blending: T.AdditiveBlending,
   }));
   halo.rotation.x = -Math.PI / 2;
   halo.visible = false;
-  scene.add(coreLight, bayLamp, ...traces, spark, halo);
+  const pointer = new T.Mesh(new T.ConeGeometry(.19, .30, 4), new T.MeshBasicMaterial({ toneMapped: false }));
+  pointer.rotation.z = Math.PI;
+  pointer.visible = false;
+  scene.add(coreLight, bayLamp, ...traces, spark, halo, pointer);
 
   const bayParts = [...new Map([...room.circuits.values()].map(part => [part.bay, part])).values()];
   const machineRest = new Map([...room.machines].map(([zone, machine]) => [zone, machine.moving.position.z]));
@@ -125,7 +128,6 @@ export function createIllumination(scene: T.Scene, room: Room) {
   function clear() {
     flight = null;
     ownerPulse = null;
-    halo.visible = false;
     current.mesh.visible = false;
     leader.mesh.visible = false;
     spark.visible = false;
@@ -140,7 +142,6 @@ export function createIllumination(scene: T.Scene, room: Room) {
     routed = null;
     current.write(0, (fraction, sample) => { route.getPointAt(fraction, sample); sample.y += .035; });
     ownerPulse = { source, start };
-    halo.position.set(source.x, .055, source.z);
   }
   function play(signal: Signal, start: number) {
     const branch = room.circuits.get(signal.zone);
@@ -259,7 +260,21 @@ export function createIllumination(scene: T.Scene, room: Room) {
     coreLight.color.copy(sphere.tint);
     coreLight.intensity = lighting.failed ? 0 : 6 + energy * 13 + boost * 12;
 
-    if (room.deck === "owner") {
+    const ownerFloor = room.deck === "owner";
+    const station = ownerFloor ? room.ownerLight?.source : state.currentZone && room.markers.get(state.currentZone);
+    halo.visible = pointer.visible = area === "room" && !!station;
+    if (station && halo.visible) {
+      const pulse = animate && (!state.replay || state.playing) ? (1 - Math.cos(now * .0025)) * .5 : 0;
+      const tint = ownerFloor || lighting.owner ? colors.owner : sphere.tint;
+      halo.position.set(station.x, .055, station.z);
+      halo.scale.setScalar(1 + pulse * .18);
+      halo.material.color.copy(tint);
+      halo.material.opacity = .91 - pulse * .31;
+      pointer.position.set(station.x, 2.22 + pulse * .13, station.z);
+      pointer.material.color.copy(tint).lerp(sparkMaterial.color, .40);
+    }
+
+    if (ownerFloor) {
       if (flight) clear();
       const lamp = room.ownerLight;
       bayLamp.intensity = lamp && area === "room" ? 17 : 0;
@@ -277,9 +292,6 @@ export function createIllumination(scene: T.Scene, room: Room) {
         current.uniforms.tint.value.copy(colors.owner);
         current.uniforms.tick.value = phase * 1.48;
         current.uniforms.gain.value = glow;
-        halo.visible = true;
-        halo.scale.setScalar(.85 + .50 * phase);
-        halo.material.opacity = glow * .78;
         bayLamp.position.copy(ownerPulse.source); bayLamp.position.y += .7;
         bayLamp.color.copy(colors.owner);
         bayLamp.intensity = 17 + 23 * glow;
@@ -352,6 +364,7 @@ export function createIllumination(scene: T.Scene, room: Room) {
       if (machine) machine.stamp.visible = index === 3 || state.core[index];
     }
   }
-  return { play, pulseOwner, clear, paint, opticalObjects: [leader.mesh, current.mesh, spark, halo, ...traces],
+  return { play, pulseOwner, clear, paint, opticalObjects: [leader.mesh, current.mesh, spark, halo, pointer, ...traces],
+    get activeDesk() { return halo.visible ? halo.position : null; },
     get flying() { return !!(flight || ownerPulse); }, get steady() { return steady; }, resetClock() { prior = 0; } };
 }

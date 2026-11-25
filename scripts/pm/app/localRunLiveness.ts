@@ -4,8 +4,20 @@ export const LIVENESS = {
   thinkingAfter: 20_000,
   quietAfter: 90_000,
   staleAfter: { preparing: 300_000, building: 240_000, checking: 600_000 },
+  // The full Vitest suite prints nothing for ~12 minutes, in the Seal hook and in Verify.
+  longStepAfter: 1_200_000,
   linkDownAfter: 12_000,
 } as const;
+
+const LONG_STEP = /^(?:Hook: tests|test started)$/u;
+
+/** The silence a phase may keep before "No signal"; a known long step gets longer. */
+export function staleThreshold(phase: string, lastSummary: string | null | undefined): number | undefined {
+  const threshold = LIVENESS.staleAfter[phase as keyof typeof LIVENESS.staleAfter];
+  return threshold !== undefined && lastSummary && LONG_STEP.test(lastSummary)
+    ? Math.max(threshold, LIVENESS.longStepAfter)
+    : threshold;
+}
 
 export type LocalLivenessState =
   | "live"
@@ -107,8 +119,11 @@ export function liveness(
   else if (["push-pending", "revert-push-pending"].includes(run.phase))
     state = "push-pending";
   else {
-    const threshold =
-      LIVENESS.staleAfter[run.phase as keyof typeof LIVENESS.staleAfter];
+    const latest = run.activity.reduce<{ at: number; summary: string | null } | null>((best, entry) => {
+      const at = timestamp(entry.at);
+      return at !== null && (!best || at >= best.at) ? { at, summary: entry.summary } : best;
+    }, null);
+    const threshold = staleThreshold(run.phase, latest?.summary);
     state =
       sinceSignalMs === null
         ? "live"

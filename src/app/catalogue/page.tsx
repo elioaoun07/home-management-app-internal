@@ -13,6 +13,7 @@ function CatalogueContent({ stickyTopClass }: { stickyTopClass: string }) {
     <WebCatalogue
       initialSection={section === "chores" ? "chores" : undefined}
       initialItemId={params.get("item") ?? undefined}
+      initialNewContact={params.get("newContact") ?? undefined}
       stickyTopClass={stickyTopClass}
     />
   );

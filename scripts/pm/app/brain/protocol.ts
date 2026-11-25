@@ -32,7 +32,9 @@ export interface RoomLighting {
 }
 export interface WorldState {
   floor?: Floor;
+  currentZone: ZoneId | null;
   owner?: {
+    current: OwnerStation | null;
     selected: OwnerStation;
     signals: Record<OwnerStation, OwnerStationState>;
     patch?: string | null;

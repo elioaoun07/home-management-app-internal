@@ -36,6 +36,7 @@ export interface BoardFacts {
   state: string;
   zones: readonly BoardZoneFact[];
   attention?: readonly BoardAttentionFact[];
+  currentZone?: ZoneId | null;
   activeZone?: ZoneId | null;
   buildZone?: ZoneId;
   buildGate?: number;
@@ -99,8 +100,6 @@ export interface BoardPlacement {
   y: number;
   width: number;
   height: number;
-  chipX: number;
-  chipY: number;
 }
 export interface PrimitiveOptions {
   top?: string;

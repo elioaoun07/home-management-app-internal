@@ -22,6 +22,7 @@ async function recordExample(input: LexiconRuleInput): Promise<void> {
 }
 import { coverCard } from "./budgetFamilies";
 import { answerEventLocation, answerEventWhen, answerPlaceSave } from "./events";
+import { answerContactCategory, answerContactNewCategory, answerContactPick } from "./contacts";
 import { answerAmendTarget, moveToGroup } from "./amend";
 import { findReminderCandidates, normalizeTitle, type ReminderCandidate } from "./reminderLookup";
 import {
@@ -130,6 +131,10 @@ export async function resolvePendingSlot(
   if (pending.capability === "event.when") return answerEventWhen(pending, text, chip);
   if (pending.capability === "event.location") return answerEventLocation(pending, text, chip);
   if (pending.capability === "place.save") return answerPlaceSave(pending, text, chip);
+  // HUB-123 — file a contact: category chips / typed name, create a missing one, pick which contact.
+  if (pending.capability === "contact.category") return answerContactCategory(pending, text, chip);
+  if (pending.capability === "contact.newCategory") return answerContactNewCategory(pending, text, chip);
+  if (pending.capability === "contact.pick") return answerContactPick(pending, text, chip);
   const choice = chip ?? matchOption(pending.options, text)?.value;
   if (!choice || choice.startsWith("nav:")) return { unmatched: true };
   const a = pending.args;
