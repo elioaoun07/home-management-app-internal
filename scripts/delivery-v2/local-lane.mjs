@@ -48,6 +48,23 @@ export function sealRefusal(text) {
   lines.forEach((line, index) => { const found = HOOK_STAGES.get(line.trim()); if (found) { start = index; stage = found; } });
   return { stage, detail: decisiveLines(lines.slice(start + 1).join("\n")) };
 }
+/** DLV-177: host checks a successful Seal hook already ran on the sealed tree.
+ * The hook stops at the first failing step, so a commit that succeeded passed every
+ * step it printed. Tests also need Vitest's own pass summary as proof they ran.
+ * @param {{stage:string, at:string, lines:string[]}[]} stages @param {string} finishedAt */
+export function sealedChecks(stages, finishedAt) {
+  /** @type {Record<string, import("./local-process.mjs").HostCheck>} */
+  const reuse = {};
+  stages.forEach((entry, index) => {
+    const name = entry.stage === "typecheck" ? "typecheck" : entry.stage === "tests" ? "test" : null;
+    if (!name) return;
+    const output = entry.lines.join("\n").replace(/\u001b\[[\d;]*m/gu, "");
+    if (name === "test" && !/^\s*Test Files\s+\d+ passed/mu.test(output)) return;
+    reuse[name] = { name, started_at: entry.at, finished_at: stages[index + 1]?.at ?? finishedAt, exit: 0,
+      stdout: "Passed in the Seal commit hook on this commit.\n" + trimTail(output), stderr: "", error: null, reused: "seal-hook" };
+  });
+  return reuse;
+}
 
 /** @param {{root:string, store:object|Function, run?:typeof runProcess,
  * session?:typeof nativeLocalSession, authenticate?:typeof localWorkerSubscription,
@@ -933,6 +950,8 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     const revising = revisionOf(d);
     let failure = { code: "install", step: "Setup", detail: "" };
     let checking = "host checks";
+    /** Host checks this attempt's Seal hook already passed (DLV-177). */
+    let sealed = {};
     const task = tasks.get(id);
     try {
       if (!resumeWith && !revising) {
@@ -1029,13 +1048,16 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
         const commitMessage = revising ? `Revise ${d.work.id} (revision ${revising.ordinal ?? revising.n})` : `Build ${d.work.id}`;
         const commit = async () => {
           event(id, "Committing candidate");
-          const seen = new Set();
+          const seen = new Set(), stages = [];
+          sealed = {};
           failure = { code: "commit-hook", step: "Seal", detail: "" };
           try {
             await buildGit(id, d.workspace, ["commit", "-m", commitMessage], hookMs, line => {
               const stage = HOOK_STAGES.get(line.trim());
-              if (stage && !seen.has(stage)) { seen.add(stage); event(id, `Hook: ${stage}`); }
+              if (stage && !seen.has(stage)) { seen.add(stage); stages.push({ stage, at: at(), lines: [] }); event(id, `Hook: ${stage}`); }
+              else stages.at(-1)?.lines.push(line);
             });
+            sealed = sealedChecks(stages, at());
           } catch (error) {
             // Record the refusing step and its own lines; a timeout keeps its own code.
             if (!String(error.message).startsWith("git commit: timed out")) {
@@ -1086,7 +1108,8 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       const changes = await diff(d, head);
       d = { ...d, phase: "checking", head, risk: changes.risk, checks: [], reviewed_head: null, reviewed_risk: null }; save(id, d); event(id, "Host checks started");
       failure = { code: "checks", step: "Verify", detail: "" };
-      const results = await checks({ workspace: d.workspace, env: env(), onStart: name => { checking = name; event(id, `${name} started`); }, onCheck: c => { d.checks.push(c); save(id, d); event(id, `${c.name}: ${c.exit}`); } });
+      const results = await checks({ workspace: d.workspace, env: env(), reuse: sealed, onStart: name => { checking = name; event(id, `${name} started`); },
+        onCheck: c => { d.checks.push(c); save(id, d); event(id, `${c.name}: ${c.exit}`); } });
       if (controller.signal.aborted) throw new Error("cancelled");
       d.checks = results;
       failure = null;

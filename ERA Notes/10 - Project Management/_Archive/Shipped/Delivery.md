@@ -582,6 +582,10 @@ owner: Elio
 
 - ✅ 2026-11-25 — **DLV-176** Merge a candidate whose files collide with your checkout, by hand — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-176>) (Both-sides view + Merge by hand (three-way, markers, no Git write); lane test DLV-176 on a real Git fixture; typecheck and changed-file ESLint clean. UAT pending (needs PM restart).)
 
+### DLV-177
+
+- ✅ 2026-11-25 — **DLV-177** Stop rerunning the Seal hook's typecheck and tests in Verify — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-177>) (Verify reuses the Seal hook's passed typecheck + tests (sealedChecks/hostChecks reuse). local-seal-reuse.test.ts 3/3, local-lane.test.ts 104/105 (1 pre-existing red on main), typecheck + eslint clean. Needs PM server restart.)
+
 ## State log
 
 _Moved from the Master Book on 2026-11-11._
