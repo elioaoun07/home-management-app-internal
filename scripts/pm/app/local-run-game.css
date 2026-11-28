@@ -9,3 +9,16 @@
 .board-game .stage-black-box dl { display: grid; grid-template-columns: min-content minmax(0, 1fr); }
 .board-game .stage-black-box dt { white-space: nowrap; }
 .stage-filter { color: var(--accent); background: var(--surface); border: 1px solid var(--line); padding: 8px; }
+/* Top-bar Stop / Discard (LocalStopControl). */
+.local-stop { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--danger, #fb7185) 45%, var(--line)); border-radius: 9px; background: var(--surface); color: var(--danger, #fb7185); font-weight: 600; white-space: nowrap; cursor: pointer; }
+.local-stop:hover:not(:disabled) { background: color-mix(in srgb, var(--danger, #fb7185) 12%, var(--surface)); }
+.local-stop:disabled { opacity: 0.5; cursor: default; }
+.local-stop-danger { border-color: transparent; background: var(--danger, #fb7185); color: var(--surface); }
+.local-stop-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger, #fb7185) 85%, var(--ink)); }
+.local-stop-keep { width: 36px; padding: 0; justify-content: center; border-color: var(--line); color: var(--ink-muted); }
+.local-stop-confirm { display: inline-flex; align-items: center; gap: 6px; }
+.local-stop-confirm small { color: var(--ink-muted); }
+@media (max-width: 720px) {
+  .local-stop span { display: none; }
+  .local-stop { padding: 0 10px; }
+}

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, symlinkSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const maxWorktrees = 2;
@@ -253,6 +253,8 @@ export function createLocalStorage({ root, run, env, getRecord, rows, activity, 
     await removeHome(id);
     for (const name of ["dependencies", "merge-inputs", "hooks"])
       await rm(privatePath(id, name), { recursive: true, force: true, maxRetries: 3 });
+    // The run's own folder goes too once empty; anything unrecognized stays.
+    await rmdir(privatePath(id)).catch(() => {});
     return { cleaned_at: new Date().toISOString(), cleanup_archive: relative(root, archive), cleanup_error: null };
   }
   // Metadata-only, follows no junctions. Worker-friendly async I/O keeps PM

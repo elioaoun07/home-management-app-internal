@@ -1,7 +1,9 @@
-// DLV-177: the Seal commit hook already runs typecheck and the full suite on the sealed
-// tree. Verify reuses those passed results instead of running them a second time.
+// The Seal commit hook, from the supervisor's side.
+// DLV-177: the hook already runs typecheck and the full suite on the sealed tree;
+// Verify reuses those passed results instead of running them a second time.
+// DLV-178: Stop kills the hook mid-run and deletes the worktree.
 import { afterEach, expect, it } from "vitest";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -17,7 +19,7 @@ const git = (root: string, ...args: string[]) => execFileSync("git", args, { cwd
 const put = (root: string, path: string, value: string) => { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), value); };
 const PM = "ERA Notes/10 - Project Management";
 
-async function sealedRun(hookSource: string) {
+async function hookLane(hookSource: string) {
   const parent = mkdtempSync(join(tmpdir(), "era-seal-")); roots.push(parent);
   const root = join(parent, "repo");
   mkdirSync(root); git(root, "init", "-b", "main"); git(root, "config", "user.email", "fixture@example.invalid"); git(root, "config", "user.name", "Fixture");
@@ -53,6 +55,11 @@ async function sealedRun(hookSource: string) {
     }) as never });
   const started = await lane.start({ file: "Delivery/4 - Checklist.md", id: "DLV-900", executor: "claude" });
   expect(started.ok).toBe(true);
+  return { root, parent, store, lane, id: started.run_id! };
+}
+async function sealedRun(hookSource: string) {
+  const { store, lane, id } = await hookLane(hookSource);
+  const started = { run_id: id };
   await lane.wait(started.run_id!);
   const record = JSON.parse(store.getRun(started.run_id!).base_manifest_json);
   return { record, checks: Object.fromEntries(record.checks.map((check: { name: string }) => [check.name, check])) };
@@ -93,3 +100,28 @@ it("reuses only steps a successful hook proved, and never spawns a reused check"
   expect(results.map(check => check.name)).toEqual(["typecheck", "lint", "test", "pm:lint"]);
   expect(results[2]).toBe(reused);
 });
+
+it("DLV-178 Stop during the Seal hook kills it, then deletes the worktree, branch and run folder", async () => {
+  const pidFile = join(mkdtempSync(join(tmpdir(), "era-seal-pid-")), "hook.pid");
+  roots.push(dirname(pidFile));
+  const { root, store, lane, id } = await hookLane(`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+    process.stdout.write('Running unit tests...\\n'); setInterval(() => {}, 1000);`);
+  await expect.poll(() => store.listActivity(id).some((row: { summary: string }) => row.summary === "Hook: tests"), { timeout: 30_000 }).toBe(true);
+  const hookPid = Number(readFileSync(pidFile, "utf8"));
+  const record = () => JSON.parse(store.getRun(id).base_manifest_json);
+  const workspace = record().workspace;
+  const started = Date.now();
+  expect(await lane.cancel(id)).toEqual({ ok: true });
+  await lane.wait(id);
+  expect(Date.now() - started).toBeLessThan(20_000);
+  expect(record()).toMatchObject({ phase: "cancelled", failure: { code: "cancelled" } });
+  expect(record().cleaned_at).toBeTruthy();
+  expect(existsSync(workspace)).toBe(false);
+  expect(git(root, "branch", "--list", "delivery/*")).toBe("");
+  expect(existsSync(join(root, ".delivery/local", id))).toBe(false);
+  expect(existsSync(join(root, ".delivery/local-archive", id, "diff.patch"))).toBe(true);
+  const summaries = store.listActivity(id).map((row: { summary: string }) => row.summary);
+  expect(summaries.some((line: string) => line.startsWith("Seal refused"))).toBe(false);
+  expect(summaries).toContain("Delivery files archived and cleaned");
+  await expect.poll(() => { try { process.kill(hookPid, 0); return true; } catch { return false; } }, { timeout: 5000 }).toBe(false);
+}, 90_000);

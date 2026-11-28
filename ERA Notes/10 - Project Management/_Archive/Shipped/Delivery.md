@@ -1,6 +1,6 @@
 ---
 created: 2026-11-11
-updated: 2026-11-25
+updated: 2026-11-28
 type: archive
 status: superseded
 owner: Elio
@@ -585,6 +585,10 @@ owner: Elio
 ### DLV-177
 
 - ✅ 2026-11-25 — **DLV-177** Stop rerunning the Seal hook's typecheck and tests in Verify — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-177>) (Verify reuses the Seal hook's passed typecheck + tests (sealedChecks/hostChecks reuse). local-seal-reuse.test.ts 3/3, local-lane.test.ts 104/105 (1 pre-existing red on main), typecheck + eslint clean. Needs PM server restart.)
+
+### DLV-178
+
+- ✅ 2026-11-28 — **DLV-178** Stop and discard a Local run from its page header, with cleanup — [criteria](<../../Delivery/Delivery — Master Book.md#dlv-178>) (Header Stop/Discard in both rooms (LocalStopControl); Stop kills hook/checks via runProcess signal; cleanup removes worktree, branch, run folder. local-seal 4/4, process, local-stop-control, local-lane + local-storage + tests/pm-ui 1204/1204, typecheck + eslint clean. Needs PM server restart.)
 
 ## State log
 

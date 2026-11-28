@@ -32,6 +32,18 @@ describe("runProcess", () => {
     expect(result.error?.code).toBe("ETIMEDOUT");
   }, 60_000);
 
+  it("kills a running child when its signal aborts and reports ABORT_ERR", async () => {
+    const controller = new AbortController();
+    const started = Date.now();
+    setTimeout(() => controller.abort(), 200);
+    const result = await runProcess(node, ["-e", "setTimeout(() => {}, 30000)"], { signal: controller.signal });
+    expect(result.status).toBeNull();
+    expect(result.error?.code).toBe("ABORT_ERR");
+    expect(Date.now() - started).toBeLessThan(15_000);
+    const early = await runProcess(node, ["-e", "setTimeout(() => {}, 30000)"], { signal: AbortSignal.abort() });
+    expect(early.error?.code).toBe("ABORT_ERR");
+  }, 60_000);
+
   it("stops a child whose output overflows the buffer", async () => {
     const result = await runProcess(node, ["-e", "process.stdout.write('x'.repeat(4096))"], { maxBuffer: 1024 });
     expect(result.error?.code).toBe("ENOBUFS");

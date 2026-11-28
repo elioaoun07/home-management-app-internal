@@ -903,7 +903,7 @@ describe("Local worktree to owner merge and revert", () => {
     ]);
     expect(activity.filter(line => line.startsWith("Git exit 0"))).toHaveLength(3);
     expect(activity.filter(line => !line.startsWith('["git"') && !line.startsWith("Git exit"))).toEqual([
-      "Installing dependencies", "Native session started", "Committing candidate", "Host checks started",
+      "Installing dependencies", "Native session started", "Seal pre-check: lint", "Committing candidate", "Host checks started",
       "typecheck started", "typecheck: 0", "lint started", "lint: 0", "test started", "test: 0",
       "pm:lint started", "pm:lint: 0", "Acceptance check started", "Acceptance reviewer started", "Acceptance passed · 3 met",
       "Freezing handover", "Ready for owner UAT",

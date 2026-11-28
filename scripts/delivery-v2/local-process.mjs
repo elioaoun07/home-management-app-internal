@@ -18,15 +18,17 @@ export function pnpmCommand(env = process.env) {
 /** `reuse` holds passed results the Seal commit hook produced on this same commit (DLV-177);
  * those commands are not run a second time.
  * @param {{workspace:string, env:NodeJS.ProcessEnv, run?:typeof runProcess, onCheck?:(check:HostCheck)=>void, onStart?:(name:string)=>void,
- *   reuse?:Record<string, HostCheck>}} options */
-export async function hostChecks({ workspace, env, run = runProcess, onCheck = () => {}, onStart = () => {}, reuse = {} }) {
+ *   reuse?:Record<string, HostCheck>, signal?:AbortSignal|null}} options
+ * An aborted `signal` kills the running check and starts no further one. */
+export async function hostChecks({ workspace, env, run = runProcess, onCheck = () => {}, onStart = () => {}, reuse = {}, signal = null }) {
   const [bin, launcher] = pnpmCommand();
   const checks = [];
   for (const name of ["typecheck", "lint", "test", "pm:lint"]) {
+    if (signal?.aborted) break;
     const started_at = new Date().toISOString();
     onStart(name);
     if (reuse[name]?.exit === 0) { checks.push(reuse[name]); onCheck(reuse[name]); continue; }
-    const output = await run(bin, [launcher, name], { cwd: workspace, env, timeout: 15 * 60_000 });
+    const output = await run(bin, [launcher, name], { cwd: workspace, env, timeout: 15 * 60_000, signal });
     const check = { name, started_at, finished_at: new Date().toISOString(), exit: output.status,
       stdout: output.stdout, stderr: output.stderr, error: output.error?.message || null };
     checks.push(check);

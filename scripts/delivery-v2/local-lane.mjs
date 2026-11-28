@@ -73,7 +73,7 @@ export function sealedChecks(stages, finishedAt) {
  * baseBranch?:string, hasStore?:()=>boolean, catalog?:()=>object|null,
  * limits?:{hookMs?:number, pushMs?:number}, previews?:ReturnType<typeof createPreviews>|null,
  * reviewSession?:typeof nativeLocalSession,
- * lintStaged?:((workspace:string)=>Promise<{stage:string, detail:string}|null>)|null}} options
+ * lintStaged?:((workspace:string, signal?:AbortSignal|null)=>Promise<{stage:string, detail:string}|null>)|null}} options
  * `reviewSession` runs the read-only acceptance reviewer (DLV-175); it defaults to `session`.
  * `lintStaged` replaces the Seal lint pre-check (the hook's ESLint rule on staged files). */
 export function createLocalLane({ root, store, run = runProcess, session = nativeLocalSession, reviewSession = session, lintStaged = null,
@@ -139,10 +139,11 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
     } catch (error) { return error.code === "EPERM" ? "busy" : null; }
   }
 
-  async function buildGit(id, cwd, args, timeout, onStderrLine = undefined) {
+  /** `signal` (the run's Cancel) kills git and its hook tree mid-command. */
+  async function buildGit(id, cwd, args, timeout, onStderrLine = undefined, signal = null) {
     const argv = ["git", "--no-optional-locks", ...args];
     event(id, JSON.stringify(argv));
-    const result = await run("git", argv.slice(1), { cwd, env: env(), timeout, onStderrLine });
+    const result = await run("git", argv.slice(1), { cwd, env: env(), timeout, onStderrLine, signal });
     const tail = [result.stdout, result.stderr, result.error?.message].filter(Boolean).join("\n").trim().slice(-1800);
     event(id, `Git exit ${result.status ?? "unknown"} · ${JSON.stringify(argv)}\n${tail}`);
     if (result.error?.code === "ETIMEDOUT") throw new Error(`git ${args[0]}: timed out after ${timeout / 1000} s`);
@@ -901,14 +902,14 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
 
   /** The hook's own ESLint rule (staged .ts/.tsx, added, copied or modified; zero warnings), run
    * before the long hook so a refusal costs seconds. Null when it passes or cannot judge. */
-  async function lintStagedFiles(workspace) {
+  async function lintStagedFiles(workspace, signal = null) {
     if (!existsSync(join(workspace, "node_modules/eslint/package.json"))) return null;
     const files = (await git(workspace, "diff", "--cached", "--name-only", "--diff-filter=ACM", "-z")).split("\0").filter(file => /\.tsx?$/u.test(file));
     if (!files.length) return null;
     // Through pnpm, exactly as the hook calls it: plugins resolve only from pnpm's layout.
     let command;
     try { command = pnpmCommand(); } catch { return null; }
-    const out = await run(command[0], [command[1], "eslint", "--max-warnings=0", "--", ...files], { cwd: workspace, env: env(), timeout: 5 * 60_000 });
+    const out = await run(command[0], [command[1], "eslint", "--max-warnings=0", "--", ...files], { cwd: workspace, env: env(), timeout: 5 * 60_000, signal });
     if (out.status === 0 && !out.error) return null;
     const text = [out.stdout, out.stderr].filter(Boolean).join("\n");
     // Only a lint verdict counts; anything else is left to the hook itself.
@@ -1044,7 +1045,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       // repository hooks, without giving the worker push/merge authority.
       failure = null;
       if (await git(d.workspace, "status", "--porcelain", "--untracked-files=all")) {
-        await buildGit(id, d.workspace, ["add", "--all"], 30_000);
+        await buildGit(id, d.workspace, ["add", "--all"], 30_000, undefined, controller.signal);
         const commitMessage = revising ? `Revise ${d.work.id} (revision ${revising.ordinal ?? revising.n})` : `Build ${d.work.id}`;
         const commit = async () => {
           event(id, "Committing candidate");
@@ -1056,10 +1057,11 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
               const stage = HOOK_STAGES.get(line.trim());
               if (stage && !seen.has(stage)) { seen.add(stage); stages.push({ stage, at: at(), lines: [] }); event(id, `Hook: ${stage}`); }
               else stages.at(-1)?.lines.push(line);
-            });
+            }, controller.signal);
             sealed = sealedChecks(stages, at());
           } catch (error) {
             // Record the refusing step and its own lines; a timeout keeps its own code.
+            if (controller.signal.aborted) throw new Error("cancelled");
             if (!String(error.message).startsWith("git commit: timed out")) {
               const refused = sealRefusal(error.message);
               failure = { code: "commit-hook", step: "Seal", ...(refused.stage ? { stage: refused.stage } : {}), detail: refused.detail };
@@ -1074,22 +1076,23 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
           fixed = true;
           if (controller.signal.aborted) throw new Error("cancelled");
           await repairSeal(id, refused, controller);
-          await buildGit(id, d.workspace, ["add", "--all"], 30_000);
+          await buildGit(id, d.workspace, ["add", "--all"], 30_000, undefined, controller.signal);
         };
         failure = { code: "commit-hook", step: "Seal", detail: "" };
         event(id, "Seal pre-check: lint");
-        const early = await sealLint(d.workspace);
+        const early = await sealLint(d.workspace, controller.signal);
         if (early) {
           failure = { code: "commit-hook", step: "Seal", stage: early.stage, detail: early.detail };
           event(id, `Seal refused at ${early.stage}\n${early.detail}`);
           await fixTurn(early);
-          const again = await sealLint(d.workspace);
+          const again = await sealLint(d.workspace, controller.signal);
           if (again) {
             failure = { code: "commit-hook", step: "Seal", stage: again.stage, detail: again.detail };
             event(id, `Seal still refused at ${again.stage} after the fix turn\n${again.detail}`);
             throw new Error(`seal refused at ${again.stage} after the fix turn\n${again.detail}`);
           }
         }
+        if (controller.signal.aborted) throw new Error("cancelled");
         try { await commit(); }
         catch (error) {
           if (fixed || failure?.code !== "commit-hook" || !failure.detail || controller.signal.aborted) throw error;
@@ -1108,7 +1111,7 @@ export function createLocalLane({ root, store, run = runProcess, session = nativ
       const changes = await diff(d, head);
       d = { ...d, phase: "checking", head, risk: changes.risk, checks: [], reviewed_head: null, reviewed_risk: null }; save(id, d); event(id, "Host checks started");
       failure = { code: "checks", step: "Verify", detail: "" };
-      const results = await checks({ workspace: d.workspace, env: env(), reuse: sealed, onStart: name => { checking = name; event(id, `${name} started`); },
+      const results = await checks({ workspace: d.workspace, env: env(), reuse: sealed, signal: controller.signal, onStart: name => { checking = name; event(id, `${name} started`); },
         onCheck: c => { d.checks.push(c); save(id, d); event(id, `${c.name}: ${c.exit}`); } });
       if (controller.signal.aborted) throw new Error("cancelled");
       d.checks = results;

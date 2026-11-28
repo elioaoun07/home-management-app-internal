@@ -38,6 +38,7 @@ import "./local-run-game.css";
 import { Back } from "./components";
 import { attemptLabel, displayTitle, newAttemptHref } from "./localRunModel";
 import { OwnerWorkspace, RoomSwitch, opensAtOwner, type DeliveryRoom } from "./OwnerWorkspace";
+import { LocalStopControl } from "./LocalStopControl";
 import { currentOwnerStation, type OwnerStation } from "./ownerStations";
 
 export function LocalRunGame({
@@ -351,6 +352,7 @@ export function LocalRunGame({
     else void stageRef.current?.closest(".board-game")?.requestFullscreen?.().catch(() => {});
   };
   const roomSwitch = <RoomSwitch room={room} onChange={enterRoom} />;
+  const stopControl = !replay && <LocalStopControl run={run} busy={busy || realHealth.state === "link-down"} act={action} />;
   if (room === "owner" && !brainView) {
     return <div className="run-game board-game owner-game" data-phase={run.phase}
       data-low-motion={quiet} data-liveness={replay ? health.state : realHealth.state}>
@@ -359,6 +361,7 @@ export function LocalRunGame({
           <Back fallback="/delivery" />
           <div className="board-title"><span className="run-game-tag">{run.work.id}</span>{attemptLabel(run) && <span className="run-game-tag run-game-attempt">{attemptLabel(run)}</span>}<h1 title={displayTitle(run)}>{displayTitle(run)}</h1></div>
           {roomSwitch}
+          {stopControl}
           <button type="button" className="owner-view-switch" onClick={explore}>
             <Footprints size={16} />Explore 3D
           </button>
@@ -468,6 +471,7 @@ export function LocalRunGame({
         }
         theaterControl={
           <>
+            {stopControl}
             {!brainView && <button type="button" className="stage-presence-button room-view-switch"
               aria-label="Explore 3D" onClick={explore}><Footprints size={16} /><span>Explore 3D</span></button>}
             {!brainView && <button type="button" className="stage-presence-button room-view-switch"

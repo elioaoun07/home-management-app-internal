@@ -353,16 +353,29 @@ No live provider run.
 - **Implementation:** done. The selected item's PM receipt and exact file changes are computed before Merge. Commit preserves unrelated staging. Push previews every outgoing commit and pins the expected remote tip. A remote read can verify an external push. The authenticated fixture exercised separate merge, commit and publication with two remotes and parallel owner work.
 - **UAT:** pending. [Real publication witness](<../../../docs/Delivery-UAT.md#local-delivery-from-start-to-push--dlv-168>).
 
+### DLV-178
+
+**Outcome:** A Local run has a visible Stop (or Discard) in its page header, Stop takes effect within seconds at any step, and stopping or discarding deletes the run's worktree, branch and run folder after one confirm.
+**Kind:** bug
+**Source:** owner, 2026-11-28, on HUB-87 attempt 2 (`local-d73a5dd2`): "I have hard time stopping deliveries from this page. Could you add a clear button for that? Also, discarding a delivery should also clean up after it; remove the cloned repo (with confirm button for that)." Cancel lived only in the collapsed attention rail, and Cancel during Seal or Verify waited for the commit hook (≈15–20 min) and the host checks because those processes ignored the run's abort.
+**Touches:** `scripts/delivery-v2/process.mjs`, `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-process.mjs`, `scripts/delivery-v2/local-storage.mjs`, `scripts/pm/app/LocalStopControl.tsx`, `scripts/pm/app/LocalRunGame.tsx`, `scripts/pm/app/local-run-game.css`, `tests/delivery-v2/local-seal.test.ts`, `tests/delivery-v2/process.test.ts`, `tests/pm-ui/local-stop-control.test.ts`
+
+- **Acceptance:** AI room and Owner room headers show **Stop** while the run works (preparing, building, checking, accepting) or its acceptance check is paused, and **Discard** while a resting candidate still holds a worktree (uat-ready, refresh-conflict, refresh-failed, failed, cancelled, stopped). The first click asks; the confirm names the action ("Stop + delete worktree" / "Delete worktree", worktree path on hover); ✕ keeps the run. Replay shows neither.
+- **Acceptance:** Stop kills the running git commit hook, Seal lint pre-check or host check with its process tree (`runProcess({ signal })`), records the run `cancelled` without a "Seal refused" row, then the existing auto-clean archives the diff and removes the worktree, branch, dependencies and the now-empty `.delivery/local/<id>/`.
+- **Implementation:** done (2026-11-28). `runProcess` `signal` → `ABORT_ERR` tree kill; `buildGit`, `lintStagedFiles` and `hostChecks` receive the run controller's signal; `local-storage.mjs#clean` removes the emptied run folder. UI: `LocalStopControl.tsx` (`stopMode`) in `LocalRunGame.tsx` both headers. Tests: `local-seal.test.ts` "DLV-178 Stop during the Seal hook…" (real hook killed in seconds, worktree/branch/run folder gone, diff archived), `process.test.ts` abort case, `tests/pm-ui/local-stop-control.test.ts`.
+- **Not witnessed:** the PM server must restart to load the backend part.
+- **UAT:** pending. Owner: start a run, press Stop during Seal, confirm; the run reads Cancelled within seconds and `budget-app-delivery/<ID>` is gone.
+
 ### DLV-177
 
 **Outcome:** A Local run's Verify does not rerun the typecheck and full test suite the Seal commit hook just passed on the same commit.
 **Kind:** bug
 **Source:** owner, 2026-11-25, on HUB-87 (`local-9ba0f21a`): "That is way too long to wait for." Measured on recent runs: Seal hook typecheck 94–166 s and tests 368–705 s, then Verify ran typecheck 31–37 s and tests 373–688 s again on the identical tree. HUB-87's first Seal also failed on `local-lane.test.ts` ("runs all four real host commands"), red on `main` since DLV-175 added the `Seal pre-check: lint` row; the fix turn edited that unrelated test and the suite ran again (≈11 min).
-**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-process.mjs`, `tests/delivery-v2/local-seal-reuse.test.ts`
+**Touches:** `scripts/delivery-v2/local-lane.mjs`, `scripts/delivery-v2/local-process.mjs`, `tests/delivery-v2/local-seal.test.ts`
 
 - **Acceptance:** After a successful Seal commit, Verify records the hook's typecheck and test results (`reused: "seal-hook"`, the hook's own output and times) and runs only lint and pm:lint. Tests are reused only when the hook output carries Vitest's pass summary; a commit that did not run (clean tree) or a hook without those steps gets all four host checks. Activity rows and the four-check contract are unchanged.
-- **Implementation:** done (2026-11-25). `sealedChecks()` in `local-lane.mjs` turns the hook's captured stage lines into host-check results; `hostChecks({ reuse })` skips a reused passed check. Replay coverage: `tests/delivery-v2/local-seal-reuse.test.ts` (real hook fixture; absent or failed summary not reused; reused names never spawn); `local-lane.test.ts` otherwise unchanged. Saves one typecheck and one full suite per Seal and per revision (≈7–12 min on this laptop). DLV-162 still owns the one-declared-gate-list rewrite.
-- **Open, not in this item:** `local-lane.test.ts` "runs all four real host commands" is red on `main` (missing the `Seal pre-check: lint` row), so every Seal fails once, spends a fix turn and reruns the suite. HUB-87's candidate carries the one-line fix; it was left out of `main` so HUB-87's Merge does not collide. If HUB-87 is discarded, apply that line. That file alone takes ≈11 min (672 s of the suite's 1,071 s in HUB-87's Seal) and is the suite's critical path at `maxWorkers: 2`.
+- **Implementation:** done (2026-11-25). `sealedChecks()` in `local-lane.mjs` turns the hook's captured stage lines into host-check results; `hostChecks({ reuse })` skips a reused passed check. Replay coverage: `tests/delivery-v2/local-seal.test.ts` (real hook fixture; absent or failed summary not reused; reused names never spawn); `local-lane.test.ts` otherwise unchanged. Saves one typecheck and one full suite per Seal and per revision (≈7–12 min on this laptop). DLV-162 still owns the one-declared-gate-list rewrite.
+- **Open, not in this item:** `local-lane.test.ts` "runs all four real host commands" is red on `main` (missing the `Seal pre-check: lint` row), so every Seal fails once, spends a fix turn and reruns the suite. HUB-87's first run failed, so the one-line fix went into `main` on 2026-11-28 (uncommitted at writing; the test passes). Run `local-d73a5dd2` (HUB-87, base `8df7fd1d`) predates it and was still on the pre-DLV-177 PM server (started 2026-11-25 21:44). That file alone takes ≈11 min (672 s of the suite's 1,071 s in HUB-87's Seal) and is the suite's critical path at `maxWorkers: 2`.
 - **Not witnessed:** the PM server must restart to load this; the HUB-87 run in flight still runs the old path.
 - **UAT:** pending. Owner: on the next Local run, Verify's TYPE and TEST read "Passed in the Seal commit hook" and Verify ends within about two minutes of Seal.
 
@@ -2126,6 +2139,7 @@ Read-only preview: `node scripts/delivery-v2/setup-checker-deps.mjs --recipe <re
 - ✅ 2026-11-25 — **DLV-175** Check each Local candidate against its acceptance before Handover → [record](<../_Archive/Shipped/Delivery.md#dlv-175>)
 - ✅ 2026-11-25 — **DLV-176** Merge a candidate whose files collide with your checkout, by hand → [record](<../_Archive/Shipped/Delivery.md#dlv-176>)
 - ✅ 2026-11-25 — **DLV-177** Stop rerunning the Seal hook's typecheck and tests in Verify → [record](<../_Archive/Shipped/Delivery.md#dlv-177>)
+- ✅ 2026-11-28 — **DLV-178** Stop and discard a Local run from its page header, with cleanup → [record](<../_Archive/Shipped/Delivery.md#dlv-178>)
 
 DW-3 conversation search/highlighting shipped 2026-07-16; removed the stale DLV-71 duplicate on 2026-09-10. This is a reconciliation, not a second implementation.
 

@@ -24,6 +24,8 @@ tags:
 
 **Orbital Library (R140).** In Game mode, open Search and choose Library to enter a panoramic observatory. Each cabinet opens a campaign’s shelves. Kitchen items open as books, Budget items as tablets and Hub & ERA items on glass. Deliver opens operator and model selection. Local admission returns the actual session ID before the transition into Walk.
 
+**Stop / Discard (2026-11-28, DLV-178).** Both Local run room headers carry one exit: **Stop** while the run works or its acceptance check is paused, **Discard** while a resting candidate still holds a worktree. One confirm ("Stop + delete worktree" / "Delete worktree", path on hover), ✕ keeps it. Stop kills a running hook or check within seconds; the worktree, branch and run folder are then deleted and the diff archived.
+
 **Explore 3D (2026-11-21, R132).** In the local Game run view, Explore 3D opens first-person exploration. Map and Seat use the same 3D level. The phase strip opens the plan and recorded outputs. Q or Ask ERA opens local questions and sources. Delivery topics choose a sphere profile. Board returns to the flat view. [Owner UAT](<../../../docs/Delivery-UAT.md#walk-inside-eras-brain--r132>).
 
 **Transfer Room (2026-11-21, R131).** In a Local Game run, **Take seat** opens a first-person workbench. Use the step strip to reach the plan and recorded outputs. The jog wheel advances by action identity, and two pinned actions can be compared. **Overview** returns to the existing board with the same cursor. A ready handover brings the cassette to the operator. Live questions and owner controls remain available through the existing attention rail. [Design and implementation](<../../10 - Project Management/Plans/Transfer Room/The Transfer Room.md>).

@@ -10,10 +10,10 @@ import { spawn } from "node:child_process";
  *
  * @param {string} command
  * @param {string[]} args
- * @param {{cwd?:string, env?:NodeJS.ProcessEnv, input?:string|Buffer, timeout?:number, maxBuffer?:number, spawnFn?:typeof spawn, onStderrLine?:(line:string)=>void}} [options]
+ * @param {{cwd?:string, env?:NodeJS.ProcessEnv, input?:string|Buffer, timeout?:number, maxBuffer?:number, spawnFn?:typeof spawn, onStderrLine?:(line:string)=>void, signal?:AbortSignal|null}} [options]
  * @returns {Promise<{status:(number|null), signal:(string|null), stdout:string, stderr:string, error:((Error & {code?:string})|null)}>}
  */
-export function runProcess(command, args, { cwd, env, input, timeout = 0, maxBuffer = 64 * 1024 * 1024, spawnFn = spawn, onStderrLine } = {}) {
+export function runProcess(command, args, { cwd, env, input, timeout = 0, maxBuffer = 64 * 1024 * 1024, spawnFn = spawn, onStderrLine, signal = null } = {}) {
   return new Promise((resolve) => {
     /** @type {import("node:child_process").ChildProcess} */
     let child;
@@ -38,6 +38,7 @@ export function runProcess(command, args, { cwd, env, input, timeout = 0, maxBuf
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
       if (killing) await killing;
       if (pendingStderr) onStderrLine?.(pendingStderr.replace(/\r$/u, ""));
       resolve({ status: error ? null : status, signal: signal ?? null, stdout, stderr, error });
@@ -58,6 +59,9 @@ export function runProcess(command, args, { cwd, env, input, timeout = 0, maxBuf
       }
     };
     if (timeout > 0) timer = setTimeout(() => abort("ETIMEDOUT"), timeout);
+    function onAbort() { abort("ABORT_ERR"); }
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener("abort", onAbort, { once: true });
     const collect = (/** @type {(chunk:string)=>void} */ append) => (/** @type {string} */ chunk) => {
       size += chunk.length;
       if (size > maxBuffer) abort("ENOBUFS");
